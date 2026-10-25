@@ -1,5 +1,5 @@
-// Coordinates are metres. The forklift faces +Z and its pallet centre is 1.55m
-// forward of the origin. Only this module owns simulation identities and poses.
+// Metres and seconds. All identities, scheduling and poses belong to this pure
+// module: no renderer, browser, storage, real inventory or network dependencies.
 const FORWARD_OFFSET = 1.55;
 const TRANSPORT_HEIGHT = 0.28;
 const SHELF_CLEARANCE = 0.16;
@@ -7,207 +7,253 @@ const DRIVE_SPEED = 4.5;
 const DOCK_SPEED = 1.1;
 const TURN_SPEED = 1.4;
 const LIFT_SPEED = 0.8;
-const PHASES = ['floor-to-rack1', 'rack1-to-rack2', 'rack2-to-floor'];
-const floorLocation = () => ({ kind: 'floor', rack: null, shelf: null, slot: null, side: null });
+const BOX_COUNT = 250;
+const location = (kind, extra = {}) => ({ kind, rack: null, shelf: null, slot: null, side: null, ...extra });
 
 function freeze(value) {
-  Object.values(value).forEach(child => {
-    if (child && typeof child === 'object') freeze(child);
-  });
+  for (const child of Object.values(value)) if (child && typeof child === 'object') freeze(child);
   return Object.freeze(value);
 }
 
 function createLayout() {
+  const staging = { x: -12, y: 0, z: -29 };
   return freeze({
-    racks: [-36, -18, 0, 18, 36].map((x, i) => ({
-      id: `simulation-rack-${i + 1}`, x, z: 12, width: 16, depth: 2,
+    racks: [-22, -11, 0, 11, 22].map((z, i) => ({
+      id: `simulation-rack-${i + 1}`, x: 0, z, width: 16, depth: 2,
       shelfHeights: [0.55, 2.65, 4.75, 6.85, 8.95],
-      slotCenters: [-6.4, -3.2, 0, 3.2, 6.4].map(offset => x + offset),
+      slotCenters: [-6.4, -3.2, 0, 3.2, 6.4],
     })),
-    floorPositions: Array.from({ length: 10 }, (_, i) => ({ x: -18 + 4 * i, y: 0, z: -10 })),
-    floorBounds: { minX: -50, maxX: 50, minZ: -18, maxZ: 22 },
+    floorPositions: [staging], staging,
+    gateIn: { x: -12, y: 0, z: -35 },
+    gateOut: { x: 13, y: 0, z: -35 },
+    floorBounds: { minX: -20, maxX: 20, minZ: -35, maxZ: 35 },
   });
 }
 
-function copyState(state) {
-  return {
-    phase: state.phase, completedInPhase: state.completedInPhase,
-    cycle: state.cycle, action: state.action,
-    forklift: { ...state.forklift, position: { ...state.forklift.position } },
-    boxes: state.boxes.map(box => ({ ...box, position: { ...box.position }, location: { ...box.location } })),
+const clonePose = pose => ({ ...pose, position: { ...pose.position } });
+
+// Each segment stores just one truck's pose, never a 250-box scene snapshot.
+// Waiting and motion share the same track so evaluating a time is a binary search.
+function track(id, role, position, yaw, visible = true) {
+  const vehicle = {
+    id, role, time: 0, segments: [],
+    pose: { position: { ...position }, yaw, liftHeight: TRANSPORT_HEIGHT, cargoId: null, visible },
   };
-}
-
-function updateCargo(state) {
-  const { forklift } = state;
-  if (forklift.cargoId === null) return;
-  const box = state.boxes.find(item => item.id === forklift.cargoId);
-  box.position = {
-    x: forklift.position.x + Math.sin(forklift.yaw) * FORWARD_OFFSET,
-    y: forklift.liftHeight,
-    z: forklift.position.z + Math.cos(forklift.yaw) * FORWARD_OFFSET,
+  vehicle.animate = (action, seconds, changes = {}) => {
+    if (seconds <= 1e-10) return;
+    const from = clonePose(vehicle.pose);
+    const to = clonePose({ ...vehicle.pose, ...changes });
+    vehicle.segments.push({ start: vehicle.time, duration: seconds, action, from, to });
+    vehicle.time += seconds;
+    // Later heading normalization and cargo events must not mutate a recorded
+    // segment endpoint: a normalized angle can differ by a complete revolution.
+    vehicle.pose = clonePose(to);
   };
-  box.rotationY = forklift.yaw;
-}
-
-function berth(layout, index, rackIndex) {
-  if (rackIndex === null) {
-    return { position: layout.floorPositions[index], yaw: Math.PI, aisleZ: -4, location: floorLocation() };
-  }
-  const rack = layout.racks[rackIndex];
-  const slot = Math.floor(index / 2);
-  const side = index % 2;
-  return {
-    position: {
-      x: rack.slotCenters[slot] + (side === 0 ? -0.7 : 0.7),
-      y: rack.shelfHeights[0],
-      // The pallet sits near the front so the mast and chassis never enter the rack.
-      z: rack.z - rack.depth / 2 + 0.65,
-    },
-    yaw: 0, aisleZ: 6,
-    location: { kind: 'rack', rack: rackIndex, shelf: 0, slot, side },
+  vehicle.waitUntil = time => vehicle.animate('wait', Math.max(0, time - vehicle.time));
+  vehicle.turn = yaw => {
+    const difference = Math.atan2(Math.sin(yaw - vehicle.pose.yaw), Math.cos(yaw - vehicle.pose.yaw));
+    vehicle.animate('turn', Math.abs(difference) / TURN_SPEED, { yaw: vehicle.pose.yaw + difference });
+    vehicle.pose.yaw = yaw;
   };
-}
-
-// A cycle is a finite sequence of continuous poses with identical endpoints.
-// Compile it once so arbitrarily large elapsed times take bounded work, without
-// dropping elapsed seconds, an unbounded catch-up loop, or a visible reset.
-function createTimeline(layout) {
-  const state = {
-    phase: PHASES[0], completedInPhase: 0, cycle: 0, action: 'turn',
-    forklift: { position: { x: 18, y: 0, z: -4 }, yaw: Math.PI, liftHeight: TRANSPORT_HEIGHT, cargoId: null },
-    boxes: layout.floorPositions.map((position, i) => ({
-      id: `simulation-box-${String(i + 1).padStart(2, '0')}`,
-      position: { ...position }, rotationY: Math.PI, location: floorLocation(),
-    })),
+  vehicle.drive = (x, z, action = 'drive') => {
+    const distance = Math.hypot(x - vehicle.pose.position.x, z - vehicle.pose.position.z);
+    vehicle.animate(action, distance / (action === 'drive' ? DRIVE_SPEED : DOCK_SPEED), {
+      position: { x, y: vehicle.pose.position.y, z },
+    });
   };
-  const segments = [];
-  let duration = 0;
-
-  function animate(action, seconds, target = {}) {
-    if (seconds < 1e-10) return;
-    state.action = action;
-    const start = copyState(state);
-    const end = {
-      position: { ...(target.position ?? state.forklift.position) },
-      yaw: target.yaw ?? state.forklift.yaw,
-      liftHeight: target.liftHeight ?? state.forklift.liftHeight,
-    };
-    segments.push({ start: duration, duration: seconds, state: start, target: end });
-    duration += seconds;
-    Object.assign(state.forklift, end);
-    updateCargo(state);
-  }
-
-  function turn(yaw) {
-    const difference = Math.atan2(Math.sin(yaw - state.forklift.yaw), Math.cos(yaw - state.forklift.yaw));
-    animate('turn', Math.abs(difference) / TURN_SPEED, { yaw: state.forklift.yaw + difference });
-    state.forklift.yaw = yaw;
-    updateCargo(state);
-  }
-
-  function drive(x, z, action = 'drive') {
-    const distance = Math.hypot(x - state.forklift.position.x, z - state.forklift.position.z);
-    animate(action, distance / (action === 'drive' ? DRIVE_SPEED : DOCK_SPEED), { position: { x, y: 0, z } });
-  }
-
-  function travel(x, z) {
-    const dx = x - state.forklift.position.x;
-    const dz = z - state.forklift.position.z;
+  vehicle.travel = (x, z) => {
+    const dx = x - vehicle.pose.position.x, dz = z - vehicle.pose.position.z;
     if (Math.hypot(dx, dz) < 1e-10) return;
-    turn(Math.atan2(dx, dz));
-    drive(x, z);
+    vehicle.turn(Math.atan2(dx, dz));
+    vehicle.drive(x, z);
+  };
+  vehicle.lift = height => vehicle.animate('lift', Math.abs(height - vehicle.pose.liftHeight) / LIFT_SPEED, { liftHeight: height });
+  return vehicle;
+}
+
+function berth(layout, index) {
+  const rackIndex = Math.floor(index / 50), shelf = Math.floor(index % 50 / 10);
+  const slot = Math.floor(index % 10 / 2), side = index % 2;
+  const rack = layout.racks[rackIndex];
+  return {
+    // Keep the complete GLB mast and telescoping rails outside the front beam,
+    // not just the chassis. The pallet sits over the front shelf supports while
+    // the truck docks 2.20m ahead of the rack centre (0.65 + fork offset1.55).
+    position: { x: rack.slotCenters[slot] + (side ? 0.7 : -0.7), y: rack.shelfHeights[shelf], z: rack.z - 0.65 },
+    aisleZ: rack.z - 4.3,
+    location: location('rack', { rack: rackIndex, shelf, slot, side }),
+  };
+}
+
+function createTimeline(layout) {
+  const putaway = track('simulation-forklift-1', 'putaway', { x: -12, y: 0, z: -25 }, Math.PI);
+  const outbound = track('simulation-forklift-2', 'outbound', { x: 17, y: 14, z: -29 }, 0, false);
+  const inbound = track('simulation-forklift-3', 'inbound', layout.gateIn, 0, false);
+  const trucks = [putaway, outbound, inbound];
+  const boxes = Array.from({ length: BOX_COUNT }, (_, i) => ({
+    id: `simulation-box-${String(i + 1).padStart(3, '0')}`,
+    events: [{ start: 0, visible: false, position: { ...layout.gateIn }, rotationY: 0, location: location('pending') }],
+  }));
+  const storedTimes = [], shippedTimes = [], rackClearTimes = [];
+
+  function carry(box, truck, rotationOffset) {
+    truck.pose.cargoId = box.id;
+    box.events.push({
+      start: truck.time, visible: true, truckIndex: trucks.indexOf(truck), rotationOffset,
+      location: location('carried', { forkliftId: truck.id }),
+    });
+    truck.animate('pickup', 0.35);
   }
 
-  function approach(destination) {
-    travel(state.forklift.position.x, 0);
-    travel(destination.position.x, 0);
-    travel(destination.position.x, destination.aisleZ);
-    turn(destination.yaw);
+  function release(box, truck, boxLocation, position, rotationY, visible = true) {
+    truck.pose.cargoId = null;
+    box.events.push({ start: truck.time, location: boxLocation, position: { ...position }, rotationY, visible });
+    truck.animate('place', 0.35);
   }
 
-  function lift(height) {
-    animate('lift', Math.abs(height - state.forklift.liftHeight) / LIFT_SPEED, { liftHeight: height });
+  // The next inbound journey is released only by the prior storage event.
+  // Truck 1 cannot approach staging until truck 3 has completely backed out.
+  for (let index = 0; index < BOX_COUNT; index++) {
+    const box = boxes[index], target = berth(layout, index);
+    inbound.waitUntil(index === 0 ? 0.6 : storedTimes[index - 1]);
+    inbound.pose.visible = true;
+    carry(box, inbound, 0);
+    inbound.drive(layout.staging.x, layout.staging.z - FORWARD_OFFSET, 'insert');
+    inbound.lift(0);
+    release(box, inbound, location('floor'), layout.staging, 0);
+    inbound.drive(layout.gateIn.x, layout.gateIn.z, 'retract');
+    inbound.lift(TRANSPORT_HEIGHT);
+
+    putaway.waitUntil(inbound.time);
+    putaway.lift(0);
+    putaway.drive(layout.staging.x, layout.staging.z + FORWARD_OFFSET, 'insert');
+    // The trucks face opposite directions at staging. Preserve the pallet's
+    // actual rotation through handoff rather than snapping it through 180deg.
+    const putawayRotationOffset = -Math.PI;
+    carry(box, putaway, putawayRotationOffset);
+    putaway.lift(SHELF_CLEARANCE);
+    putaway.drive(-12, -25, 'retract');
+    putaway.lift(TRANSPORT_HEIGHT);
+    putaway.travel(-13, -25);
+    putaway.travel(-13, target.aisleZ);
+    putaway.travel(target.position.x, target.aisleZ);
+    putaway.turn(0);
+    putaway.lift(target.position.y + SHELF_CLEARANCE);
+    putaway.drive(target.position.x, target.position.z - FORWARD_OFFSET, 'insert');
+    putaway.lift(target.position.y);
+    storedTimes.push(putaway.time);
+    release(box, putaway, target.location, target.position, putawayRotationOffset);
+    putaway.drive(target.position.x, target.aisleZ, 'retract');
+    putaway.lift(TRANSPORT_HEIGHT);
+    putaway.travel(-13, target.aisleZ);
+    // Rack-wide reservation: outbound enters a row only after its fiftieth
+    // placement and after truck 1 clears that row onto the left travel lane.
+    if (index % 50 === 49) rackClearTimes.push(putaway.time);
+    putaway.travel(-13, -25);
+    putaway.travel(-12, -25);
+    putaway.turn(Math.PI);
   }
+  inbound.pose.visible = false;
 
-  function insert(destination) {
-    drive(
-      destination.position.x - Math.sin(destination.yaw) * FORWARD_OFFSET,
-      destination.position.z - Math.cos(destination.yaw) * FORWARD_OFFSET,
-      'insert',
-    );
+  outbound.waitUntil(storedTimes[49]);
+  outbound.pose.visible = true;
+  outbound.animate('descend', 10, { position: { x: 17, y: 0, z: -29 } });
+  outbound.travel(13, -29);
+  for (let index = 0; index < BOX_COUNT; index++) {
+    const box = boxes[index], source = berth(layout, index);
+    outbound.travel(13, source.aisleZ);
+    outbound.waitUntil(rackClearTimes[source.location.rack]);
+    outbound.travel(source.position.x, source.aisleZ);
+    outbound.turn(0);
+    outbound.lift(source.position.y);
+    outbound.drive(source.position.x, source.position.z - FORWARD_OFFSET, 'insert');
+    carry(box, outbound, -Math.PI);
+    outbound.lift(source.position.y + SHELF_CLEARANCE);
+    outbound.drive(source.position.x, source.aisleZ, 'retract');
+    outbound.lift(TRANSPORT_HEIGHT);
+    outbound.travel(13, source.aisleZ);
+    outbound.travel(13, -29);
+    outbound.turn(Math.PI);
+    outbound.drive(13, layout.gateOut.z + FORWARD_OFFSET, 'insert');
+    outbound.lift(0);
+    shippedTimes.push(outbound.time);
+    release(box, outbound, location('shipped'), layout.gateOut, 0, false);
+    outbound.drive(13, -29, 'retract');
+    outbound.lift(TRANSPORT_HEIGHT);
   }
+  outbound.travel(17, -29);
+  outbound.turn(0);
+  outbound.animate('ascend', 10, { position: { x: 17, y: 14, z: -29 } });
+  outbound.pose.visible = false;
+  const duration = Math.max(...trucks.map(truck => truck.time)) + 1;
+  for (const truck of trucks) truck.waitUntil(duration);
+  for (const box of boxes) box.events.sort((a, b) => a.start - b.start);
+  return { trucks, boxes, storedTimes, shippedTimes, duration };
+}
 
-  for (let phase = 0; phase < 3; phase++) {
-    state.phase = PHASES[phase];
-    state.completedInPhase = 0;
-    for (let index = 0; index < 10; index++) {
-      const source = berth(layout, index, phase === 0 ? null : phase - 1);
-      const destination = berth(layout, index, phase === 2 ? null : phase);
-      const box = state.boxes[index];
-
-      approach(source);
-      lift(source.position.y);
-      insert(source);
-      state.forklift.cargoId = box.id;
-      box.location = { kind: 'carried', rack: null, shelf: null, slot: null, side: null };
-      updateCargo(state);
-      animate('pickup', 0.3);
-      lift(source.position.y + SHELF_CLEARANCE);
-      drive(source.position.x, source.aisleZ, 'retract');
-      lift(TRANSPORT_HEIGHT);
-
-      approach(destination);
-      lift(destination.position.y + SHELF_CLEARANCE);
-      insert(destination);
-      lift(destination.position.y);
-      state.forklift.cargoId = null;
-      box.position = { ...destination.position };
-      box.rotationY = destination.yaw;
-      box.location = { ...destination.location };
-      state.completedInPhase++;
-      animate('place', 0.3);
-      // Forks stay level until completely clear of the shelf and pallet.
-      drive(destination.position.x, destination.aisleZ, 'retract');
-      lift(TRANSPORT_HEIGHT);
-    }
+// Last item at or before time. Every pose/event track has an entry at time 0.
+function indexAt(items, time, getTime = item => item.start) {
+  let low = 0, high = items.length - 1;
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2);
+    if (getTime(items[middle]) <= time) low = middle;
+    else high = middle - 1;
   }
-  return { segments, duration };
+  return low;
+}
+
+function countAt(times, elapsed) {
+  if (elapsed < times[0]) return 0;
+  return indexAt(times, elapsed, value => value) + 1;
+}
+
+function poseAt(truck, elapsed) {
+  const segment = truck.segments[indexAt(truck.segments, elapsed)];
+  const progress = Math.max(0, Math.min(1, (elapsed - segment.start) / segment.duration));
+  const eased = progress * progress * (3 - 2 * progress);
+  const lerp = (a, b) => a + (b - a) * eased;
+  return {
+    id: truck.id, role: truck.role, action: segment.action,
+    visible: segment.from.visible, cargoId: segment.from.cargoId,
+    position: Object.fromEntries(['x', 'y', 'z'].map(axis => [axis, lerp(segment.from.position[axis], segment.to.position[axis])])),
+    yaw: lerp(segment.from.yaw, segment.to.yaw),
+    liftHeight: lerp(segment.from.liftHeight, segment.to.liftHeight),
+  };
 }
 
 export function createSimulation() {
-  const layout = createLayout();
-  const timeline = createTimeline(layout);
-  let elapsed = 0;
-  let cycle = 0;
-  let disposed = false;
+  const layout = createLayout(), timeline = createTimeline(layout);
+  let elapsed = 0, cycle = 0, disposed = false;
 
   function getState() {
-    let low = 0;
-    let high = timeline.segments.length - 1;
-    while (low < high) {
-      const middle = Math.ceil((low + high) / 2);
-      if (timeline.segments[middle].start <= elapsed) low = middle;
-      else high = middle - 1;
-    }
-    const segment = timeline.segments[low];
-    const state = copyState(segment.state);
-    const progress = Math.max(0, Math.min(1, (elapsed - segment.start) / segment.duration));
-    const eased = progress * progress * (3 - 2 * progress);
-    const interpolate = (a, b) => a + (b - a) * eased;
-    for (const axis of ['x', 'y', 'z']) {
-      state.forklift.position[axis] = interpolate(state.forklift.position[axis], segment.target.position[axis]);
-    }
-    state.forklift.yaw = interpolate(state.forklift.yaw, segment.target.yaw);
-    state.forklift.liftHeight = interpolate(state.forklift.liftHeight, segment.target.liftHeight);
-    state.cycle = cycle;
-    updateCargo(state);
-    return state;
+    const forklifts = timeline.trucks.map(truck => poseAt(truck, elapsed));
+    const storedCount = countAt(timeline.storedTimes, elapsed);
+    const shippedCount = countAt(timeline.shippedTimes, elapsed);
+    const phase = shippedCount === BOX_COUNT ? 'returning' : storedCount === BOX_COUNT ? 'shipping' : storedCount >= 50 ? 'parallel' : 'filling';
+    return {
+      cycle, phase, completedInPhase: phase === 'filling' ? storedCount : shippedCount,
+      storedCount, shippedCount, action: forklifts[0].action,
+      forklifts, forklift: forklifts[0],
+      boxes: timeline.boxes.map(box => {
+        const event = box.events[indexAt(box.events, elapsed)];
+        const truck = event.truckIndex === undefined ? null : forklifts[event.truckIndex];
+        return {
+          id: box.id, visible: event.visible, location: { ...event.location },
+          position: truck ? {
+            x: truck.position.x + Math.sin(truck.yaw) * FORWARD_OFFSET,
+            y: truck.position.y + truck.liftHeight,
+            z: truck.position.z + Math.cos(truck.yaw) * FORWARD_OFFSET,
+          } : { ...event.position },
+          rotationY: truck ? truck.yaw + event.rotationOffset : event.rotationY,
+        };
+      }),
+    };
   }
 
   function step(deltaSeconds) {
     if (!disposed && Number.isFinite(deltaSeconds) && deltaSeconds > 0) {
-      // Reduce before adding: even Number.MAX_VALUE cannot overflow the clock.
+      // Reduce before adding, including Number.MAX_VALUE: no catch-up loop,
+      // overflow, dropped elapsed time, or dependence on previous frame size.
       cycle = Math.min(Number.MAX_VALUE, cycle + Math.floor(deltaSeconds / timeline.duration));
       elapsed += deltaSeconds % timeline.duration;
       if (elapsed >= timeline.duration) {
@@ -218,5 +264,5 @@ export function createSimulation() {
     return getState();
   }
 
-  return { layout, getState, step, dispose() { disposed = true; } };
+  return { layout, cycleDuration: timeline.duration, getState, step, dispose() { disposed = true; } };
 }

@@ -1,190 +1,186 @@
 import assert from 'node:assert/strict';
 import { createSimulation } from '../public/warehouse-simulation-engine.mjs';
 
-// Keep the standalone Node command while cooperating with the frontend runner.
 const { test } = process.env.VITEST ? await import('vitest') : await import('node:test');
-
 const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
 const angleDistance = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
-const close = (a, b, message) => assert.ok(Math.abs(a - b) < 1e-8, `${message}: ${a} versus ${b}`);
+const close = (a, b, message) => assert.ok(Math.abs(a - b) < 1e-7, `${message}: ${a} versus ${b}`);
 
-test('initial model has ten unique floor pallets and five racks with five two-pallet bays per shelf', () => {
+function rectangle(position, yaw, halfWidth, rear, front) {
+  return [-halfWidth, halfWidth].flatMap(x => [rear, front].map(z => ({
+    x: position.x + x * Math.cos(yaw) + z * Math.sin(yaw),
+    z: position.z - x * Math.sin(yaw) + z * Math.cos(yaw),
+  })));
+}
+
+function overlaps(a, yawA, b, yawB) {
+  for (const yaw of [yawA, yawB]) {
+    for (const axis of [{ x: Math.cos(yaw), z: -Math.sin(yaw) }, { x: Math.sin(yaw), z: Math.cos(yaw) }]) {
+      const aa = a.map(p => p.x * axis.x + p.z * axis.z);
+      const bb = b.map(p => p.x * axis.x + p.z * axis.z);
+      if (Math.max(...aa) <= Math.min(...bb) + 1e-7 || Math.max(...bb) <= Math.min(...aa) + 1e-7) return false;
+    }
+  }
+  return true;
+}
+
+test('empty racks and one staging point reserve 250 stable identities across three independent trucks', () => {
   const simulation = createSimulation();
   const state = simulation.getState();
+  assert.equal(state.boxes.length, 250);
+  assert.equal(new Set(state.boxes.map(box => box.id)).size, 250);
+  assert.ok(state.boxes.every(box => box.location.kind === 'pending' && box.visible === false));
+  assert.equal(simulation.layout.floorPositions.length, 1);
+  assert.deepEqual(simulation.layout.floorPositions[0], { x: -12, y: 0, z: -29 });
   assert.equal(simulation.layout.racks.length, 5);
-  assert.equal(simulation.layout.floorPositions.length, 10);
-  assert.equal(state.boxes.length, 10);
-  assert.equal(new Set(state.boxes.map(box => box.id)).size, 10);
-  assert.equal(state.phase, 'floor-to-rack1');
-  assert.equal(state.completedInPhase, 0);
-  assert.equal(state.cycle, 0);
-  assert.equal(state.forklift.cargoId, null);
-  for (const rack of simulation.layout.racks) {
-    assert.equal(rack.shelfHeights.length, 5);
-    assert.equal(rack.slotCenters.length, 5);
-    assert.ok(rack.depth >= 1.2);
-    assert.ok(rack.shelfHeights.every((height, i, heights) => height > 0 && (!i || height - heights[i - 1] >= 1.5)));
-    assert.ok(rack.slotCenters.every((x, i, xs) => x > rack.x - rack.width / 2 && x < rack.x + rack.width / 2 && (!i || x - xs[i - 1] >= 2.6)));
-  }
-  state.boxes.forEach((box, index) => {
-    assert.deepEqual(box.position, simulation.layout.floorPositions[index]);
-    assert.deepEqual(box.location, { kind: 'floor', rack: null, shelf: null, slot: null, side: null });
-  });
+  assert.deepEqual(simulation.layout.racks.map(rack => rack.z), [-22, -11, 0, 11, 22]);
+  assert.equal(state.forklifts.length, 3);
+  assert.deepEqual(state.forklifts.map(truck => truck.role), ['putaway', 'outbound', 'inbound']);
+  assert.equal(new Set(state.forklifts.map(truck => truck.id)).size, 3);
+  assert.equal(state.forklifts[1].visible, false);
+  assert.equal(state.storedCount, 0);
+  assert.equal(state.shippedCount, 0);
+  assert.ok(Number.isFinite(simulation.cycleDuration) && simulation.cycleDuration > 100);
 });
 
-test('snapshots cannot mutate the model, and idle time and disposal freeze its state', () => {
+test('two complete cycles feed one floor box, store all cells once in order and ship FIFO while putaway continues', { timeout: 30000 }, () => {
   const simulation = createSimulation();
-  const before = simulation.getState();
-  const changed = simulation.getState();
-  changed.boxes[0].position.x = 12345;
-  changed.boxes[0].location.kind = 'carried';
-  changed.forklift.position.z = -12345;
-  changed.phase = 'rack2-to-floor';
-  assert.deepEqual(simulation.getState(), before);
-  for (const dt of [0, -1, NaN, Infinity, -Infinity, undefined, null, '1']) {
-    assert.deepEqual(simulation.step(dt), before);
-  }
-  const moving = simulation.step(2);
-  assert.notDeepEqual(moving, before);
-  moving.boxes.pop();
-  assert.equal(simulation.getState().boxes.length, 10);
-  const stopped = simulation.getState();
-  simulation.dispose();
-  simulation.dispose();
-  assert.deepEqual(simulation.step(10000), stopped);
-});
-
-test('two complete cycles deliver individually, fill each slot in order, and restore the same floor identities', () => {
-  const simulation = createSimulation();
-  const initial = simulation.getState();
-  const ids = initial.boxes.map(box => box.id);
-  const deliveries = [];
-  const phases = [];
-  let previous = initial;
-  for (let frame = 0; frame < 150000; frame++) {
-    const state = simulation.step(0.2);
-    assert.deepEqual(state.boxes.map(box => box.id), ids);
-    assert.ok(state.completedInPhase >= 0 && state.completedInPhase <= 10);
-    const carried = state.boxes.filter(box => box.location.kind === 'carried');
-    assert.equal(carried.length, state.forklift.cargoId === null ? 0 : 1);
-    if (carried.length) assert.equal(carried[0].id, state.forklift.cargoId);
-    const occupancy = new Map();
-    for (const box of state.boxes.filter(box => box.location.kind === 'rack')) {
-      const { rack, shelf, slot, side } = box.location;
-      assert.ok(rack === 0 || rack === 1, 'only the first two racks receive boxes');
-      assert.equal(shelf, 0, 'ten boxes fit entirely on the bottom shelf');
-      assert.ok(side === 0 || side === 1);
-      const key = `${rack}:${shelf}:${slot}`;
-      const sides = occupancy.get(key) ?? new Set();
-      assert.ok(!sides.has(side), 'no two pallets own the same side of a slot');
-      sides.add(side);
-      occupancy.set(key, sides);
-      assert.ok(sides.size <= 2);
-    }
-    if (previous.forklift.cargoId && !state.forklift.cargoId) {
-      const index = deliveries.length % 10;
-      const box = state.boxes.find(box => box.id === previous.forklift.cargoId);
-      assert.equal(box.id, ids[index], 'every phase completes the ten transfers in order');
-      if (state.phase === 'rack2-to-floor') {
-        assert.deepEqual(box.position, initial.boxes[index].position);
-        assert.deepEqual(box.location, initial.boxes[index].location);
-        close(box.rotationY, initial.boxes[index].rotationY, 'floor orientation restored');
-      } else {
-        assert.deepEqual(box.location, {
-          kind: 'rack', rack: state.phase === 'floor-to-rack1' ? 0 : 1,
-          shelf: 0, slot: Math.floor(index / 2), side: index % 2,
-        });
-        close(box.position.y, simulation.layout.racks[box.location.rack].shelfHeights[0], 'pallet rests at shelf base');
-      }
-      assert.equal(state.completedInPhase, index + 1);
-      deliveries.push(box.id);
-    }
-    if (state.phase !== previous.phase) {
-      phases.push(state.phase);
-      assert.equal(previous.completedInPhase, 10);
-      assert.equal(state.completedInPhase, 0);
-      assert.equal(state.forklift.cargoId, null);
-      if (state.phase === 'floor-to-rack1') {
-        state.boxes.forEach((box, i) => assert.deepEqual(box, initial.boxes[i]));
-      } else {
-        const rack = state.phase === 'rack1-to-rack2' ? 0 : 1;
-        assert.ok(state.boxes.every(box => box.location.kind === 'rack' && box.location.rack === rack));
-      }
-    }
-    previous = state;
-    if (state.cycle >= 2) break;
-  }
-  assert.equal(previous.cycle, 2, 'two cycles finish without a reset');
-  assert.equal(deliveries.length, 60);
-  assert.deepEqual(phases, ['rack1-to-rack2', 'rack2-to-floor', 'floor-to-rack1', 'rack1-to-rack2', 'rack2-to-floor', 'floor-to-rack1']);
-});
-
-test('frame motion stays continuous through docking, turning, lifting and cycle wrap with exact fork attachment', () => {
-  const simulation = createSimulation();
-  let previous = simulation.getState();
-  const actions = new Set();
-  for (let frame = 0; frame < 150000; frame++) {
-    const state = simulation.step(0.1);
-    actions.add(state.action);
-    assert.ok(distance(previous.forklift.position, state.forklift.position) <= 0.68, 'forklift never jumps');
-    assert.ok(angleDistance(previous.forklift.yaw, state.forklift.yaw) <= 0.22, 'turn never snaps');
-    assert.ok(Math.abs(previous.forklift.liftHeight - state.forklift.liftHeight) <= 0.13, 'lift never snaps');
-    state.boxes.forEach((box, i) => {
-      assert.ok(distance(previous.boxes[i].position, box.position) <= 0.7, `pallet ${box.id} never jumps`);
-      assert.ok(angleDistance(previous.boxes[i].rotationY, box.rotationY) <= 0.22, 'pallet rotates continuously');
-      if (box.location.kind === 'carried') {
-        close(box.position.x, state.forklift.position.x + Math.sin(state.forklift.yaw) * 1.55, 'forward X offset');
-        close(box.position.z, state.forklift.position.z + Math.cos(state.forklift.yaw) * 1.55, 'forward Z offset');
-        close(box.position.y, state.forklift.liftHeight, 'fork and pallet height agree');
-        if (state.action === 'retract' && box.position.z > 10.45) {
-          assert.ok(box.position.y >= 0.71 - 1e-8, 'loaded forks clear the beam before lowering outside the rack');
+  const ids = simulation.getState().boxes.map(box => box.id);
+  const stored = [[], []], shipped = [[], []];
+  const previousKinds = ids.map(() => 'pending');
+  let previousCycle = 0, sawParallel = false, sawDescent = false;
+  for (let time = 0; time < simulation.cycleDuration * 2 + 1; time += 0.5) {
+    const state = simulation.getState();
+    if (state.cycle === 2) break;
+    if (state.cycle !== previousCycle) previousKinds.fill('pending');
+    previousCycle = state.cycle;
+    assert.equal(state.boxes.length, 250);
+    const floor = state.boxes.filter(box => box.location.kind === 'floor');
+    assert.ok(floor.length <= 1, 'at most one box waits on the floor');
+    const cells = new Set();
+    let lastStoredIndex = stored[state.cycle].length - 1;
+    for (let index = 0; index < state.boxes.length; index++) {
+      const box = state.boxes[index];
+      assert.equal(box.id, ids[index]);
+      if (box.location.kind === 'rack') {
+        const cell = `${box.location.rack}:${box.location.shelf}:${box.location.slot}:${box.location.side}`;
+        assert.ok(!cells.has(cell), 'each of the two sides holds at most one box');
+        cells.add(cell);
+        assert.ok(box.location.side === 0 || box.location.side === 1);
+        if (previousKinds[index] !== 'rack') {
+          assert.equal(index, stored[state.cycle].length, 'putaway follows stable identity order without refilling cleared cells');
+          assert.deepEqual(box.location, {
+            kind: 'rack', rack: Math.floor(index / 50), shelf: Math.floor(index % 50 / 10),
+            slot: Math.floor(index % 10 / 2), side: index % 2,
+          });
+          stored[state.cycle].push(box.id);
+          lastStoredIndex = index;
         }
       }
-      for (let j = 0; j < i; j++) {
-        const other = state.boxes[j];
-        assert.ok(Math.hypot(box.position.x - other.position.x, box.position.z - other.position.z) >= 1.2 - 1e-8, 'pallet footprints stay separated');
+      if (box.location.kind === 'shipped' && previousKinds[index] !== 'shipped') {
+        assert.equal(box.id, ids[shipped[state.cycle].length], 'Gate Out receives FIFO');
+        assert.equal(box.visible, false);
+        shipped[state.cycle].push(box.id);
       }
-    });
-    const { x, z } = state.forklift.position;
-    const { yaw } = state.forklift;
-    for (const rack of simulation.layout.racks) {
-      for (const localX of [-0.55, 0.55]) for (const localZ of [-1.2, 0.85]) {
-        const worldX = x + localX * Math.cos(yaw) + localZ * Math.sin(yaw);
-        const worldZ = z - localX * Math.sin(yaw) + localZ * Math.cos(yaw);
-        assert.ok(worldX <= rack.x - rack.width / 2 || worldX >= rack.x + rack.width / 2 || worldZ <= rack.z - rack.depth / 2 || worldZ >= rack.z + rack.depth / 2, 'chassis stays outside rack volumes');
-      }
+      if (box.location.kind === 'floor') assert.ok(index <= lastStoredIndex + 1, 'inbound waits for the previous putaway');
+      previousKinds[index] = box.location.kind;
     }
-    for (const box of state.boxes.filter(box => box.location.kind === 'floor')) {
-      const dx = box.position.x - x;
-      const dz = box.position.z - z;
-      const localX = dx * Math.cos(yaw) - dz * Math.sin(yaw);
-      const localZ = dx * Math.sin(yaw) + dz * Math.cos(yaw);
-      assert.ok(Math.abs(localX) >= 1.15 || localZ <= -1.75 || localZ >= 1.4, 'chassis stays clear of staging pallets');
-    }
-    previous = state;
-    if (state.cycle >= 1) break;
+    const outgoing = state.forklifts[1];
+    if (outgoing.visible) assert.ok(state.storedCount >= 50, 'outbound appears only after rack 1 contains 50');
+    if (outgoing.visible && outgoing.position.y > 0 && state.shippedCount === 0) sawDescent = true;
+    if (state.storedCount > 50 && state.storedCount < 250 && outgoing.cargoId) sawParallel = true;
+    assert.equal(state.storedCount, stored[state.cycle].length);
+    assert.equal(state.shippedCount, shipped[state.cycle].length);
+    simulation.step(0.5);
   }
-  assert.equal(previous.cycle, 1);
-  for (const action of ['drive', 'turn', 'lift', 'insert', 'retract', 'pickup', 'place']) assert.ok(actions.has(action), `visible ${action} action`);
+  assert.equal(simulation.getState().cycle, 2);
+  for (const entries of [...stored, ...shipped]) assert.deepEqual(entries, ids);
+  assert.ok(sawParallel, 'outbound runs while later racks are being filled');
+  assert.ok(sawDescent, 'truck 2 visibly descends at its safe start');
 });
 
-test('large elapsed deltas are bounded work, account for cycles and agree with smaller steps', { timeout: 4000 }, () => {
-  const one = createSimulation();
-  const many = createSimulation();
-  const once = one.step(20000);
-  for (let i = 0; i < 20000; i++) many.step(1);
+test('all trucks and visible boxes move continuously, attach to their own forks, and avoid racks and each other', { timeout: 30000 }, () => {
+  const simulation = createSimulation();
+  const dt = 0.4;
+  let previous = simulation.getState();
+  const actions = new Set();
+  const rackRectangles = simulation.layout.racks.map(rack => rectangle({ x: rack.x, z: rack.z }, 0, rack.width / 2, -rack.depth / 2, rack.depth / 2));
+  while (previous.cycle === 0) {
+    const state = simulation.step(dt);
+    // Bounds include the actual normalized GLB body (width1.34, rear-1.78),
+    // not only the previous procedural truck's smaller chassis.
+    const bodies = state.forklifts.map(truck => rectangle(truck.position, truck.yaw, 0.7, -1.8, 0.9));
+    state.forklifts.forEach((truck, i) => {
+      actions.add(truck.action);
+      const before = previous.forklifts[i];
+      assert.ok(distance(before.position, truck.position) <= 6.8 * dt + 1e-7, `${truck.role} never teleports`);
+      assert.ok(angleDistance(before.yaw, truck.yaw) <= 2.11 * dt + 1e-7, `${truck.role} never snaps its heading`);
+      assert.ok(Math.abs(before.liftHeight - truck.liftHeight) <= 1.21 * dt + 1e-7, `${truck.role} lift stays continuous`);
+      if (!truck.visible || truck.position.y > 10.5) return;
+      rackRectangles.forEach((rackBody, j) => assert.ok(!overlaps(bodies[i], truck.yaw, rackBody, 0), `${truck.role} chassis stays outside rack ${j + 1}`));
+      for (let j = 0; j < i; j++) {
+        if (state.forklifts[j].visible && Math.abs(truck.position.y - state.forklifts[j].position.y) < 2.5) {
+          assert.ok(!overlaps(bodies[i], truck.yaw, bodies[j], state.forklifts[j].yaw), 'truck chassis never collide');
+        }
+      }
+      for (const box of state.boxes.filter(box => box.location.kind === 'floor')) {
+        assert.ok(!overlaps(bodies[i], truck.yaw, rectangle(box.position, box.rotationY, 0.6, -0.6, 0.6), box.rotationY), 'chassis stays outside floor box');
+      }
+    });
+    state.boxes.forEach((box, index) => {
+      const before = previous.boxes[index];
+      if (box.visible && before.visible) {
+        assert.ok(distance(before.position, box.position) < 12 * dt + 1e-7, `visible ${box.id} never teleports`);
+        assert.ok(angleDistance(before.rotationY, box.rotationY) <= 2.11 * dt + 1e-7, 'box rotation is continuous through pickup and placement');
+      }
+      if (box.location.kind !== 'carried') return;
+      const truck = state.forklifts.find(item => item.id === box.location.forkliftId);
+      assert.ok(truck && truck.cargoId === box.id, 'only the owning truck carries this box');
+      close(box.position.x, truck.position.x + Math.sin(truck.yaw) * 1.55, 'fork X');
+      close(box.position.z, truck.position.z + Math.cos(truck.yaw) * 1.55, 'fork Z');
+      close(box.position.y, truck.position.y + truck.liftHeight, 'fork height');
+    });
+    previous = state;
+  }
+  for (const action of ['drive', 'turn', 'lift', 'insert', 'retract', 'pickup', 'place', 'descend']) assert.ok(actions.has(action), `observable ${action}`);
+});
+
+test('snapshots are isolated, invalid time has no effect, and disposing freezes the simulation', () => {
+  const simulation = createSimulation();
+  const before = simulation.getState(), changed = simulation.getState();
+  changed.boxes[0].position.x = 12345;
+  changed.boxes[0].location.kind = 'carried';
+  changed.forklifts[0].position.z = -12345;
+  changed.forklift.position.x = -12345;
+  assert.deepEqual(simulation.getState(), before);
+  for (const dt of [0, -1, NaN, Infinity, -Infinity, undefined, null, '1']) assert.deepEqual(simulation.step(dt), before);
+  const moved = simulation.step(2);
+  assert.notDeepEqual(moved, before);
+  simulation.dispose();
+  simulation.dispose();
+  assert.deepEqual(simulation.step(100000), moved);
+});
+
+test('arbitrary time partitions and enormous deltas have bounded work and preserve deterministic poses', { timeout: 6000 }, () => {
+  const one = createSimulation(), many = createSimulation();
+  const elapsed = one.cycleDuration * 2.25;
+  const once = one.step(elapsed);
+  for (let i = 0; i < 1000; i++) many.step(elapsed / 1000);
   const split = many.getState();
   assert.equal(once.cycle, split.cycle);
   assert.equal(once.phase, split.phase);
-  assert.equal(once.completedInPhase, split.completedInPhase);
-  assert.equal(once.forklift.cargoId, split.forklift.cargoId);
-  assert.ok(distance(once.forklift.position, split.forklift.position) < 1e-7);
-  close(once.forklift.liftHeight, split.forklift.liftHeight, 'delta partition lift');
-  once.boxes.forEach((box, i) => assert.ok(distance(box.position, split.boxes[i].position) < 1e-7));
+  assert.equal(once.storedCount, split.storedCount);
+  assert.equal(once.shippedCount, split.shippedCount);
+  once.forklifts.forEach((truck, i) => {
+    assert.equal(truck.cargoId, split.forklifts[i].cargoId);
+    assert.ok(distance(truck.position, split.forklifts[i].position) < 1e-7);
+    close(truck.liftHeight, split.forklifts[i].liftHeight, 'partitioned lift');
+  });
+  once.boxes.forEach((box, i) => {
+    assert.deepEqual(box.location, split.boxes[i].location);
+    assert.ok(distance(box.position, split.boxes[i].position) < 1e-7);
+  });
   const enormous = one.step(Number.MAX_VALUE);
-  assert.ok(enormous.cycle > once.cycle);
-  assert.ok(Number.isFinite(enormous.cycle));
-  assert.ok(Object.values(enormous.forklift.position).every(Number.isFinite));
-  assert.ok(Number.isFinite(enormous.forklift.yaw));
-  assert.ok(Number.isFinite(enormous.forklift.liftHeight));
+  assert.ok(Number.isFinite(enormous.cycle) && enormous.cycle > once.cycle);
+  for (const truck of enormous.forklifts) assert.ok([...Object.values(truck.position), truck.yaw, truck.liftHeight].every(Number.isFinite));
 });
