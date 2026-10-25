@@ -20,6 +20,12 @@
       "sha256": "4a37e127f4cc30f94acdedd7916d1e4c564845d71d4587204cd51c75b05def8f",
       "duration": 9.263990929705216,
       "channels": 2
+    },
+    "gate": {
+      "filename": "door-open-by-freesound-community-royalty-free-music-827701.mp3",
+      "sha256": "38b00a8472eca3e5031e338f6810ec5fecf8f6d35fcb3a76cc7b25b7b320d6de",
+      "duration": 1.1493877551020408,
+      "channels": 1
     }
   },
   "assets": {
@@ -79,26 +85,26 @@
       "sha256": "c4082d96fc818dec9cda8584314ac0f3de113f56d279f1fedbc708c15eccd676"
     },
     "gate-open": {
-      "source": "original-procedural",
-      "generator": "scripts/build-warehouse-audio.cjs#shutterPcm",
-      "description": "Electric roller-shutter motor, rolling metal curtain and resonant slat rattle",
-      "direction": "opening",
-      "duration": 3.6,
-      "crossfade": 0.12,
-      "frames": 79380,
-      "bytes": 158804,
-      "sha256": "a053cc739fb0c6a530a5ec9a276428684a9358148c51cadf6ceed5d04d2581b6"
+      "source": "door-open-by-freesound-community-royalty-free-music-827701.mp3",
+      "sourceStart": 0,
+      "sourceEnd": 1.1493877551020408,
+      "duration": 1.1493877551020408,
+      "crossfade": 0,
+      "edgeFade": 0.012,
+      "frames": 25344,
+      "bytes": 50732,
+      "sha256": "92ee35952dc178d7094c2ff6e2fc132f942320f64f07d0b73206b6afe7f010d3"
     },
     "gate-close": {
-      "source": "original-procedural",
-      "generator": "scripts/build-warehouse-audio.cjs#shutterPcm",
-      "description": "Electric roller-shutter motor, rolling metal curtain and resonant slat rattle",
-      "direction": "closing",
-      "duration": 3.3,
-      "crossfade": 0.12,
-      "frames": 72765,
-      "bytes": 145574,
-      "sha256": "053e73fb9aa5e0b6fee6dd3a5ff44041cb3946b7f2f9e10e038e5b3072dce73d"
+      "source": "door-open-by-freesound-community-royalty-free-music-827701.mp3",
+      "sourceStart": 0,
+      "sourceEnd": 1.1493877551020408,
+      "duration": 1.1493877551020408,
+      "crossfade": 0,
+      "edgeFade": 0.012,
+      "frames": 25344,
+      "bytes": 50732,
+      "sha256": "92ee35952dc178d7094c2ff6e2fc132f942320f64f07d0b73206b6afe7f010d3"
     }
   }
 }

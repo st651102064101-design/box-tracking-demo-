@@ -39,6 +39,8 @@ async function measureAttenuation(page, duration, pannerIndex) {
 }
 
 async function main() {
+  const manifest = JSON.parse(await readFile(path.join(publicRoot, 'audio/warehouse/manifest.json'), 'utf8'));
+  const gateDurations = [manifest.assets['gate-open'].duration, manifest.assets['gate-close'].duration];
   const server = createServer(async (req, res) => {
     const pathname = new URL(req.url, 'http://localhost').pathname;
     if (pathname === '/') { res.setHeader('Content-Type', 'text/html'); res.end(fixture); return; }
@@ -63,6 +65,7 @@ async function main() {
         constructor(...args) { super(...args); window.observedAudioContexts.push(this); this.sources = []; this.panners = []; }
         createBufferSource() {
           const node = super.createBufferSource();
+          node.addEventListener('ended', () => { node.hasEnded = true; });
           const stop = node.stop.bind(node);
           node.stop = (...args) => { node.wasStopped = true; return stop(...args); };
           this.sources.push(node); return node;
@@ -113,12 +116,14 @@ async function main() {
       audio.update(gateState(0.1, 0.9), camera);
     });
     await page.waitForFunction(() => observedAudioContexts[0].panners[2].positionX.value === 13);
-    assert.deepEqual(await page.evaluate(() => {
+    const renderedGates = await page.evaluate(() => {
       const context = observedAudioContexts[0];
       return { durations: context.sources.slice(5).map(source => source.buffer.duration), positions: context.panners.slice(1).map(panner => [panner.positionX.value, panner.positionZ.value]) };
-    }), { durations: [3.6, 3.3], positions: [[-12, -35], [13, -35]] });
-    const gateAttenuation = await measureAttenuation(page, 3.6, 1);
-    assert.ok(gateAttenuation.near > 0.01, 'The rolling shutter has audible motor and metal samples');
+    });
+    assert.deepEqual(renderedGates.positions, [[-12, -35], [13, -35]]);
+    renderedGates.durations.forEach((duration, index) => assert.ok(Math.abs(duration - gateDurations[index]) < 1 / manifest.sampleRate, 'Decoder resampling preserves the complete recording'));
+    const gateAttenuation = await measureAttenuation(page, gateDurations[0], 1);
+    assert.ok(gateAttenuation.near > 0.01, 'The supplied door recording is audible');
     assert.ok(gateAttenuation.far < gateAttenuation.near / 5, 'A distant shutter is quieter than the same nearby shutter');
     await page.evaluate(() => {
       audio.update(gateState(0.4, 0.6), camera);
@@ -126,9 +131,11 @@ async function main() {
     });
     assert.equal(await page.evaluate(() => observedAudioContexts[0].sources.length), 7, 'Gate movement frames reuse the same two samples');
     await page.evaluate(() => audio.update(gateState(1, 0), camera));
-    assert.equal(await page.evaluate(() => observedAudioContexts[0].sources.slice(5).every(source => source.wasStopped)), true, 'Both shutters stop exactly at their motion endpoints');
+    assert.equal(await page.evaluate(() => observedAudioContexts[0].sources.slice(5).every(source => source.wasStopped || source.hasEnded)), true, 'Both shutters stop or finish their recording by the motion endpoint');
     await page.evaluate(() => audio.update(gateState(0.8, 0.2), camera));
-    assert.deepEqual(await page.evaluate(() => observedAudioContexts[0].sources.slice(7).map(source => source.buffer.duration)), [3.3, 3.6], 'Return travel switches each gate to the opposite sound');
+    const returnDurations = await page.evaluate(() => observedAudioContexts[0].sources.slice(7).map(source => source.buffer.duration));
+    assert.equal(returnDurations.length, 2, 'Return travel starts a fresh recording at each gate');
+    returnDurations.forEach((duration, index) => assert.ok(Math.abs(duration - gateDurations[1 - index]) < 1 / manifest.sampleRate));
     await page.evaluate(() => audio.setPaused(true));
     assert.equal(await page.evaluate(() => observedAudioContexts[0].state), 'suspended');
     await page.evaluate(() => audio.setPaused(false));
@@ -137,7 +144,7 @@ async function main() {
     await page.evaluate(() => audio.dispose());
     await page.waitForFunction(() => observedAudioContexts[0].state === 'closed');
     assert.deepEqual(errors, []);
-    assert.equal(await page.evaluate(() => observedAudioContexts[0].sources.slice(5).every(source => source.wasStopped)), true, 'Disposal stops all shutter sources');
+    assert.equal(await page.evaluate(() => observedAudioContexts[0].sources.slice(5).every(source => source.wasStopped || source.hasEnded)), true, 'Disposal leaves no playing shutter sources');
     console.log(JSON.stringify({ passed: true, checks: ['gesture unlock', 'real WAV decode', 'per-truck source graph', 'camera listener', 'distance attenuation', 'shutdown', 'positional roller shutters', 'gate distance attenuation', 'gate motion endpoints', 'gate direction changes', 'pause and resume', 'dispose'], attenuation, gateAttenuation, errors }, null, 2));
   } finally {
     await browser?.close();

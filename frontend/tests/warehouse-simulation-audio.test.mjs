@@ -5,6 +5,7 @@ const audioModule = await import('../public/warehouse-simulation-audio.mjs').cat
 
 function audioBoundary() {
   const contexts = [];
+  const assetNames = new WeakMap();
   const parameter = () => ({ value: 0, events: [], setValueAtTime(value, time) { this.value = value; this.events.push([value, time]); }, linearRampToValueAtTime(value, time) { this.value = value; this.events.push([value, time]); }, setTargetAtTime(value, time) { this.value = value; this.events.push([value, time]); }, cancelScheduledValues() {} });
   const node = () => ({ connected: [], disconnected: false, connect(other) { this.connected.push(other); return other; }, disconnect() { this.disconnected = true; } });
   class Context {
@@ -26,7 +27,7 @@ function audioBoundary() {
     }
     async decodeAudioData(bytes) {
       const view = new DataView(bytes);
-      return { duration: view.getUint32(40, true) / view.getUint32(28, true), numberOfChannels: view.getUint16(22, true) };
+      return { duration: view.getUint32(40, true) / view.getUint32(28, true), numberOfChannels: view.getUint16(22, true), name: assetNames.get(bytes) };
     }
   }
   const oldContext = globalThis.AudioContext;
@@ -34,7 +35,16 @@ function audioBoundary() {
   globalThis.AudioContext = Context;
   globalThis.fetch = async url => {
     const buffer = await fs.readFile(url);
-    return { ok: true, arrayBuffer: async () => buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) };
+    return { ok: true, arrayBuffer: async () => {
+      const bytes = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+      const name = new URL(url).pathname.split('/').at(-1).replace('.wav', '');
+      assetNames.set(bytes, name);
+      // Preserve fixture-only identity across the decoder's defensive copy.
+      // Opening and closing may intentionally contain the same recording.
+      const slice = bytes.slice.bind(bytes);
+      bytes.slice = (...args) => { const copy = slice(...args); assetNames.set(copy, name); return copy; };
+      return bytes;
+    } };
   };
   return { contexts, restore() { globalThis.AudioContext = oldContext; globalThis.fetch = oldFetch; } };
 }
@@ -44,8 +54,7 @@ const layout = { gateIn: { x: -12, y: 0, z: -35 }, gateOut: { x: 13, y: 0, z: -3
 const forklift = (id, changes = {}) => ({ id, position: { x: 0, y: 0, z: 0 }, yaw: 0, visible: true, speed: 0, liftVelocity: 0, engineRunning: true, ...changes });
 const state = (...forklifts) => ({ forklifts });
 const kind = source => {
-  const duration = source.buffer.duration;
-  return duration > 7 ? 'idle' : duration === 3.6 ? 'gate-open' : duration === 3.3 ? 'gate-close' : duration > 2.3 ? 'start' : duration === 1.5 ? 'hydraulics' : duration > 1.5 ? 'stop' : 'reverse';
+  return ({ 'engine-start': 'start', 'engine-idle': 'idle', 'engine-stop': 'stop' })[source.buffer.name] || source.buffer.name;
 };
 const active = context => context.sources.filter(source => source.stopped === undefined).map(kind);
 
@@ -207,4 +216,36 @@ test('bundled hydraulics uses the original recording from exactly zero to one an
   assert.equal(manifest.assets.hydraulics.sourceStart, 0);
   assert.equal(manifest.assets.hydraulics.sourceEnd, 1.5);
   assert.equal(manifest.sources.hydraulics.sha256, '4a37e127f4cc30f94acdedd7916d1e4c564845d71d4587204cd51c75b05def8f');
+});
+
+test('both gate effects use the supplied door recording at its natural duration', async () => {
+  const manifest = JSON.parse(await fs.readFile(new URL('../public/audio/warehouse/manifest.json', import.meta.url), 'utf8'));
+  assert.equal(manifest.sources.gate.filename, 'door-open-by-freesound-community-royalty-free-music-827701.mp3');
+  assert.equal(manifest.sources.gate.sha256, '38b00a8472eca3e5031e338f6810ec5fecf8f6d35fcb3a76cc7b25b7b320d6de');
+  for (const name of ['gate-open', 'gate-close']) {
+    const recording = manifest.assets[name];
+    assert.equal(recording.source, manifest.sources.gate.filename);
+    assert.equal(recording.sourceStart, 0);
+    assert.equal(recording.sourceEnd, manifest.sources.gate.duration);
+    const bytes = await fs.readFile(new URL(`../public/audio/warehouse/${name}.wav`, import.meta.url));
+    assert.ok(Math.abs(bytes.readUInt32LE(40) / bytes.readUInt32LE(28) - manifest.sources.gate.duration) < 1 / 22050);
+  }
+});
+
+test('a short door recording plays once per opening or closing without restarting at its end', async () => {
+  const boundary = audioBoundary();
+  const audio = audioModule.createSimulationAudio({ layout });
+  try {
+    await audio.resume();
+    audio.update({ forklifts: [], gates: { in: 0, out: 0 } }, camera);
+    audio.update({ forklifts: [], gates: { in: 0.1, out: 0 } }, camera);
+    const context = boundary.contexts[0], first = context.sources[0];
+    assert.notEqual(first.loop, true, 'short recording must not repeat before the door stops');
+    first.onended();
+    audio.update({ forklifts: [], gates: { in: 0.9, out: 0 } }, camera);
+    assert.equal(context.sources.length, 1, 'a finished recording stays finished during the same motion');
+    audio.update({ forklifts: [], gates: { in: 1, out: 0 } }, camera);
+    audio.update({ forklifts: [], gates: { in: 0.9, out: 0 } }, camera);
+    assert.equal(context.sources.length, 2, 'closing starts a fresh recording');
+  } finally { audio.dispose(); boundary.restore(); }
 });

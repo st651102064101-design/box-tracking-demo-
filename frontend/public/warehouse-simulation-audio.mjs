@@ -136,9 +136,12 @@ export function createSimulationAudio({ signal, layout } = {}) {
         value(panner.positionX, location.x); value(panner.positionY, location.y + 4.7); value(panner.positionZ, location.z);
       } else panner.setPosition(location.x, location.y + 4.7, location.z);
       const name = motion.direction > 0 ? 'gate-open' : motion.direction < 0 ? 'gate-close' : null;
-      for (const effect of ['gate-open', 'gate-close']) {
-        if (effect === name) sound(shutter, effect, { loop: true, fadeIn: 0.035 });
-        else stopSound(shutter, effect);
+      if (shutter.direction !== motion.direction) {
+        shutter.direction = motion.direction;
+        for (const effect of ['gate-open', 'gate-close']) stopSound(shutter, effect);
+        // This recording is slightly shorter than the shutter movement. Play
+        // it once, preserving its natural ending instead of repeating the start.
+        if (name) sound(shutter, name, { fadeIn: 0.012 });
       }
     }
   }
