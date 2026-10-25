@@ -5887,7 +5887,13 @@ function requireCustomerSetup(){
 window.requireGateSetup=requireGateSetup;window.openForcedModal=openForcedModal;window.releaseForcedModal=releaseForcedModal;window.requireCustomerSetup=requireCustomerSetup;
 
 /* ===== nav ===== */
-function movePill(b){var bg=$('#pillBg');bg.style.width=b.offsetWidth+'px';bg.style.transform='translateX('+b.offsetLeft+'px)';}
+function movePill(b){
+  var bg=$('#pillBg');
+  // Follow the actual button box, including compact nav padding and font size.
+  // Keep vertical positioning out of transform: dragging owns translateX.
+  bg.style.top=b.offsetTop+'px';bg.style.height=b.offsetHeight+'px';
+  bg.style.width=b.offsetWidth+'px';bg.style.transform='translateX('+b.offsetLeft+'px)';
+}
 
 /* ── drag the glass pill to switch tabs ────────────────────────────────────
    Press the active tab and drag sideways: the pill follows the finger, morphs to the
