@@ -21,6 +21,7 @@ async function main() {
       let body = await readFile(file);
       if (pathname === '/warehouse-simulation-view.mjs') {
         body = body.toString().replace('controls = new OrbitControls(camera, canvas);', '$&\nwindow.observedCamera = camera; window.observedControls = controls; window.observedFrames = 0; window.observedLockEvents = 0; document.addEventListener("pointerlockchange", () => { window.observedPointerLock = document.pointerLockElement?.id || null; window.observedLockEvents++; });')
+          .replace('warehouse = createWarehouseScene(renderer, layout, state, abort.signal);', '$&\nwindow.observedWarehouse = warehouse;')
           .replace('function animate(time) {', '$&\nwindow.observedFrames++;');
       }
       res.setHeader('Content-Type', ({ '.mjs': 'text/javascript', '.js': 'text/javascript', '.html': 'text/html', '.css': 'text/css' })[path.extname(file)] || 'application/octet-stream');
@@ -39,6 +40,9 @@ async function main() {
     await page.waitForFunction(() => document.activeElement?.tagName === 'IFRAME');
     simulationFrame = page.frames().find(item => item.url().includes('/warehouse-simulation.html'));
     await simulationFrame.waitForFunction(() => Boolean(window.observedCamera));
+    assert.equal(await simulationFrame.locator('button').count(), 2, 'Only the two view buttons remain');
+    assert.equal(await simulationFrame.locator('#toggle-ui').count(), 0, 'UI visibility uses only its hotkey');
+    assert.equal(await simulationFrame.evaluate(() => window.observedWarehouse.buildingVisible), true, 'Re-entry resets temporary building visibility');
   };
   const pressFor = async key => {
     const frames = await simulationFrame.evaluate(() => window.observedFrames);
@@ -68,8 +72,8 @@ async function main() {
     await page.mouse.move(750, 350);
     const cursorMoved = await snapshot();
     cursorLook.rotation.forEach((value, axis) => closeTo(cursorMoved.rotation[axis], value, 'Moving the unlocked cursor preserves first-person look'));
-    await simulationFrame.locator('#toggle-ui').click();
-    assert.equal(await simulationFrame.locator('button:visible').count(), 0, 'The actual cursor can operate UI while Ctrl is held');
+    await simulationFrame.locator('#first-person-view').click();
+    assert.equal(await simulationFrame.locator('#first-person-view').getAttribute('aria-pressed'), 'true', 'The actual cursor can operate the remaining UI while Ctrl is held');
     await page.keyboard.up('ControlLeft');
     await simulationFrame.waitForFunction(() => document.pointerLockElement?.id === 'warehouse', null, { timeout: 3000 });
     const resumedLook = await snapshot();
@@ -88,7 +92,6 @@ async function main() {
     });
     await simulationFrame.waitForFunction(before => window.observedPointerLock === 'warehouse' && window.observedLockEvents >= before + 2, beforeQuickCtrl);
     assert.equal(await page.evaluate(() => window.__warehouseSimulationActive), true, 'A quick Ctrl tap finishes unlock/relock without being mistaken for Escape');
-    await page.keyboard.press('h');
     await page.keyboard.press('f');
     await simulationFrame.waitForFunction(() => !document.pointerLockElement);
     assert.equal(await page.evaluate(() => window.__warehouseSimulationActive), true, 'An intentional orbit unlock must keep the simulation active');
@@ -117,19 +120,37 @@ async function main() {
     const lowered = await snapshot();
     assert.ok(lowered.position[1] < raised.position[1] - 0.3, 'Shift lowers the orbit camera');
 
+    await page.keyboard.down('b');
+    assert.equal(await simulationFrame.evaluate(() => window.observedWarehouse.buildingVisible), false, 'B hides the building');
+    await page.keyboard.down('b');
+    assert.equal(await simulationFrame.evaluate(() => window.observedWarehouse.buildingVisible), false, 'Holding B does not flicker the shell');
+    await page.keyboard.up('b');
+    assert.equal(await simulationFrame.evaluate(() => window.observedWarehouse.scene.getObjectByName('simulation-building-shell').visible), false, 'Actual shell geometry is hidden');
+    await simulationFrame.evaluate(() => { window.observedCamera.position.set(-10, 30, -25); window.observedControls.target.set(0, 5, 0); window.observedControls.update(); });
+    await simulationFrame.waitForFunction(() => window.observedCamera.position.y > 29);
+    const above = await snapshot();
+    await pressFor('Space');
+    assert.ok((await snapshot()).position[1] > above.position[1], 'Open building permits above-roof inspection');
+    await page.keyboard.press('b');
+    assert.equal(await simulationFrame.evaluate(() => window.observedWarehouse.buildingVisible), true, 'B restores the building');
+    assert.ok((await snapshot()).position[1] < 14, 'Showing the shell restores the indoor orbit limit');
+
     await page.keyboard.press('h');
-    assert.equal(await simulationFrame.locator('button:visible').count(), 0, 'H hides every control, including its own restore button');
+    assert.equal(await simulationFrame.locator('button:visible').count(), 0, 'H hides both view controls');
     await page.keyboard.press('?');
     assert.equal(await simulationFrame.locator('#controls-help').isVisible(), false, 'Help respects hidden UI');
     await page.keyboard.press('f');
     await simulationFrame.waitForFunction(() => document.pointerLockElement?.id === 'warehouse');
     assert.equal(await simulationFrame.locator('#controls-help').isVisible(), false, 'Mode hints respect hidden UI');
+    await page.keyboard.press('b');
+    assert.equal(await simulationFrame.evaluate(() => window.observedWarehouse.buildingVisible), false, 'B works with hidden UI in first person');
+    assert.equal(await simulationFrame.evaluate(() => document.pointerLockElement?.id), 'warehouse', 'Building toggle preserves pointer lock');
+    assert.equal(await simulationFrame.locator('button:visible').count(), 0, 'Building toggle keeps UI hidden');
+    assert.equal(await simulationFrame.locator('#controls-help').isVisible(), false, 'Building hints respect hidden UI');
     await page.keyboard.press('f');
     await page.keyboard.press('h');
-    assert.equal(await simulationFrame.locator('button:visible').count(), 3, 'H restores all controls');
-    await simulationFrame.locator('#toggle-ui').click();
-    assert.equal(await simulationFrame.locator('button:visible').count(), 0, 'The UI button hides itself too');
-    await page.keyboard.press('h');
+    assert.equal(await simulationFrame.locator('button:visible').count(), 2, 'H restores the two view buttons');
+    assert.equal(await simulationFrame.evaluate(() => window.observedWarehouse.buildingVisible), false, 'H leaves the independent shell toggle unchanged');
     await page.keyboard.press('?');
     assert.equal(await simulationFrame.locator('#controls-help').isVisible(), true, '? displays controls help');
     await simulationFrame.locator('#controls-help').waitFor({ state: 'hidden', timeout: 7000 });
@@ -203,7 +224,7 @@ async function main() {
     await page.waitForFunction(() => !window.__warehouseSimulationActive);
     assert.deepEqual(errors, []);
     assert.deepEqual(await page.evaluate(() => window.errors), []);
-    console.log(JSON.stringify({ result: 'PASS', checks: ['native-pointer-lock', 'unbounded-mouse-look', 'Ctrl-cursor-hold-release', 'Ctrl-UI-interaction', 'Ctrl-look-preserved', 'Ctrl-both-keys', 'Ctrl-quick-tap', 'Ctrl-orbit-switch', 'Ctrl-lost-keyup', 'Ctrl-resume-refusal', 'Ctrl-Escape', 'F-mode-switch', 'intentional-unlock', 'orbit-snapshot', 'view-relative-orbit-flight', 'Space-Shift-height', 'H-all-overlays', 'UI-button-hide', 'hidden-mode-help', 'transient-help', 'locked-Escape', 'swallowed-Escape', 'blur-unlock', 'lock-refusal', 'zero-browser-errors'] }));
+    console.log(JSON.stringify({ result: 'PASS', checks: ['native-pointer-lock', 'unbounded-mouse-look', 'Ctrl-cursor-hold-release', 'Ctrl-UI-interaction', 'Ctrl-look-preserved', 'Ctrl-both-keys', 'Ctrl-quick-tap', 'Ctrl-orbit-switch', 'Ctrl-lost-keyup', 'Ctrl-resume-refusal', 'Ctrl-Escape', 'F-mode-switch', 'intentional-unlock', 'orbit-snapshot', 'view-relative-orbit-flight', 'Space-Shift-height', 'H-all-overlays', 'two-view-buttons-only', 'B-shell-toggle-repeat-guard', 'B-above-roof-orbit', 'B-first-person-pointer-lock', 'B-H-independent', 'B-reentry-reset', 'hidden-mode-help', 'transient-help', 'locked-Escape', 'swallowed-Escape', 'blur-unlock', 'lock-refusal', 'zero-browser-errors'] }));
   } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

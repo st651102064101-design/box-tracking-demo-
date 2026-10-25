@@ -9,7 +9,6 @@ import { createSimulationAudio } from './warehouse-simulation-audio.mjs';
 const canvas = document.querySelector('#warehouse');
 const orbitButton = document.querySelector('#orbit-view');
 const firstPersonButton = document.querySelector('#first-person-view');
-const uiButton = document.querySelector('#toggle-ui');
 const help = document.querySelector('#controls-help');
 const abort = new AbortController();
 const eventOptions = { signal: abort.signal };
@@ -98,11 +97,12 @@ async function initialize() {
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
   warehouse = createWarehouseScene(renderer, layout, state, abort.signal);
+  canvas.dataset.buildingVisible = String(warehouse.buildingVisible);
   const camera = new THREE.PerspectiveCamera(68, 1, 0.08, 170);
   // Start on the indoor pedestrian side, below the roof and beside the rows.
-  camera.position.set(-18, 10, -34);
+  camera.position.set(-17, 10, -24);
   controls = new OrbitControls(camera, canvas);
-  controls.target.set(0, 1, -16);
+  controls.target.set(0, 3, 0);
   controls.enableDamping = true;
   controls.dampingFactor = 0.075;
   controls.minDistance = 1.2;
@@ -126,8 +126,8 @@ async function initialize() {
   const rightDirection = new THREE.Vector3();
   const up = new THREE.Vector3(0, 1, 0);
   const modeHelp = () => view === 'orbit'
-    ? 'Orbit: drag to rotate · scroll to zoom · WASD / arrows to fly · Space up · Shift down · F first person · H hide UI · ? help · Esc exit'
-    : 'First person: move mouse to look · hold Ctrl for cursor · WASD / arrows to walk · touch: drag to look · F orbit · H hide UI · ? help · Esc exit';
+    ? 'Orbit: drag to rotate · scroll to zoom · WASD / arrows to fly · Space up · Shift down · F first person · B walls/roof · H hide UI · ? help · Esc exit'
+    : 'First person: move mouse to look · hold Ctrl for cursor · WASD / arrows to walk · touch: drag to look · F orbit · B walls/roof · H hide UI · ? help · Esc exit';
   function pointerLockRefused() {
     requestingLock = false;
     if (!stopped && view === 'first-person' && !cursorKeys.size) showHelp('Click the scene to resume mouse look · hold Ctrl for cursor · F orbit · H hide UI · Esc exit. Touch: drag to look.');
@@ -183,10 +183,10 @@ async function initialize() {
     const position = camera.position;
     position.x = THREE.MathUtils.clamp(position.x, bounds.minX + 0.5, bounds.maxX - 0.5);
     position.z = THREE.MathUtils.clamp(position.z, bounds.minZ + 0.5, bounds.maxZ - 0.5);
-    position.y = THREE.MathUtils.clamp(position.y, 0.6, warehouse.roofHeight(position.x) - 0.5);
+    position.y = THREE.MathUtils.clamp(position.y, 0.6, warehouse.buildingVisible ? warehouse.roofHeight(position.x) - 0.5 : 55);
     controls.target.x = THREE.MathUtils.clamp(controls.target.x, bounds.minX + 0.5, bounds.maxX - 0.5);
     controls.target.z = THREE.MathUtils.clamp(controls.target.z, bounds.minZ + 0.5, bounds.maxZ - 0.5);
-    controls.target.y = THREE.MathUtils.clamp(controls.target.y, 0.6, 10.6);
+    controls.target.y = THREE.MathUtils.clamp(controls.target.y, 0.6, warehouse.buildingVisible ? 10.6 : 55);
     camera.lookAt(controls.target);
   }
   function setView(next) {
@@ -223,7 +223,6 @@ async function initialize() {
     setView('first-person');
     if (event.pointerType !== 'touch') requestMouseLook();
   }, eventOptions);
-  uiButton.addEventListener('click', toggleUI, eventOptions);
   const movementKeys = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'ShiftLeft', 'ShiftRight']);
   window.addEventListener('keydown', event => {
     if (event.key === 'Control') {
@@ -245,6 +244,12 @@ async function initialize() {
       if (view === 'first-person') requestMouseLook();
     } else if (event.code === 'KeyH') {
       event.preventDefault(); toggleUI();
+    } else if (event.code === 'KeyB') {
+      event.preventDefault();
+      warehouse.setBuildingVisible(!warehouse.buildingVisible);
+      canvas.dataset.buildingVisible = String(warehouse.buildingVisible);
+      showHelp(`Walls and roof ${warehouse.buildingVisible ? 'shown' : 'hidden'} · B toggle building · H hide UI · Esc exit`);
+      if (view === 'orbit') constrainOrbit();
     } else if (event.key === '?') {
       event.preventDefault(); showHelp(modeHelp());
     }
@@ -325,7 +330,8 @@ async function initialize() {
       for (const [axis, min, max] of [['x', bounds.minX + 0.5, bounds.maxX - 0.5], ['z', bounds.minZ + 0.5, bounds.maxZ - 0.5]]) {
         walkDirection[axis] = THREE.MathUtils.clamp(walkDirection[axis], Math.max(min - camera.position[axis], min - controls.target[axis]), Math.min(max - camera.position[axis], max - controls.target[axis]));
       }
-      walkDirection.y = THREE.MathUtils.clamp(walkDirection.y, Math.max(0.6 - camera.position.y, 0.6 - controls.target.y), Math.min(warehouse.roofHeight(camera.position.x + walkDirection.x) - 0.5 - camera.position.y, 10.6 - controls.target.y));
+      const ceiling = warehouse.buildingVisible ? warehouse.roofHeight(camera.position.x + walkDirection.x) - 0.5 : 55;
+      walkDirection.y = THREE.MathUtils.clamp(walkDirection.y, Math.max(0.6 - camera.position.y, 0.6 - controls.target.y), Math.min(ceiling - camera.position.y, (warehouse.buildingVisible ? 10.6 : 55) - controls.target.y));
       camera.position.add(walkDirection);
       controls.target.add(walkDirection);
       return;
@@ -334,7 +340,12 @@ async function initialize() {
     walkDirection.set(sideways, 0, -forward).normalize().applyAxisAngle(up, lookYaw).multiplyScalar(delta * 5);
     const nextX = THREE.MathUtils.clamp(camera.position.x + walkDirection.x, bounds.minX + 0.5, bounds.maxX - 0.5);
     const nextZ = THREE.MathUtils.clamp(camera.position.z + walkDirection.z, bounds.minZ + 0.5, bounds.maxZ - 0.5);
-    const blocked = (x, z) => layout.racks.some(rack => Math.abs(x - rack.x) < rack.width / 2 + 0.6 && Math.abs(z - rack.z) < rack.depth / 2 + 0.6);
+    const blocked = (x, z) => layout.racks.some(rack => {
+      const dx = x - rack.x, dz = z - rack.z;
+      const along = dx * Math.cos(rack.rotationY) - dz * Math.sin(rack.rotationY);
+      const across = dx * Math.sin(rack.rotationY) + dz * Math.cos(rack.rotationY);
+      return Math.abs(along) < rack.width / 2 + 0.6 && Math.abs(across) < rack.depth / 2 + 0.6;
+    });
     if (!blocked(nextX, camera.position.z)) camera.position.x = nextX;
     if (!blocked(camera.position.x, nextZ)) camera.position.z = nextZ;
     camera.position.y = 1.72;

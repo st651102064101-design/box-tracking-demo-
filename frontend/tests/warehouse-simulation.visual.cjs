@@ -46,8 +46,11 @@ async function main() {
           + `\nexport function createSimulation() { const engine = createSimulationForCapture(); engine.step(${snapshotTime}); return { ...engine, step() { return engine.getState(); } }; }\n`;
       }
       if (pathname === '/warehouse-simulation-view.mjs' && gateView) {
-        body = body.toString().replace('camera.position.set(-18, 10, -34);', 'camera.position.set(-18, 5, -24);')
-          .replace('controls.target.set(0, 1, -16);', 'controls.target.set(-12, 2, -35);');
+        body = body.toString().replace('camera.position.set(-17, 10, -24);', 'camera.position.set(-18, 5, -24);')
+          .replace('controls.target.set(0, 3, 0);', 'controls.target.set(-12, 2, -35);');
+      }
+      if (pathname === '/warehouse-simulation-view.mjs') {
+        body = body.toString().replace('controls = new OrbitControls(camera, canvas);', '$&\nwindow.visualCamera = camera; window.visualControls = controls; window.visualWarehouse = warehouse;');
       }
       res.setHeader('Cache-Control', 'no-store');
       res.setHeader('Content-Type', ({ '.mjs': 'text/javascript', '.js': 'text/javascript', '.html': 'text/html', '.css': 'text/css' })[path.extname(file)] || 'application/octet-stream');
@@ -109,6 +112,18 @@ async function main() {
       assert.equal(await page.evaluate(() => window.visualError), null);
       await page.screenshot({ path: path.join(output, `warehouse-${sample.name}.png`) });
     }
+    await page.keyboard.press('b');
+    await page.evaluate(() => {
+      window.visualCamera.position.set(-15, 32, -24);
+      window.visualControls.target.set(0, 3, 0);
+      window.visualControls.update();
+    });
+    await page.keyboard.press('h');
+    await page.screenshot({ path: path.join(output, 'warehouse-open-building.png') });
+    assert.equal(await page.evaluate(() => window.visualWarehouse.scene.getObjectByName('simulation-building-shell').visible), false);
+    assert.equal(await page.locator('button:visible').count(), 0);
+    await page.keyboard.press('h');
+    await page.keyboard.press('b');
     await page.locator('#first-person-view').click();
     await page.screenshot({ path: path.join(output, 'warehouse-first-person.png') });
     const rigBounds = await page.evaluate(async (dockingStates) => {
@@ -126,6 +141,23 @@ async function main() {
       const wheels = [];
       truck.traverse(node => { if (/^Wheel_(FL|FR|RL|RR)$/.test(node.name)) wheels.push(node.userData.wheelRadius); });
       const result = { body: { min: body.min.toArray(), max: body.max.toArray() }, forks: { min: forks.min.toArray(), max: forks.max.toArray() }, wheels };
+      graphics.scene.updateMatrixWorld(true);
+      result.rackFrames = model.layout.racks.map(rack => {
+        const frame = graphics.scene.getObjectByName(rack.id);
+        const beams = frame.children.find(child => child.isInstancedMesh && child.material.color.getHex() === 0xf18020);
+        const extent = new THREE.Box3().setFromObject(beams);
+        return { min: extent.min.toArray(), max: extent.max.toArray() };
+      });
+      const beforeShell = JSON.stringify(state);
+      graphics.setBuildingVisible(false);
+      result.openBuilding = {
+        shell: graphics.scene.getObjectByName('simulation-building-shell').visible,
+        racks: model.layout.racks.every(rack => graphics.scene.getObjectByName(rack.id).visible),
+        trucks: state.forklifts.every(truck => graphics.scene.getObjectByName(truck.id).visible === truck.visible),
+        gates: ['in', 'out'].every(id => graphics.scene.getObjectByName(`simulation-gate-${id}`).visible),
+        unchangedState: beforeShell === JSON.stringify(state),
+      };
+      graphics.setBuildingVisible(true);
       result.operators = state.forklifts.map(snapshot => {
         const vehicle = graphics.scene.getObjectByName(snapshot.id);
         const operator = vehicle.getObjectByName('ForkliftOperator');
@@ -153,14 +185,15 @@ async function main() {
         graphics.scene.updateMatrixWorld(true);
         const object = graphics.scene.getObjectByName(state.forklifts[truckIndex].id);
         let mastFront = -Infinity;
-        const rack = model.layout.racks[rackIndex], toward = -rack.facing;
+        const rack = model.layout.racks[rackIndex];
+        const towardX = -rack.facing * Math.sin(rack.rotationY), towardZ = -rack.facing * Math.cos(rack.rotationY);
         object.traverse(node => {
           if (node.name === 'ForkliftMastOuter' || node.name === 'ForkliftCarriageForks' || node.name.includes('-mast-stage-')) {
             const extent = new THREE.Box3().setFromObject(node);
-            mastFront = Math.max(mastFront, toward === 1 ? extent.max.z : -extent.min.z);
+            for (const x of [extent.min.x, extent.max.x]) for (const z of [extent.min.z, extent.max.z]) mastFront = Math.max(mastFront, towardX * x + towardZ * z);
           }
         });
-        return { role: state.forklifts[truckIndex].role, facing: rack.facing, clearance: toward * rack.z - rack.depth / 2 - 0.065 - mastFront };
+        return { role: state.forklifts[truckIndex].role, facing: rack.facing, clearance: towardX * rack.x + towardZ * rack.z - rack.depth / 2 - 0.065 - mastFront };
       });
       graphics.dispose(); model.dispose();
       return result;
@@ -179,6 +212,12 @@ async function main() {
       assert.ok(operator.meshCount <= 12, 'Anatomy is batched to keep the three drivers inexpensive to render');
     }
     assert.ok(rigBounds.wheels.every(radius => Number.isFinite(radius) && radius > 0), 'Every wheel has a usable physical radius');
+    for (const frame of rigBounds.rackFrames) {
+      assert.ok(Math.abs(frame.max[0] - frame.min[0] - 1.37) < 0.001, 'Rendered shelf depth includes the actual front beam thickness');
+      assert.ok(Math.abs(frame.max[2] - frame.min[2] - 16) < 0.001, 'Long axes run along gate traffic');
+    }
+    for (const [left, right] of [[1, 2], [3, 4]]) assert.ok(Math.abs(rigBounds.rackFrames[right].min[0] - rigBounds.rackFrames[left].max[0] - 5.6) < 0.001, 'Rendered beam faces preserve the full clear passing aisle');
+    assert.deepEqual(rigBounds.openBuilding, { shell: false, racks: true, trucks: true, gates: true, unchangedState: true });
     assert.ok(rigBounds.mastClearances.every(item => item.clearance >= 0.05), `Real mast and telescoping stages must clear the front shelf beams: ${JSON.stringify(rigBounds.mastClearances)}`);
     for (const shutter of rigBounds.shutters) {
       assert.equal(shutter.visible, shutter.openness < 1, 'Open shutters leave a clear portal');

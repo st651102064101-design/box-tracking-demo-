@@ -6,6 +6,10 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 // are supplied by the isolated engine; the only fetch is this bundled asset.
 export function createWarehouseScene(renderer, layout, initialState, signal) {
   const scene = new THREE.Scene();
+  const building = new THREE.Group();
+  building.name = 'simulation-building-shell';
+  scene.add(building);
+  let staticRoot = scene;
   scene.background = new THREE.Color(0x58666e);
   scene.fog = new THREE.Fog(0x91a0a5, 62, 120);
   const geometries = new Set();
@@ -53,8 +57,8 @@ export function createWarehouseScene(renderer, layout, initialState, signal) {
     mesh.position.set(...position);
     mesh.castShadow = castShadow;
     mesh.receiveShadow = true;
-    parent.add(mesh);
-    if (parent === scene) staticMeshes.push(mesh);
+    if (parent === scene) { staticRoot.add(mesh); staticMeshes.push(mesh); }
+    else parent.add(mesh);
     return mesh;
   }
   function member(from, to, radius = 0.055, surface = surfaces.steel) {
@@ -65,7 +69,7 @@ export function createWarehouseScene(renderer, layout, initialState, signal) {
     mesh.position.copy(start.add(end).multiplyScalar(0.5));
     mesh.scale.set(radius, delta.length(), radius);
     mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), delta.normalize());
-    scene.add(mesh);
+    staticRoot.add(mesh);
     staticMeshes.push(mesh);
     return mesh;
   }
@@ -94,7 +98,7 @@ export function createWarehouseScene(renderer, layout, initialState, signal) {
     mesh.scale.set(size[0], size[1], 1);
     mesh.position.set(...position);
     mesh.rotation.set(options.floor ? -Math.PI / 2 : 0, options.floor ? 0 : (options.rotationY ?? Math.PI), options.floor ? (options.floorRotation ?? Math.PI) : 0);
-    scene.add(mesh);
+    staticRoot.add(mesh);
     staticMeshes.push(mesh);
     return mesh;
   }
@@ -129,6 +133,7 @@ export function createWarehouseScene(renderer, layout, initialState, signal) {
 
   // The shell is fully enclosed. Both loading portals are actual wall openings;
   // dark recesses conceal the off-stage return route beyond the threshold.
+  staticRoot = building;
   box([0.2, eave, depth], [bounds.minX, eave / 2, 0], surfaces.wall, scene, false);
   box([0.2, eave, depth], [bounds.maxX, eave / 2, 0], surfaces.wall, scene, false);
   box([width, eave, 0.2], [0, eave / 2, bounds.maxZ], surfaces.wall, scene, false);
@@ -149,6 +154,8 @@ export function createWarehouseScene(renderer, layout, initialState, signal) {
     box([0.16, 5, recessDepth], [left, 2.5, bounds.minZ - recessDepth / 2], surfaces.dark, scene, false);
     box([0.16, 5, recessDepth], [right, 2.5, bounds.minZ - recessDepth / 2], surfaces.dark, scene, false);
     box([gate.width, 0.15, recessDepth], [gate.x, 4.8, bounds.minZ - recessDepth / 2], surfaces.dark, scene, false);
+    // Gates remain usable and visible when the building shell is hidden.
+    staticRoot = scene;
     box([gate.width, 0.18, recessDepth], [gate.x, -0.09, bounds.minZ - recessDepth / 2], surfaces.floor, scene, false);
     for (const x of [left, right]) {
       box([0.27, 4.9, 0.4], [x, 2.45, bounds.minZ + 0.08], surfaces.steel);
@@ -166,6 +173,7 @@ export function createWarehouseScene(renderer, layout, initialState, signal) {
     sign(gate.text, [4.4, 0.76], [gate.x, 5.85, bounds.minZ + 0.14], { background: gate.color, rotationY: 0 });
     for (const x of [left + 0.3, right - 0.3]) floorLine(x, bounds.minZ + 2.4, 0.1, 4.8);
     wallStart = right;
+    staticRoot = building;
   });
   box([bounds.maxX - wallStart, eave, 0.2], [(bounds.maxX + wallStart) / 2, eave / 2, bounds.minZ], surfaces.wall, scene, false);
   for (const side of [-1, 1]) {
@@ -185,7 +193,7 @@ export function createWarehouseScene(renderer, layout, initialState, signal) {
     ], 3));
     geometry.setIndex([0, 1, 2, 0, 2, 3]);
     geometry.computeVertexNormals();
-    scene.add(new THREE.Mesh(geometry, surfaces.roof));
+    building.add(new THREE.Mesh(geometry, surfaces.roof));
   }
   roofPanel(-20, 0, -35, 35);
   roofPanel(0, 20, -35, 35);
@@ -193,7 +201,7 @@ export function createWarehouseScene(renderer, layout, initialState, signal) {
     const geometry = keepGeometry(new THREE.BufferGeometry());
     geometry.setAttribute('position', new THREE.Float32BufferAttribute([-20, eave, z, 20, eave, z, 0, ridge, z], 3));
     geometry.computeVertexNormals();
-    scene.add(new THREE.Mesh(geometry, surfaces.roof));
+    building.add(new THREE.Mesh(geometry, surfaces.roof));
   }
   for (let z = -34; z <= 34; z += 8.5) {
     for (const side of [-1, 1]) {
@@ -240,7 +248,14 @@ export function createWarehouseScene(renderer, layout, initialState, signal) {
   fill.position.set(16, 10, 28);
   scene.add(fill);
 
-  layout.racks.forEach((rack, row) => {
+  layout.racks.forEach((worldRack, row) => {
+    const rackRoot = new THREE.Group();
+    rackRoot.name = worldRack.id;
+    rackRoot.position.set(worldRack.x, 0, worldRack.z);
+    rackRoot.rotation.y = worldRack.rotationY;
+    scene.add(rackRoot);
+    staticRoot = rackRoot;
+    const rack = { ...worldRack, x: 0, z: 0 };
     const front = rack.z + rack.facing * rack.depth / 2;
     const rear = rack.z - rack.facing * rack.depth / 2;
     const faceRotation = rack.facing === -1 ? Math.PI : 0;
@@ -260,7 +275,7 @@ export function createWarehouseScene(renderer, layout, initialState, signal) {
       }
     }
     rack.shelfHeights.forEach((y, shelf) => {
-      for (const z of [front, rear]) box([rack.width, 0.18, 0.13], [rack.x, y - 0.09, z], surfaces.orange);
+      for (const z of [front, rear]) box([rack.width, 0.18, rack.beamDepth], [rack.x, y - 0.09, z], surfaces.orange);
       rack.slotCenters.forEach((x, slot) => {
         for (const offset of [-1.1, -0.35, 0.35, 1.1]) box([0.06, 0.06, rack.depth], [x + offset, y - 0.03, rack.z], surfaces.steel);
         sign(`${shelf + 1} / ${String(slot + 1).padStart(2, '0')}`, [0.55, 0.13], [x, y - 0.09, front + rack.facing * 0.071], { background: '#ece9d9', color: '#344550', rotationY: faceRotation });
@@ -270,7 +285,7 @@ export function createWarehouseScene(renderer, layout, initialState, signal) {
     // Visible spacers connect the rear frames of each back-to-back pair.
     if (row % 2 === 0) {
       for (const x of [-8, 8]) for (const y of [1.6, 5.8, 10]) {
-        box([0.14, 0.12, 0.18], [x, y, rear + 0.09], surfaces.steel);
+        box([0.14, 0.12, 0.18], [x, y, rear - rack.facing * 0.09], surfaces.steel);
       }
     }
     for (const side of [-1, 1]) {
@@ -278,10 +293,16 @@ export function createWarehouseScene(renderer, layout, initialState, signal) {
       for (const z of [front + rack.facing * 0.25, rear - rack.facing * 0.25]) bollard(x, z);
       box([0.12, 0.18, rack.depth + 0.5], [x, 0.55, rack.z], surfaces.yellow);
     }
-    floorLine(-9.2, rack.z, 0.09, 4.5);
-    floorLine(9.2, rack.z, 0.09, 4.5);
-    sign(`R0${row + 1} / AISLE`, [3.2, 0.65], [0, 0.015, rack.z + rack.facing * 4.8], { floor: true, floorRotation: faceRotation, background: '#bac0ba', color: '#5b6566' });
+    floorLine(-9.2, rack.z, 0.09, 2.2);
+    floorLine(9.2, rack.z, 0.09, 2.2);
+    // Opposing fronts share one aisle and one floor label, avoiding two
+    // coplanar signs occupying the same place after compacting the pairs.
+    if (row === 0 || row === layout.racks.length - 1 || row % 2 === 1) {
+      const label = row % 2 === 1 && row + 1 < layout.racks.length ? `R0${row + 1} / R0${row + 2}` : `R0${row + 1} / AISLE`;
+      sign(label, [3.2, 0.65], [0, 0.015, rack.facing * ((rack.depth + rack.beamDepth) / 2 + layout.pairAisleWidth / 2)], { floor: true, floorRotation: faceRotation, background: '#bac0ba', color: '#5b6566' });
+    }
   });
+  staticRoot = scene;
   for (const x of [-19.85, -18.45]) floorLine(x, 0, 0.08, 64);
   for (let z = -31; z <= 31; z += 5) floorLine(-19.15, z, 1.4, 0.1);
   sign('PEDESTRIAN WALKWAY', [7, 0.85], [-19.15, 0.016, 29], { floor: true, floorRotation: Math.PI / 2, background: '#bac0ba', color: '#5b6566' });
@@ -290,6 +311,7 @@ export function createWarehouseScene(renderer, layout, initialState, signal) {
   for (const z of [-1.1, 1.1]) floorLine(staging.x, staging.z + z, 2.2, 0.08);
   sign('INBOUND / STAGING', [5.7, 0.8], [-12, 0.018, -31.7], { floor: true, background: '#bac0ba', color: '#3b6761' });
   sign('OUTBOUND', [4.3, 0.8], [13, 0.018, -31.7], { floor: true, background: '#bac0ba', color: '#8a692e' });
+  staticRoot = building;
   sign('WAREHOUSE / 05', [7, 1], [0, 7, -34.85], { rotationY: 0 });
   sign('EXIT', [1.2, 0.45], [18.1, 2.6, 34.85], { background: '#286653' });
   box([1.3, 2.1, 0.08], [18.1, 1.05, 34.84], surfaces.steel);
@@ -303,19 +325,23 @@ export function createWarehouseScene(renderer, layout, initialState, signal) {
   // wall ribs collapse into a handful of material batches.
   const batches = new Map();
   staticMeshes.forEach(mesh => {
-    const key = `${mesh.geometry.uuid}:${mesh.material.uuid}:${mesh.castShadow}`;
+    // Shell batches must stay separate from racks and floor. Retain each
+    // rotated rack's local frame rather than flattening it into the building.
+    const key = `${mesh.parent.uuid}:${mesh.geometry.uuid}:${mesh.material.uuid}:${mesh.castShadow}`;
     if (!batches.has(key)) batches.set(key, []);
     batches.get(key).push(mesh);
   });
   batches.forEach(meshes => {
+    const parent = meshes[0].parent;
     const batch = new THREE.InstancedMesh(meshes[0].geometry, meshes[0].material, meshes.length);
     batch.castShadow = meshes[0].castShadow;
     batch.receiveShadow = true;
     instances.add(batch);
-    meshes.forEach((mesh, index) => { mesh.updateMatrix(); batch.setMatrixAt(index, mesh.matrix); scene.remove(mesh); });
+    meshes.forEach((mesh, index) => { mesh.updateMatrix(); batch.setMatrixAt(index, mesh.matrix); mesh.removeFromParent(); });
     batch.computeBoundingSphere();
-    scene.add(batch);
+    parent.add(batch);
   });
+  staticRoot = scene;
 
   function combinedBoxes(parts) {
     const temp = parts.map(([size, position]) => unitBox.clone().applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(...position), new THREE.Quaternion(), new THREE.Vector3(...size))));
@@ -613,6 +639,8 @@ export function createWarehouseScene(renderer, layout, initialState, signal) {
   const ready = loadFleet();
   return {
     scene, ready, update, roofHeight,
+    get buildingVisible() { return building.visible; },
+    setBuildingVisible(visible) { building.visible = Boolean(visible); },
     dispose() {
       if (disposed) return;
       disposed = true;

@@ -62,7 +62,7 @@ async function main() {
     const frame = page.frameLocator('iframe');
     await frame.locator('#orbit-view').waitFor();
     await page.waitForFunction(() => document.activeElement?.tagName === 'IFRAME');
-    assert.equal(await frame.locator('.view-controls button:visible').count(), 3);
+    assert.equal(await frame.locator('.view-controls button:visible').count(), 2);
     assert.equal(await page.evaluate(() => window.__warehouseSimulationActive), true);
     await page.screenshot({ path: path.join(root, '../.simulation-work/simulation-orbit.png') });
     const simulationFrame = page.frames().find(item => item.url().includes('/warehouse-simulation.html'));

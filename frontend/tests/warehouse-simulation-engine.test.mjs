@@ -11,9 +11,13 @@ test('paired racks begin with five full racks, one empty and all vehicles on the
   assert.equal(simulation.layout.racks.length, 6);
   for (let i = 0; i < 6; i += 2) {
     const [a, b] = simulation.layout.racks.slice(i, i + 2);
-    assert.equal(a.facing, -1); assert.equal(b.facing, 1);
-    close(b.z - a.z - a.depth, 0.18, 'back-to-back spacer gap');
+    assert.equal(a.facing, 1); assert.equal(b.facing, -1);
+    close(a.rotationY, -Math.PI / 2, 'long axis runs parallel to gate traffic');
+    close(b.rotationY, a.rotationY, 'both racks share the longitudinal axis');
+    close(b.x - a.x - a.depth, 0.18, 'back-to-back spacer gap');
+    close(a.z, b.z, 'paired bays align');
     assert.ok(a.depth <= 1.25, 'pallets fill the shelf depth');
+    if (i > 0) close(a.x - simulation.layout.racks[i - 1].x - a.depth - a.beamDepth, 5.6, 'clear two-truck aisle between actual beam faces');
   }
   assert.equal(state.boxes.filter(box => box.location.kind === 'rack').length, 250);
   assert.deepEqual(Array.from({ length: 6 }, (_, rack) => state.boxes.filter(box => box.location.rack === rack).length), [0, 50, 50, 50, 50, 50]);
@@ -178,8 +182,9 @@ test('two cycles fill the one empty rack and ship preloaded stock before incomin
         if (previousKinds[index] !== 'rack') {
           assert.deepEqual(box.location, {kind:'rack', rack:Math.floor(index/50), shelf:Math.floor(index%50/10), slot:Math.floor(index%10/2), side:index%2});
           const rack = simulation.layout.racks[box.location.rack];
-          close(box.position.z, rack.z, 'pallet centred on fitted shelf');
-          close(rack.depth/2 - 0.065 - (box.position.z + 0.55 - rack.z), 0.005, 'rear gap is five millimetres');
+          close(box.position.x, rack.x, 'pallet centred on rotated shelf depth');
+          close(box.position.z, rack.z + rack.slotCenters[box.location.slot] + (box.location.side ? 0.7 : -0.7), 'bays progress away from front gates');
+          close(rack.depth/2 - 0.065 - 0.55, 0.005, 'rear gap is five millimetres');
           assert.equal(index, stored[state.cycle].length - 250, 'new boxes fill rack 1 in shelf/bay/side order');
           stored[state.cycle].push(box.id);
         }
@@ -206,7 +211,7 @@ test('all trucks and visible boxes move continuously, attach to their own forks,
   let previous = simulation.getState();
   const actions = new Set();
   const gateStates = { in: new Set(), out: new Set() };
-  const rackRectangles = simulation.layout.racks.map(rack => rectangle({ x: rack.x, z: rack.z }, 0, rack.width / 2, -rack.depth / 2, rack.depth / 2));
+  const rackRectangles = simulation.layout.racks.map(rack => rectangle({ x: rack.x, z: rack.z }, rack.rotationY, rack.width / 2, -rack.depth / 2, rack.depth / 2));
   while (previous.cycle === 0) {
     const state = simulation.step(dt);
     // Bounds include the actual normalized GLB body (width1.34, rear-1.78),
@@ -232,7 +237,7 @@ test('all trucks and visible boxes move continuously, attach to their own forks,
           assert.equal(state.gates[truck.role === 'inbound' ? 'in' : 'out'], 1, 'gate stays fully open while body, forks or cargo cross its thickness');
         }
       }
-      rackRectangles.forEach((rackBody, j) => assert.ok(!overlaps(bodies[i], truck.yaw, rackBody, 0), `${truck.role} chassis stays outside rack ${j + 1}`));
+      rackRectangles.forEach((rackBody, j) => assert.ok(!overlaps(bodies[i], truck.yaw, rackBody, simulation.layout.racks[j].rotationY), `${truck.role} chassis stays outside rack ${j + 1}`));
       for (let j = 0; j < i; j++) {
         if (state.forklifts[j].visible && Math.abs(truck.position.y - state.forklifts[j].position.y) < 2.5) {
           assert.ok(!overlaps(bodies[i], truck.yaw, bodies[j], state.forklifts[j].yaw), 'truck chassis never collide');

@@ -11,6 +11,8 @@ const ENGINE_START_DURATION = 2.4;
 const GATE_DURATION = 1.2;
 const STAGING_TURN_RADIUS = 2;
 const PUTAWAY_LANE_X = -16;
+const FRONT_CROSS_AISLE_Z = -16;
+const PAIR_AISLE_WIDTH = 5.6;
 const BOX_COUNT = 300;
 const INCOMING_COUNT = 50;
 const location = (kind, extra = {}) => ({ kind, rack: null, shelf: null, slot: null, side: null, ...extra });
@@ -22,18 +24,34 @@ function freeze(value) {
 
 function createLayout() {
   const staging = { x: -12, y: 0, z: -29 };
+  const rackDepth = 1.24, beamDepth = 0.13;
+  const halfPairOffset = (rackDepth + 0.18) / 2;
+  const pairPitch = 2 * rackDepth + 0.18 + beamDepth + PAIR_AISLE_WIDTH;
   return freeze({
-    racks: [-22, -20.58, -5, -3.58, 12, 13.42].map((z, i) => ({
-      id: `simulation-rack-${i + 1}`, x: 0, z, width: 16, depth: 1.24, facing: i % 2 ? 1 : -1,
+    // Three compact longitudinal pairs. The 18cm rear spacer is separate
+    // from the 5.6m clear aisle between their outward-facing fronts.
+    racks: Array.from({ length: 6 }, (_, i) => ({
+      id: `simulation-rack-${i + 1}`,
+      x: (Math.floor(i / 2) - 1) * pairPitch + (i % 2 ? halfPairOffset : -halfPairOffset),
+      z: 0, width: 16, depth: rackDepth, beamDepth,
+      rotationY: -Math.PI / 2, facing: i % 2 ? -1 : 1,
       shelfHeights: [0.55, 2.65, 4.75, 6.85, 8.95],
       slotCenters: [-6.4, -3.2, 0, 3.2, 6.4],
     })),
     floorPositions: [staging], staging, forkOffset: FORWARD_OFFSET,
+    pairAisleWidth: PAIR_AISLE_WIDTH, crossAisleZ: FRONT_CROSS_AISLE_Z,
     gateIn: { x: -12, y: 0, z: -35 },
     inboundOffstage: { x: -12, y: 0, z: -40 },
     gateOut: { x: 13, y: 0, z: -35 },
     floorBounds: { minX: -20, maxX: 20, minZ: -35, maxZ: 35 },
   });
+}
+
+// Rack graphics, cargo and docking all use the same local frame: along the
+// five bays, vertically up, and across the shelf depth toward its front.
+export function rackPoint(rack, along, height = 0, across = 0) {
+  const cosine = Math.cos(rack.rotationY), sine = Math.sin(rack.rotationY);
+  return { x: rack.x + along * cosine + across * sine, y: height, z: rack.z - along * sine + across * cosine };
 }
 
 const clonePose = pose => ({ ...pose, position: { ...pose.position } });
@@ -97,13 +115,14 @@ function berth(layout, index) {
   const rackIndex = Math.floor(index / 50), shelf = Math.floor(index % 50 / 10);
   const slot = Math.floor(index % 10 / 2), side = index % 2;
   const rack = layout.racks[rackIndex];
+  const along = rack.slotCenters[slot] + (side ? 0.7 : -0.7);
   return {
     // Centre the 1.10m pallet on the 1.24m shelf. The longer fork offset leaves
     // the real GLB mast clear of the beam on either face of a paired row.
-    position: { x: rack.slotCenters[slot] + (side ? 0.7 : -0.7), y: rack.shelfHeights[shelf], z: rack.z },
-    aisleZ: rack.z + rack.facing * 4.3,
-    dockZ: rack.z + rack.facing * FORWARD_OFFSET,
-    yaw: rack.facing === -1 ? 0 : Math.PI,
+    position: rackPoint(rack, along, rack.shelfHeights[shelf]),
+    aisle: rackPoint(rack, along, 0, rack.facing * ((rack.depth + rack.beamDepth) / 2 + PAIR_AISLE_WIDTH / 2)),
+    dock: rackPoint(rack, along, 0, rack.facing * FORWARD_OFFSET),
+    yaw: rack.rotationY + (rack.facing === -1 ? 0 : Math.PI),
     location: location('rack', { rack: rackIndex, shelf, slot, side }),
   };
 }
@@ -157,7 +176,7 @@ function createTimeline(layout) {
 
   // The next inbound journey is released only by the prior storage event.
   // Truck 1 cannot approach staging until truck 3 has completely backed out.
-  const stagingTurnZ = berth(layout, 0).aisleZ;
+  const stagingTurnZ = -25;
   putaway.startEngine();
   for (let index = 0; index < INCOMING_COUNT; index++) {
     const box = boxes[index], target = berth(layout, index);
@@ -189,25 +208,27 @@ function createTimeline(layout) {
     putaway.drive(layout.staging.x, stagingTurnZ, 'retract');
     putaway.lift(TRANSPORT_HEIGHT);
     putaway.steer(-Math.PI, STAGING_TURN_RADIUS, -1);
-    putaway.travel(PUTAWAY_LANE_X, target.aisleZ);
-    putaway.travel(target.position.x, target.aisleZ);
+    putaway.travel(PUTAWAY_LANE_X, layout.crossAisleZ);
+    putaway.travel(target.aisle.x, layout.crossAisleZ);
+    putaway.travel(target.aisle.x, target.aisle.z);
     putaway.turn(target.yaw);
     putaway.lift(target.position.y + SHELF_CLEARANCE);
-    putaway.drive(target.position.x, target.dockZ, 'insert');
+    putaway.drive(target.dock.x, target.dock.z, 'insert');
     putaway.lift(target.position.y);
     storedTimes.push(putaway.time);
     placementTimes.push(putaway.time);
-    release(box, putaway, target.location, target.position, putawayRotationOffset);
-    putaway.drive(target.position.x, target.aisleZ, 'retract');
+    release(box, putaway, target.location, target.position, target.yaw + putawayRotationOffset);
+    putaway.drive(target.aisle.x, target.aisle.z, 'retract');
     putaway.lift(TRANSPORT_HEIGHT);
-    putaway.travel(PUTAWAY_LANE_X, target.aisleZ);
+    putaway.travel(target.aisle.x, layout.crossAisleZ);
+    putaway.travel(PUTAWAY_LANE_X, layout.crossAisleZ);
     // Rack-wide reservation: outbound enters a row only after its fiftieth
     // placement and after truck 1 clears that row onto the left travel lane.
     if (index % 50 === 49) rackClearTimes[target.location.rack] = putaway.time;
     // Empty return keeps its heading while reversing down the left lane,
     // then steers forward into the pickup line without pivoting at the box.
     putaway.turn(0);
-    putaway.drive(PUTAWAY_LANE_X, -25, target.aisleZ > -25 ? 'retract' : 'drive');
+    putaway.drive(PUTAWAY_LANE_X, stagingTurnZ, 'retract');
     putaway.steer(Math.PI, STAGING_TURN_RADIUS);
   }
   putaway.pose.engineRunning = false;
@@ -219,17 +240,19 @@ function createTimeline(layout) {
     ...Array.from({ length: INCOMING_COUNT }, (_, i) => i)];
   for (const index of shippingOrder) {
     const box = boxes[index], source = berth(layout, index);
-    outbound.travel(13, source.aisleZ);
     outbound.waitUntil(rackClearTimes[source.location.rack]);
-    outbound.travel(source.position.x, source.aisleZ);
+    outbound.travel(layout.gateOut.x, layout.crossAisleZ);
+    outbound.travel(source.aisle.x, layout.crossAisleZ);
+    outbound.travel(source.aisle.x, source.aisle.z);
     outbound.turn(source.yaw);
     outbound.lift(source.position.y);
-    outbound.drive(source.position.x, source.dockZ, 'insert');
+    outbound.drive(source.dock.x, source.dock.z, 'insert');
     carry(box, outbound, -Math.PI);
     outbound.lift(source.position.y + SHELF_CLEARANCE);
-    outbound.drive(source.position.x, source.aisleZ, 'retract');
+    outbound.drive(source.aisle.x, source.aisle.z, 'retract');
     outbound.lift(TRANSPORT_HEIGHT);
-    outbound.travel(13, source.aisleZ);
+    outbound.travel(source.aisle.x, layout.crossAisleZ);
+    outbound.travel(layout.gateOut.x, layout.crossAisleZ);
     outbound.travel(13, -29);
     outbound.turn(Math.PI);
     const gateOutStart = openGate('out', outbound);
