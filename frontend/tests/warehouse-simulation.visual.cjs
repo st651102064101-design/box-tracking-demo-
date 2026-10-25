@@ -129,6 +129,20 @@ async function main() {
       const wheels = [];
       truck.traverse(node => { if (/^Wheel_(FL|FR|RL|RR)$/.test(node.name)) wheels.push(node.userData.wheelRadius); });
       const result = { body: { min: body.min.toArray(), max: body.max.toArray() }, forks: { min: forks.min.toArray(), max: forks.max.toArray() }, wheels };
+      result.operators = state.forklifts.map(snapshot => {
+        const vehicle = graphics.scene.getObjectByName(snapshot.id);
+        const operator = vehicle.getObjectByName('ForkliftOperator');
+        if (!operator) return { id: snapshot.id, exists: false };
+        const previousPosition = vehicle.position.clone(), previousYaw = vehicle.rotation.y;
+        vehicle.position.set(0, 0, 0); vehicle.rotation.y = 0; vehicle.updateMatrixWorld(true);
+        const bounds = new THREE.Box3().setFromObject(operator);
+        vehicle.position.set(4, 0, -7); vehicle.rotation.y = Math.PI / 2; vehicle.updateMatrixWorld(true);
+        const origin = operator.getWorldPosition(new THREE.Vector3()).toArray();
+        const head = operator.getObjectByName('OperatorHead').getWorldPosition(new THREE.Vector3()).toArray();
+        const meshCount = operator.children.reduce((total, child) => total + (child.isMesh ? 1 : child.children.filter(item => item.isMesh).length), 0);
+        vehicle.position.copy(previousPosition); vehicle.rotation.y = previousYaw;
+        return { id: snapshot.id, exists: true, attached: operator.parent === vehicle, min: bounds.min.toArray(), max: bounds.max.toArray(), origin, head, meshCount };
+      });
       result.shutters = [0, 0.5, 1].map(openness => {
         graphics.update({ ...state, gates: { in: openness, out: openness } });
         return ['in', 'out'].map(id => {
@@ -156,6 +170,16 @@ async function main() {
     assert.ok(rigBounds.body.min[0] >= -0.7 && rigBounds.body.max[0] <= 0.7, 'Rendered body fits the tested collision width');
     assert.ok(rigBounds.body.min[2] >= -1.8 && rigBounds.body.max[2] <= 0.9, 'Rendered body fits the tested fore/aft envelope');
     assert.equal(rigBounds.wheels.length, 4);
+    assert.equal(rigBounds.operators.length, 3);
+    for (const operator of rigBounds.operators) {
+      assert.ok(operator.exists && operator.attached, 'Each forklift carries its own seated operator');
+      assert.ok(operator.min[0] > -0.4 && operator.max[0] < 0.4, 'Operator stays within the cabin width');
+      assert.ok(operator.min[1] >= 0.5 && operator.max[1] < 2.2, 'Boots stay above the floor and helmet below the canopy');
+      assert.ok(operator.min[2] > -1.1 && operator.max[2] < 0.4, 'Seated body fits between the seat back and controls');
+      assert.deepEqual(operator.origin, [4, 0, -7], 'Driver position follows the chassis');
+      assert.ok(operator.head[0] < 4 && Math.abs(operator.head[2] + 7) < 0.001, 'Head follows the chassis rotation');
+      assert.ok(operator.meshCount <= 12, 'Anatomy is batched to keep the three drivers inexpensive to render');
+    }
     assert.ok(rigBounds.wheels.every(radius => Number.isFinite(radius) && radius > 0), 'Every wheel has a usable physical radius');
     assert.ok(rigBounds.mastClearances.every(item => item.clearance >= 0.05), `Real mast and telescoping stages must clear the front shelf beams: ${JSON.stringify(rigBounds.mastClearances)}`);
     for (const shutter of rigBounds.shutters) {

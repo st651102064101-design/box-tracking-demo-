@@ -95,6 +95,34 @@ test('inbound reverses completely beyond the gate and hides between deliveries',
   assert.ok(sawDelivery && sawReverse && sawHiddenGap && sawNextDelivery);
 });
 
+test('putaway steers through staging while moving and lines up straight for each floor pickup', () => {
+  const simulation = createSimulation();
+  const staging = simulation.layout.staging;
+  let before = simulation.step(simulation.introDuration);
+  let reverseSteering = false, forwardSteering = false, pickups = 0;
+  for (let time = 0; time < 180; time += 0.05) {
+    const state = simulation.step(0.05), truck = state.forklift;
+    const previous = before.forklift;
+    const turned = angleDistance(previous.yaw, truck.yaw);
+    const moved = Math.hypot(truck.position.x - previous.position.x, truck.position.z - previous.position.z);
+    const nearStaging = Math.abs(truck.position.x - staging.x) < 2.1 && truck.position.z < -24.5;
+    if (nearStaging && turned > 1e-5) {
+      assert.ok(moved > 1e-6, 'the truck must steer along a moving path instead of spinning beside the floor pallet');
+      if (truck.speed < -0.01) reverseSteering = true;
+      if (truck.speed > 0.01) forwardSteering = true;
+    }
+    if (truck.action === 'insert' && !truck.cargoId && truck.position.z < -25 && Math.abs(truck.position.x - staging.x) < 0.01) {
+      close(truck.position.x, staging.x, 'pickup aligns with the staging centre');
+      close(angleDistance(truck.yaw, Math.PI), 0, 'forks face straight toward the floor pallet');
+      assert.ok(truck.speed >= 0, 'approach drives forward into the pallet');
+    }
+    if (truck.cargoId && !previous.cargoId) pickups++;
+    before = state;
+  }
+  assert.ok(pickups >= 3, 'check several staging visits');
+  assert.ok(reverseSteering && forwardSteering, 'staging uses a real reverse departure and forward return curve');
+});
+
 test('forklift telemetry describes real signed motion and hydraulic travel independently', () => {
   const simulation = createSimulation();
   const epsilon = 1e-4;

@@ -22,6 +22,12 @@ async function main() {
   const page = await browser.newPage({ viewport: { width: 1200, height: 800 } });
   const errors = [], apiDuringSimulation = [];
   let collecting = false;
+  // Observe the real graphics instance without adding a hook to shipped code.
+  await page.route('**/warehouse-simulation-view.mjs', async route => {
+    const response = await route.fetch();
+    const body = (await response.text()).replace('warehouse = createWarehouseScene(renderer, layout, state, abort.signal);', '$&\nwindow.__observedWarehouseGraphics = warehouse;');
+    await route.fulfill({ response, body });
+  });
   page.on('pageerror', error => errors.push(error.message));
   page.on('request', request => {
     if (collecting && new URL(request.url()).pathname.startsWith('/api/')) apiDuringSimulation.push({ method: request.method(), path: new URL(request.url()).pathname });
@@ -70,6 +76,13 @@ async function main() {
     await sim.locator('#orbit-view').waitFor();
     await liveFrame.waitForFunction(() => document.fullscreenElement?.classList.contains('warehouse-simulation-host'));
     assert.equal(await sim.locator('.view-controls button:visible').count(), 3);
+    const simulationFrame = page.frames().find(frame => new URL(frame.url()).pathname === '/warehouse-simulation.html');
+    await simulationFrame.waitForFunction(() => Boolean(window.__observedWarehouseGraphics?.scene.getObjectByName('simulation-forklift-3')), null, { timeout: 30000 });
+    const operators = await simulationFrame.evaluate(() => [1, 2, 3].map(index => {
+      const truck = window.__observedWarehouseGraphics.scene.getObjectByName(`simulation-forklift-${index}`);
+      return Boolean(truck && truck.getObjectByName('ForkliftOperator')?.parent === truck);
+    }));
+    assert.deepEqual(operators, [true, true, true], 'The deployed scene renders a seated driver on every truck');
     collecting = true;
     await page.waitForTimeout(8500); // covers at least two normal four-second sync polls
     assert.deepEqual(apiDuringSimulation, []);
@@ -106,7 +119,7 @@ async function main() {
     assert.equal(await live.locator('.loc3d-first-person').getAttribute('aria-pressed'), 'true');
     await page.keyboard.press('Escape');
     assert.deepEqual(errors, [], 'No new runtime errors in simulation or return to real scene');
-    console.log(JSON.stringify({ result: 'PASS', checks: ['deployed-entry-button', 'nested-app-fullscreen', 'view-and-ui-controls', 'no-api-over-two-polls', 'first-person-control', 'Esc-real-controller-camera-data-restore', 'live-first-person-resume', 'zero-new-runtime-errors'], apiDuringSimulation, baselineErrors }));
+    console.log(JSON.stringify({ result: 'PASS', checks: ['deployed-entry-button', 'nested-app-fullscreen', 'deployed-seated-operators', 'view-and-ui-controls', 'no-api-over-two-polls', 'first-person-control', 'Esc-real-controller-camera-data-restore', 'live-first-person-resume', 'zero-new-runtime-errors'], apiDuringSimulation, baselineErrors }));
   } catch (error) {
     await page.screenshot({ path: path.join(output, 'simulation-live-failure.png'), timeout: 10000 }).catch(() => {});
     console.error(JSON.stringify({ liveUrl: page.url(), errors, apiDuringSimulation }));

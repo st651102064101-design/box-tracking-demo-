@@ -22,6 +22,8 @@ export function createWarehouseScene(renderer, layout, initialState, signal) {
   const unitBox = keepGeometry(new THREE.BoxGeometry(1, 1, 1));
   const unitPlane = keepGeometry(new THREE.PlaneGeometry(1, 1));
   const unitCylinder = keepGeometry(new THREE.CylinderGeometry(1, 1, 1, 8));
+  const unitSphere = keepGeometry(new THREE.SphereGeometry(1, 18, 12));
+  const helmetDome = keepGeometry(new THREE.SphereGeometry(1, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2));
   const bounds = layout.floorBounds;
   const width = bounds.maxX - bounds.minX;
   const depth = bounds.maxZ - bounds.minZ;
@@ -37,6 +39,9 @@ export function createWarehouseScene(renderer, layout, initialState, signal) {
     yellow: material(0xf3c22e, 0.6, 0.25), red: material(0xb83936, 0.5, 0.4),
     wood: material(0x98734b, 0.98), woodLight: material(0xb58c59, 0.95),
     carton: material(0xc49660, 0.98), tape: material(0xe1c28c, 0.9),
+    skin: material(0xbd8865, 0.88), workwear: material(0x263f59, 0.94),
+    safetyVest: material(0xf38a24, 0.86), reflective: material(0xe8edc6, 0.6),
+    helmet: material(0xf3ce35, 0.52), boots: material(0x20292d, 0.91),
     lamp: keepMaterial(new THREE.MeshStandardMaterial({ color: 0xf0f5f3, emissive: 0xd8ecf8, emissiveIntensity: 2.5, roughness: 0.4 })),
     opening: keepMaterial(new THREE.MeshBasicMaterial({ color: 0x233038 })),
   };
@@ -88,7 +93,7 @@ export function createWarehouseScene(renderer, layout, initialState, signal) {
     const mesh = new THREE.Mesh(unitPlane, signMaterials.get(key));
     mesh.scale.set(size[0], size[1], 1);
     mesh.position.set(...position);
-    mesh.rotation.set(options.floor ? -Math.PI / 2 : 0, options.floor ? 0 : (options.rotationY ?? Math.PI), options.floor ? Math.PI : 0);
+    mesh.rotation.set(options.floor ? -Math.PI / 2 : 0, options.floor ? 0 : (options.rotationY ?? Math.PI), options.floor ? (options.floorRotation ?? Math.PI) : 0);
     scene.add(mesh);
     staticMeshes.push(mesh);
     return mesh;
@@ -283,9 +288,9 @@ export function createWarehouseScene(renderer, layout, initialState, signal) {
     floorLine(9.2, rack.z, 0.09, 8.8);
     sign(`AISLE ${row + 1}`, [3.2, 0.65], [0, 0.015, rack.z - 4.8], { floor: true, background: '#bac0ba', color: '#5b6566' });
   });
-  for (const x of [-17.7, -16.2]) floorLine(x, 0, 0.08, 64);
-  for (let z = -31; z <= 31; z += 5) floorLine(-16.95, z, 1.5, 0.1);
-  sign('PEDESTRIAN WALKWAY', [7, 0.85], [-17, 0.016, 29], { floor: true, background: '#bac0ba', color: '#5b6566' });
+  for (const x of [-19.85, -18.45]) floorLine(x, 0, 0.08, 64);
+  for (let z = -31; z <= 31; z += 5) floorLine(-19.15, z, 1.4, 0.1);
+  sign('PEDESTRIAN WALKWAY', [7, 0.85], [-19.15, 0.016, 29], { floor: true, floorRotation: Math.PI / 2, background: '#bac0ba', color: '#5b6566' });
   const staging = layout.staging || layout.floorPositions[0];
   for (const x of [-1.1, 1.1]) floorLine(staging.x + x, staging.z, 0.08, 2.2);
   for (const z of [-1.1, 1.1]) floorLine(staging.x, staging.z + z, 2.2, 0.08);
@@ -385,6 +390,91 @@ export function createWarehouseScene(renderer, layout, initialState, signal) {
     images.forEach(bitmap => bitmap.close());
     instances.clear(); geometries.clear(); materials.clear(); textures.clear();
   }
+  function createOperator(truck) {
+    const operator = new THREE.Group();
+    operator.name = 'ForkliftOperator';
+    truck.add(operator);
+    const head = new THREE.Group();
+    head.name = 'OperatorHead';
+    head.position.set(0, 1.86, -0.57);
+    operator.add(head);
+    function rounded(parent, name, size, position, surface, geometry = unitSphere) {
+      const mesh = new THREE.Mesh(geometry, surface);
+      mesh.name = name;
+      mesh.scale.set(...size); mesh.position.set(...position);
+      mesh.castShadow = true; mesh.receiveShadow = true;
+      parent.add(mesh);
+      return mesh;
+    }
+    function limb(name, from, to, radius, surface) {
+      const start = new THREE.Vector3(...from), end = new THREE.Vector3(...to);
+      const delta = end.clone().sub(start);
+      const mesh = rounded(operator, name, [radius, delta.length() / 2 + radius * 0.3, radius], start.clone().add(end).multiplyScalar(0.5).toArray(), surface);
+      mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), delta.normalize());
+      return mesh;
+    }
+    // Dimensions are in the chassis frame after normalising the local GLB.
+    // Seat cushion: y≈1.04,z≈-.65; feet stay on its .55m cabin floor.
+    rounded(operator, 'OperatorHips', [0.205, 0.14, 0.19], [0, 1.16, -0.65], surfaces.workwear);
+    rounded(operator, 'OperatorShirt', [0.225, 0.285, 0.15], [0, 1.44, -0.59], surfaces.workwear);
+    rounded(operator, 'OperatorVest', [0.232, 0.25, 0.157], [0, 1.43, -0.581], surfaces.safetyVest);
+    const vestSurface = (x, y, side) => -0.581 + side * (0.157 * Math.sqrt(Math.max(0, 1 - (x / 0.232) ** 2 - ((y - 1.43) / 0.25) ** 2)) + 0.004);
+    for (const side of [-1, 1]) {
+      for (const x of [-0.1, 0.1]) {
+        for (let i = 0; i < 8; i++) {
+          const y = 1.285 + i * 0.04;
+          box([0.033, 0.042, 0.009], [x, y, vestSurface(x, y, side)], surfaces.reflective, operator);
+        }
+      }
+    }
+    for (let i = 0; i < 8; i++) {
+      const x = -0.1575 + i * 0.045;
+      box([0.046, 0.035, 0.009], [x, 1.31, vestSurface(x, 1.31, 1)], surfaces.reflective, operator);
+      const y = 1.285 + i * 0.04;
+      box([0.012, 0.042, 0.009], [0, y, vestSurface(0, y, 1)], surfaces.boots, operator);
+    }
+    rounded(operator, 'OperatorNeck', [0.068, 0.09, 0.07], [0, 1.715, -0.57], surfaces.skin);
+    rounded(head, 'OperatorFace', [0.115, 0.15, 0.105], [0, 0, 0], surfaces.skin);
+    rounded(head, 'OperatorNose', [0.024, 0.035, 0.029], [0, -0.01, 0.105], surfaces.skin);
+    for (const side of [-1, 1]) {
+      rounded(head, 'OperatorEar', [0.024, 0.045, 0.023], [side * 0.112, -0.005, 0], surfaces.skin);
+      rounded(head, 'OperatorEye', [0.012, 0.008, 0.006], [side * 0.043, 0.032, 0.098], surfaces.boots);
+      const hip = [side * 0.125, 1.15, -0.62];
+      const knee = [side * 0.17, 1.035, -0.18];
+      const ankle = [side * 0.17, 0.67, -0.04];
+      limb('OperatorThigh', hip, knee, 0.095, surfaces.workwear);
+      limb('OperatorShin', knee, ankle, 0.075, surfaces.workwear);
+      rounded(operator, 'OperatorBoot', [0.087, 0.068, 0.17], [side * 0.17, 0.6, 0.045], surfaces.boots);
+      const shoulder = [side * 0.205, 1.62, -0.56];
+      const elbow = [side * 0.255, 1.4, -0.32];
+      const wrist = [side * 0.155, 1.55, 0.12];
+      limb('OperatorSleeve', shoulder, elbow, 0.075, surfaces.workwear);
+      limb('OperatorForearm', elbow, wrist, 0.052, surfaces.skin);
+      rounded(operator, 'OperatorHand', [0.043, 0.036, 0.058], wrist, surfaces.skin);
+    }
+    limb('OperatorSeatBelt', [-0.2, 1.19, -0.54], [0.2, 1.19, -0.54], 0.022, surfaces.boots);
+    rounded(head, 'OperatorHelmet', [0.148, 0.125, 0.16], [0, 0.1, 0], surfaces.helmet, helmetDome);
+    rounded(head, 'OperatorHelmetBrim', [0.169, 0.013, 0.19], [0, 0.1, 0.016], surfaces.helmet, unitCylinder);
+    // Batch the fixed anatomy by material: each truck adds only a handful of
+    // draw calls. The head stays separate so it can look back when reversing.
+    for (const group of [operator, head]) {
+      const batches = new Map();
+      for (const child of [...group.children]) {
+        if (!child.isMesh) continue;
+        child.updateMatrix();
+        if (!batches.has(child.material)) batches.set(child.material, []);
+        batches.get(child.material).push(child.geometry.clone().applyMatrix4(child.matrix));
+        group.remove(child);
+      }
+      for (const [surface, parts] of batches) {
+        const geometry = keepGeometry(mergeGeometries(parts, false));
+        parts.forEach(part => part.dispose());
+        const mesh = new THREE.Mesh(geometry, surface);
+        mesh.castShadow = true; mesh.receiveShadow = true; group.add(mesh);
+      }
+    }
+    return { root: operator, head };
+  }
   function createTruck(source, snapshot) {
     const model = source.clone(true);
     const root = new THREE.Group();
@@ -438,6 +528,7 @@ export function createWarehouseScene(renderer, layout, initialState, signal) {
       if (/^Wheel_(FL|FR|RL|RR)$/.test(mesh.name)) wheels.push({ mesh, radius: mesh.userData.wheelRadius * scale });
     });
     if (wheels.length !== 4) throw new Error('The local forklift model is missing wheel pivots.');
+    const operator = createOperator(root);
     const hoistCables = [];
     if (snapshot.role === 'outbound' || snapshot.role === 'putaway') {
       for (const x of [-0.47, 0.47]) {
@@ -448,7 +539,7 @@ export function createWarehouseScene(renderer, layout, initialState, signal) {
     }
     root.visible = false;
     scene.add(root);
-    return { root, carriage, carriageBase, mastStages, mastBase, scale, wheels, hoistCables, previous: null };
+    return { root, carriage, carriageBase, mastStages, mastBase, scale, wheels, operator, hoistCables, previous: null };
   }
   async function loadFleet() {
     const response = await fetch('/models/forklift-wheels.glb', { signal, credentials: 'same-origin' });
@@ -492,6 +583,7 @@ export function createWarehouseScene(renderer, layout, initialState, signal) {
       rig.root.visible = snapshot.visible !== false;
       rig.root.position.set(position.x, position.y, position.z);
       rig.root.rotation.y = yaw;
+      rig.operator.head.rotation.y = Math.max(0, Math.tanh(-(snapshot.speed || 0) * 2)) * 0.65;
       rig.carriage.position.copy(rig.carriageBase).addScaledVector(new THREE.Vector3(0, 1, 0), liftHeight / rig.scale);
       const extension = Math.max(0, liftHeight - 1.9);
       rig.mastStages.forEach((stage, index) => {

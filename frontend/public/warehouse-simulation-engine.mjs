@@ -9,6 +9,8 @@ const TURN_SPEED = 1.4;
 const LIFT_SPEED = 0.8;
 const ENGINE_START_DURATION = 2.4;
 const GATE_DURATION = 1.2;
+const STAGING_TURN_RADIUS = 2;
+const PUTAWAY_LANE_X = -16;
 const BOX_COUNT = 250;
 const location = (kind, extra = {}) => ({ kind, rack: null, shelf: null, slot: null, side: null, ...extra });
 
@@ -42,11 +44,11 @@ function track(id, role, position, yaw, visible = true) {
     id, role, time: 0, segments: [],
     pose: { position: { ...position }, yaw, liftHeight: TRANSPORT_HEIGHT, cargoId: null, visible, engineRunning: false },
   };
-  vehicle.animate = (action, seconds, changes = {}) => {
+  vehicle.animate = (action, seconds, changes = {}, curve = null) => {
     if (seconds <= 1e-10) return;
     const from = clonePose(vehicle.pose);
     const to = clonePose({ ...vehicle.pose, ...changes });
-    vehicle.segments.push({ start: vehicle.time, duration: seconds, action, from, to });
+    vehicle.segments.push({ start: vehicle.time, duration: seconds, action, from, to, curve });
     vehicle.time += seconds;
     // Later heading normalization and cargo events must not mutate a recorded
     // segment endpoint: a normalized angle can differ by a complete revolution.
@@ -69,6 +71,18 @@ function track(id, role, position, yaw, visible = true) {
     if (Math.hypot(dx, dz) < 1e-10) return;
     vehicle.turn(Math.atan2(dx, dz));
     vehicle.drive(x, z);
+  };
+  vehicle.steer = (yawChange, radius, direction = 1) => {
+    const fromYaw = vehicle.pose.yaw, toYaw = fromYaw + yawChange;
+    const scale = direction * radius * Math.sign(yawChange);
+    vehicle.animate('steer', radius * Math.abs(yawChange) / DOCK_SPEED, {
+      yaw: toYaw,
+      position: {
+        x: vehicle.pose.position.x + scale * (Math.cos(fromYaw) - Math.cos(toYaw)),
+        y: vehicle.pose.position.y,
+        z: vehicle.pose.position.z + scale * (Math.sin(toYaw) - Math.sin(fromYaw)),
+      },
+    }, { radius, direction, scale });
   };
   vehicle.lift = height => vehicle.animate('lift', Math.abs(height - vehicle.pose.liftHeight) / LIFT_SPEED, { liftHeight: height });
   vehicle.startEngine = () => {
@@ -173,10 +187,13 @@ function createTimeline(layout) {
     const putawayRotationOffset = -Math.PI;
     carry(box, putaway, putawayRotationOffset);
     putaway.lift(SHELF_CLEARANCE);
-    putaway.drive(-12, -25, 'retract');
+    // Clear the pallet straight back before steering. The old one-metre lane
+    // jog required three stationary pivots beside the staging point and looked
+    // like circling; a reversing half-circle connects to the travel lane.
+    putaway.drive(layout.staging.x, layout.staging.z + FORWARD_OFFSET + 1, 'retract');
     putaway.lift(TRANSPORT_HEIGHT);
-    putaway.travel(-13, -25);
-    putaway.travel(-13, target.aisleZ);
+    putaway.steer(-Math.PI, STAGING_TURN_RADIUS, -1);
+    putaway.travel(PUTAWAY_LANE_X, target.aisleZ);
     putaway.travel(target.position.x, target.aisleZ);
     putaway.turn(0);
     putaway.lift(target.position.y + SHELF_CLEARANCE);
@@ -186,13 +203,15 @@ function createTimeline(layout) {
     release(box, putaway, target.location, target.position, putawayRotationOffset);
     putaway.drive(target.position.x, target.aisleZ, 'retract');
     putaway.lift(TRANSPORT_HEIGHT);
-    putaway.travel(-13, target.aisleZ);
+    putaway.travel(PUTAWAY_LANE_X, target.aisleZ);
     // Rack-wide reservation: outbound enters a row only after its fiftieth
     // placement and after truck 1 clears that row onto the left travel lane.
     if (index % 50 === 49) rackClearTimes.push(putaway.time);
-    putaway.travel(-13, -25);
-    putaway.travel(-12, -25);
-    putaway.turn(Math.PI);
+    // Empty return keeps its heading while reversing down the left lane,
+    // then steers forward into the pickup line without pivoting at the box.
+    putaway.turn(0);
+    putaway.drive(PUTAWAY_LANE_X, -25, target.aisleZ > -25 ? 'retract' : 'drive');
+    putaway.steer(Math.PI, STAGING_TURN_RADIUS);
   }
   putaway.pose.engineRunning = false;
 
@@ -259,13 +278,20 @@ function poseAt(truck, elapsed) {
   const velocityFactor = 6 * progress * (1 - progress) / segment.duration;
   const lerp = (a, b) => a + (b - a) * eased;
   const yaw = lerp(segment.from.yaw, segment.to.yaw);
+  const position = segment.curve ? {
+    x: segment.from.position.x + segment.curve.scale * (Math.cos(segment.from.yaw) - Math.cos(yaw)),
+    y: lerp(segment.from.position.y, segment.to.position.y),
+    z: segment.from.position.z + segment.curve.scale * (Math.sin(yaw) - Math.sin(segment.from.yaw)),
+  } : Object.fromEntries(['x', 'y', 'z'].map(axis => [axis, lerp(segment.from.position[axis], segment.to.position[axis])]));
   return {
     id: truck.id, role: truck.role, action: segment.action,
     visible: segment.from.visible, cargoId: segment.from.cargoId,
-    position: Object.fromEntries(['x', 'y', 'z'].map(axis => [axis, lerp(segment.from.position[axis], segment.to.position[axis])])),
+    position,
     yaw,
     liftHeight: lerp(segment.from.liftHeight, segment.to.liftHeight),
-    speed: velocityFactor * ((segment.to.position.x - segment.from.position.x) * Math.sin(yaw) + (segment.to.position.z - segment.from.position.z) * Math.cos(yaw)),
+    speed: segment.curve
+      ? segment.curve.direction * segment.curve.radius * Math.abs(segment.to.yaw - segment.from.yaw) * velocityFactor
+      : velocityFactor * ((segment.to.position.x - segment.from.position.x) * Math.sin(yaw) + (segment.to.position.z - segment.from.position.z) * Math.cos(yaw)),
     liftVelocity: velocityFactor * (segment.to.liftHeight - segment.from.liftHeight),
     engineRunning: segment.from.engineRunning,
   };
