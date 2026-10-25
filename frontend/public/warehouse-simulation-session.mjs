@@ -52,7 +52,7 @@ export function createSimulationSession({ window: win, getController, onError = 
     // Its HTML can paint before the view module installs keyboard handlers.
     // Keep startup clicks/focus in the parent, where Escape already works.
     frame.inert = true;
-    frame.setAttribute('allow', 'fullscreen');
+    frame.setAttribute('allow', 'fullscreen; autoplay');
     frame.style.cssText = 'display:block;width:100%;height:100%;border:0;';
     host.appendChild(frame);
     const session = { host, frame, controller, originalFetch: win.fetch, focus: doc.activeElement, ready: false, fullscreen: false, started: false, timeout: null };

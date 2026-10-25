@@ -7,6 +7,8 @@ const DRIVE_SPEED = 4.5;
 const DOCK_SPEED = 1.1;
 const TURN_SPEED = 1.4;
 const LIFT_SPEED = 0.8;
+const ENGINE_START_DURATION = 2.4;
+const GATE_DURATION = 1.2;
 const BOX_COUNT = 250;
 const location = (kind, extra = {}) => ({ kind, rack: null, shelf: null, slot: null, side: null, ...extra });
 
@@ -25,6 +27,7 @@ function createLayout() {
     })),
     floorPositions: [staging], staging,
     gateIn: { x: -12, y: 0, z: -35 },
+    inboundOffstage: { x: -12, y: 0, z: -40 },
     gateOut: { x: 13, y: 0, z: -35 },
     floorBounds: { minX: -20, maxX: 20, minZ: -35, maxZ: 35 },
   });
@@ -37,7 +40,7 @@ const clonePose = pose => ({ ...pose, position: { ...pose.position } });
 function track(id, role, position, yaw, visible = true) {
   const vehicle = {
     id, role, time: 0, segments: [],
-    pose: { position: { ...position }, yaw, liftHeight: TRANSPORT_HEIGHT, cargoId: null, visible },
+    pose: { position: { ...position }, yaw, liftHeight: TRANSPORT_HEIGHT, cargoId: null, visible, engineRunning: false },
   };
   vehicle.animate = (action, seconds, changes = {}) => {
     if (seconds <= 1e-10) return;
@@ -68,7 +71,23 @@ function track(id, role, position, yaw, visible = true) {
     vehicle.drive(x, z);
   };
   vehicle.lift = height => vehicle.animate('lift', Math.abs(height - vehicle.pose.liftHeight) / LIFT_SPEED, { liftHeight: height });
+  vehicle.startEngine = () => {
+    vehicle.pose.engineRunning = true;
+    vehicle.animate('engine-start', ENGINE_START_DURATION);
+  };
   return vehicle;
+}
+
+function createIntro() {
+  // This left hoist bay is clear of the warehouse roof, lights and trusses.
+  // Entry is not part of the repeating cycle: truck 1 remains on the floor.
+  const putaway = track('simulation-forklift-1', 'putaway', { x: -17, y: 14, z: -29 }, 0);
+  putaway.animate('descend', 10, { position: { x: -17, y: 0, z: -29 } });
+  putaway.startEngine();
+  putaway.travel(-17, -25);
+  putaway.travel(-12, -25);
+  putaway.turn(Math.PI);
+  return putaway;
 }
 
 function berth(layout, index) {
@@ -88,13 +107,29 @@ function berth(layout, index) {
 function createTimeline(layout) {
   const putaway = track('simulation-forklift-1', 'putaway', { x: -12, y: 0, z: -25 }, Math.PI);
   const outbound = track('simulation-forklift-2', 'outbound', { x: 17, y: 14, z: -29 }, 0, false);
-  const inbound = track('simulation-forklift-3', 'inbound', layout.gateIn, 0, false);
+  const inbound = track('simulation-forklift-3', 'inbound', layout.inboundOffstage, 0, false);
   const trucks = [putaway, outbound, inbound];
   const boxes = Array.from({ length: BOX_COUNT }, (_, i) => ({
     id: `simulation-box-${String(i + 1).padStart(3, '0')}`,
     events: [{ start: 0, visible: false, position: { ...layout.gateIn }, rotationY: 0, location: location('pending') }],
   }));
   const storedTimes = [], shippedTimes = [], rackClearTimes = [];
+  const gates = { in: [], out: [] };
+
+  function openGate(key, truck) {
+    const start = truck.time;
+    // Complete opening before any part of the approaching truck or load can
+    // touch the portal. Its entire journey holds the gate open thereafter.
+    truck.animate('gate-wait', GATE_DURATION);
+    return start;
+  }
+
+  function closeGate(key, start, truck) {
+    const intervals = gates[key];
+    const previous = intervals.at(-1);
+    if (previous && start <= previous.closeStart + GATE_DURATION) previous.closeStart = truck.time;
+    else intervals.push({ start, closeStart: truck.time });
+  }
 
   function carry(box, truck, rotationOffset) {
     truck.pose.cargoId = box.id;
@@ -113,16 +148,22 @@ function createTimeline(layout) {
 
   // The next inbound journey is released only by the prior storage event.
   // Truck 1 cannot approach staging until truck 3 has completely backed out.
+  putaway.startEngine();
   for (let index = 0; index < BOX_COUNT; index++) {
     const box = boxes[index], target = berth(layout, index);
     inbound.waitUntil(index === 0 ? 0.6 : storedTimes[index - 1]);
+    inbound.startEngine();
     inbound.pose.visible = true;
     carry(box, inbound, 0);
+    const gateInStart = openGate('in', inbound);
     inbound.drive(layout.staging.x, layout.staging.z - FORWARD_OFFSET, 'insert');
     inbound.lift(0);
     release(box, inbound, location('floor'), layout.staging, 0);
-    inbound.drive(layout.gateIn.x, layout.gateIn.z, 'retract');
+    inbound.drive(layout.inboundOffstage.x, layout.inboundOffstage.z, 'retract');
     inbound.lift(TRANSPORT_HEIGHT);
+    closeGate('in', gateInStart, inbound);
+    inbound.pose.visible = false;
+    inbound.pose.engineRunning = false;
 
     putaway.waitUntil(inbound.time);
     putaway.lift(0);
@@ -153,11 +194,12 @@ function createTimeline(layout) {
     putaway.travel(-12, -25);
     putaway.turn(Math.PI);
   }
-  inbound.pose.visible = false;
+  putaway.pose.engineRunning = false;
 
   outbound.waitUntil(storedTimes[49]);
   outbound.pose.visible = true;
   outbound.animate('descend', 10, { position: { x: 17, y: 0, z: -29 } });
+  outbound.startEngine();
   outbound.travel(13, -29);
   for (let index = 0; index < BOX_COUNT; index++) {
     const box = boxes[index], source = berth(layout, index);
@@ -174,21 +216,24 @@ function createTimeline(layout) {
     outbound.travel(13, source.aisleZ);
     outbound.travel(13, -29);
     outbound.turn(Math.PI);
+    const gateOutStart = openGate('out', outbound);
     outbound.drive(13, layout.gateOut.z + FORWARD_OFFSET, 'insert');
     outbound.lift(0);
     shippedTimes.push(outbound.time);
     release(box, outbound, location('shipped'), layout.gateOut, 0, false);
     outbound.drive(13, -29, 'retract');
     outbound.lift(TRANSPORT_HEIGHT);
+    closeGate('out', gateOutStart, outbound);
   }
   outbound.travel(17, -29);
   outbound.turn(0);
+  outbound.pose.engineRunning = false;
   outbound.animate('ascend', 10, { position: { x: 17, y: 14, z: -29 } });
   outbound.pose.visible = false;
-  const duration = Math.max(...trucks.map(truck => truck.time)) + 1;
+  const duration = Math.max(...trucks.map(truck => truck.time)) + 2;
   for (const truck of trucks) truck.waitUntil(duration);
   for (const box of boxes) box.events.sort((a, b) => a.start - b.start);
-  return { trucks, boxes, storedTimes, shippedTimes, duration };
+  return { trucks, boxes, gates, storedTimes, shippedTimes, duration };
 }
 
 // Last item at or before time. Every pose/event track has an entry at time 0.
@@ -211,22 +256,37 @@ function poseAt(truck, elapsed) {
   const segment = truck.segments[indexAt(truck.segments, elapsed)];
   const progress = Math.max(0, Math.min(1, (elapsed - segment.start) / segment.duration));
   const eased = progress * progress * (3 - 2 * progress);
+  const velocityFactor = 6 * progress * (1 - progress) / segment.duration;
   const lerp = (a, b) => a + (b - a) * eased;
+  const yaw = lerp(segment.from.yaw, segment.to.yaw);
   return {
     id: truck.id, role: truck.role, action: segment.action,
     visible: segment.from.visible, cargoId: segment.from.cargoId,
     position: Object.fromEntries(['x', 'y', 'z'].map(axis => [axis, lerp(segment.from.position[axis], segment.to.position[axis])])),
-    yaw: lerp(segment.from.yaw, segment.to.yaw),
+    yaw,
     liftHeight: lerp(segment.from.liftHeight, segment.to.liftHeight),
+    speed: velocityFactor * ((segment.to.position.x - segment.from.position.x) * Math.sin(yaw) + (segment.to.position.z - segment.from.position.z) * Math.cos(yaw)),
+    liftVelocity: velocityFactor * (segment.to.liftHeight - segment.from.liftHeight),
+    engineRunning: segment.from.engineRunning,
   };
 }
 
+function gateAt(intervals, elapsed) {
+  if (!intervals.length || elapsed < intervals[0].start) return 0;
+  const interval = intervals[indexAt(intervals, elapsed)];
+  const progress = Math.max(0, Math.min(1, elapsed < interval.start + GATE_DURATION
+    ? (elapsed - interval.start) / GATE_DURATION
+    : 1 - (elapsed - interval.closeStart) / GATE_DURATION));
+  return progress * progress * (3 - 2 * progress);
+}
+
 export function createSimulation() {
-  const layout = createLayout(), timeline = createTimeline(layout);
-  let elapsed = 0, cycle = 0, disposed = false;
+  const layout = createLayout(), timeline = createTimeline(layout), intro = createIntro();
+  let elapsed = 0, introElapsed = 0, cycle = 0, disposed = false;
 
   function getState() {
     const forklifts = timeline.trucks.map(truck => poseAt(truck, elapsed));
+    if (introElapsed < intro.time) forklifts[0] = poseAt(intro, introElapsed);
     const storedCount = countAt(timeline.storedTimes, elapsed);
     const shippedCount = countAt(timeline.shippedTimes, elapsed);
     const phase = shippedCount === BOX_COUNT ? 'returning' : storedCount === BOX_COUNT ? 'shipping' : storedCount >= 50 ? 'parallel' : 'filling';
@@ -234,6 +294,7 @@ export function createSimulation() {
       cycle, phase, completedInPhase: phase === 'filling' ? storedCount : shippedCount,
       storedCount, shippedCount, action: forklifts[0].action,
       forklifts, forklift: forklifts[0],
+      gates: { in: gateAt(timeline.gates.in, elapsed), out: gateAt(timeline.gates.out, elapsed) },
       boxes: timeline.boxes.map(box => {
         const event = box.events[indexAt(box.events, elapsed)];
         const truck = event.truckIndex === undefined ? null : forklifts[event.truckIndex];
@@ -252,6 +313,9 @@ export function createSimulation() {
 
   function step(deltaSeconds) {
     if (!disposed && Number.isFinite(deltaSeconds) && deltaSeconds > 0) {
+      const introStep = Math.min(deltaSeconds, intro.time - introElapsed);
+      introElapsed += introStep;
+      deltaSeconds -= introStep;
       // Reduce before adding, including Number.MAX_VALUE: no catch-up loop,
       // overflow, dropped elapsed time, or dependence on previous frame size.
       cycle = Math.min(Number.MAX_VALUE, cycle + Math.floor(deltaSeconds / timeline.duration));
@@ -264,5 +328,7 @@ export function createSimulation() {
     return getState();
   }
 
-  return { layout, cycleDuration: timeline.duration, getState, step, dispose() { disposed = true; } };
+  // Total elapsed time at cycle N is introDuration + N * cycleDuration. The
+  // introductory descent runs only once and arbitrary deltas can skip it.
+  return { layout, introDuration: intro.time, cycleDuration: timeline.duration, getState, step, dispose() { disposed = true; } };
 }

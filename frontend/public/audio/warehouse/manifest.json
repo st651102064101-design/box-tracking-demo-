@@ -1,0 +1,82 @@
+{
+  "sampleRate": 22050,
+  "channels": 1,
+  "bitsPerSample": 16,
+  "sources": {
+    "engine": {
+      "filename": "freesound_community-forklift-62407.mp3",
+      "sha256": "d92f5cf5291dd6390c8a7764e7f01b3953d6f50b549574ddccd51f1e6dfe4e99",
+      "duration": 38.56798185941043,
+      "channels": 1
+    },
+    "reverse": {
+      "filename": "forza1903-forkliftin-ilerigeri-hareket-sesi-328411.mp3",
+      "sha256": "4df3bc251f8a290e91243d2673f6ab97955e43fe593f04e7c301b89fb112378f",
+      "duration": 8.097959183673469,
+      "channels": 2
+    },
+    "hydraulics": {
+      "filename": "freesound_community-hydraulics-87154.mp3",
+      "sha256": "4a37e127f4cc30f94acdedd7916d1e4c564845d71d4587204cd51c75b05def8f",
+      "duration": 9.263990929705216,
+      "channels": 2
+    }
+  },
+  "assets": {
+    "engine-start": {
+      "source": "freesound_community-forklift-62407.mp3",
+      "sourceStart": 0.26,
+      "sourceEnd": 2.66,
+      "duration": 2.4,
+      "crossfade": 0,
+      "edgeFade": 0.012,
+      "frames": 52920,
+      "bytes": 105884,
+      "sha256": "e0d3c454c98afebe06882d6d9534c3935471ad778cb9750f390114557ecead5d"
+    },
+    "engine-idle": {
+      "source": "freesound_community-forklift-62407.mp3",
+      "sourceStart": 12.8,
+      "sourceEnd": 20.8,
+      "duration": 7.76,
+      "crossfade": 0.24,
+      "edgeFade": 0,
+      "frames": 171108,
+      "bytes": 342260,
+      "sha256": "af441cca0a36a5d16a83080fb37040a1e2f946354a7194d138ef8303e219e223"
+    },
+    "engine-stop": {
+      "source": "freesound_community-forklift-62407.mp3",
+      "sourceStart": 36.6,
+      "sourceEnd": 38.25,
+      "duration": 1.6500226757369614,
+      "crossfade": 0,
+      "edgeFade": 0.02,
+      "frames": 36383,
+      "bytes": 72810,
+      "sha256": "419569be2b48d12a23e7aaded300a69bdca388e0b2493b9601c75ed2d2aa596a"
+    },
+    "reverse": {
+      "source": "forza1903-forkliftin-ilerigeri-hareket-sesi-328411.mp3",
+      "sourceStart": 0.68,
+      "sourceEnd": 1.9,
+      "duration": 1.2049886621315193,
+      "crossfade": 0.015,
+      "edgeFade": 0,
+      "frames": 26570,
+      "bytes": 53184,
+      "sha256": "e3e2bc89d1c49b397b5904d3344467d9303821d09591c6d84a10dd66069d51cd"
+    },
+    "hydraulics": {
+      "source": "freesound_community-hydraulics-87154.mp3",
+      "sourceStart": 7,
+      "sourceEnd": 9,
+      "duration": 2,
+      "crossfade": 0,
+      "edgeFade": 0.012,
+      "frames": 44100,
+      "bytes": 88244,
+      "sha256": "388a111bf4446d18c2073bd7179d54eed4623795d78e19f0b5bf9426fd3ffe77"
+    }
+  }
+}

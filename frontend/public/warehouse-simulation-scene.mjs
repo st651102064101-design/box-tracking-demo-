@@ -14,6 +14,7 @@ export function createWarehouseScene(renderer, layout, initialState, signal) {
   const instances = new Set();
   const staticMeshes = [];
   const fleet = new Map();
+  const shutters = new Map();
   let disposed = false;
   const keepGeometry = geometry => { geometries.add(geometry); return geometry; };
   const keepMaterial = surface => { materials.add(surface); return surface; };
@@ -127,8 +128,8 @@ export function createWarehouseScene(renderer, layout, initialState, signal) {
   box([0.2, eave, depth], [bounds.maxX, eave / 2, 0], surfaces.wall, scene, false);
   box([width, eave, 0.2], [0, eave / 2, bounds.maxZ], surfaces.wall, scene, false);
   const gates = [
-    { x: layout.gateIn.x, text: 'GATE IN', color: '#286653', width: 5.6 },
-    { x: layout.gateOut.x, text: 'GATE OUT', color: '#a86b22', width: 5.6 },
+    { id: 'in', x: layout.gateIn.x, text: 'GATE IN', color: '#286653', width: 5.6 },
+    { id: 'out', x: layout.gateOut.x, text: 'GATE OUT', color: '#a86b22', width: 5.6 },
   ];
   let wallStart = bounds.minX;
   gates.forEach(gate => {
@@ -136,15 +137,27 @@ export function createWarehouseScene(renderer, layout, initialState, signal) {
     const right = gate.x + gate.width / 2;
     box([left - wallStart, eave, 0.2], [(left + wallStart) / 2, eave / 2, bounds.minZ], surfaces.wall, scene, false);
     box([gate.width, eave - 4.8, 0.2], [gate.x, (eave + 4.8) / 2, bounds.minZ], surfaces.wall, scene, false);
-    box([gate.width, 5, 0.12], [gate.x, 2.5, bounds.minZ - 2.5], surfaces.opening, scene, false);
-    box([0.16, 5, 2.6], [left, 2.5, bounds.minZ - 1.25], surfaces.dark, scene, false);
-    box([0.16, 5, 2.6], [right, 2.5, bounds.minZ - 1.25], surfaces.dark, scene, false);
-    box([gate.width, 0.15, 2.6], [gate.x, 4.8, bounds.minZ - 1.25], surfaces.dark, scene, false);
+    // Recess is deep enough for the entire inbound truck to reverse out of
+    // sight before its engine/visibility turn off at the offstage stop.
+    const recessDepth = 8;
+    box([gate.width, 5, 0.12], [gate.x, 2.5, bounds.minZ - recessDepth], surfaces.opening, scene, false);
+    box([0.16, 5, recessDepth], [left, 2.5, bounds.minZ - recessDepth / 2], surfaces.dark, scene, false);
+    box([0.16, 5, recessDepth], [right, 2.5, bounds.minZ - recessDepth / 2], surfaces.dark, scene, false);
+    box([gate.width, 0.15, recessDepth], [gate.x, 4.8, bounds.minZ - recessDepth / 2], surfaces.dark, scene, false);
+    box([gate.width, 0.18, recessDepth], [gate.x, -0.09, bounds.minZ - recessDepth / 2], surfaces.floor, scene, false);
     for (const x of [left, right]) {
       box([0.27, 4.9, 0.4], [x, 2.45, bounds.minZ + 0.08], surfaces.steel);
       bollard(x + (x < gate.x ? -0.38 : 0.38), bounds.minZ + 0.6);
     }
     box([gate.width + 0.6, 0.48, 0.5], [gate.x, 4.9, bounds.minZ], surfaces.steel);
+    const shutter = new THREE.Group();
+    shutter.name = `simulation-gate-${gate.id}`;
+    shutter.position.set(gate.x, 0, bounds.minZ);
+    scene.add(shutter);
+    const panel = box([gate.width - 0.12, 4.8, 0.1], [0, 2.4, 0], surfaces.steel, shutter);
+    const ribs = Array.from({ length: 16 }, (_, i) => box([gate.width - 0.12, 0.035, 0.13], [0, i * 0.3, 0], surfaces.dark, shutter));
+    const bottom = box([gate.width - 0.1, 0.09, 0.16], [0, 0.045, 0], surfaces.yellow, shutter);
+    shutters.set(gate.id, { root: shutter, panel, ribs, bottom });
     sign(gate.text, [4.4, 0.76], [gate.x, 5.85, bounds.minZ + 0.14], { background: gate.color, rotationY: 0 });
     for (const x of [left + 0.3, right - 0.3]) floorLine(x, bounds.minZ + 2.4, 0.1, 4.8);
     wallStart = right;
@@ -169,15 +182,20 @@ export function createWarehouseScene(renderer, layout, initialState, signal) {
     geometry.computeVertexNormals();
     scene.add(new THREE.Mesh(geometry, surfaces.roof));
   }
-  roofPanel(-20, 0, -35, 35);
+  roofPanel(-20, -19, -35, 35);
+  roofPanel(-15, 0, -35, 35);
+  roofPanel(-19, -15, -35, -32);
+  roofPanel(-19, -15, -26, 35);
   roofPanel(0, 15, -35, 35);
   roofPanel(19, 20, -35, 35);
   roofPanel(15, 19, -35, -32);
   roofPanel(15, 19, -26, 35);
-  // Truck 2 descends through this open hoist bay, never through solid roofing.
-  for (const x of [15, 19]) member([x, roofHeight(x) - 0.08, -32], [x, roofHeight(x) - 0.08, -26], 0.13, surfaces.yellow);
-  for (const z of [-32, -26]) member([15, roofHeight(15) - 0.08, z], [19, roofHeight(19) - 0.08, z], 0.13, surfaces.yellow);
-  sign('OVERHEAD TRANSFER', [3.7, 0.55], [17, 6.9, -34.85], { background: '#ba8d24', rotationY: 0 });
+  // Both descending vehicles have a clear overhead transfer bay.
+  for (const centre of [-17, 17]) {
+    for (const x of [centre - 2, centre + 2]) member([x, roofHeight(x) - 0.08, -32], [x, roofHeight(x) - 0.08, -26], 0.13, surfaces.yellow);
+    for (const z of [-32, -26]) member([centre - 2, roofHeight(centre - 2) - 0.08, z], [centre + 2, roofHeight(centre + 2) - 0.08, z], 0.13, surfaces.yellow);
+    sign('OVERHEAD TRANSFER', [3.7, 0.55], [centre, 6.9, -34.85], { background: '#ba8d24', rotationY: 0 });
+  }
   for (const z of [bounds.minZ, bounds.maxZ]) {
     const geometry = keepGeometry(new THREE.BufferGeometry());
     geometry.setAttribute('position', new THREE.Float32BufferAttribute([-20, eave, z, 20, eave, z, 0, ridge, z], 3));
@@ -421,7 +439,7 @@ export function createWarehouseScene(renderer, layout, initialState, signal) {
     });
     if (wheels.length !== 4) throw new Error('The local forklift model is missing wheel pivots.');
     const hoistCables = [];
-    if (snapshot.role === 'outbound') {
+    if (snapshot.role === 'outbound' || snapshot.role === 'putaway') {
       for (const x of [-0.47, 0.47]) {
         const cable = new THREE.Mesh(unitCylinder, surfaces.dark);
         cable.position.set(x, 0, -0.4);
@@ -445,6 +463,21 @@ export function createWarehouseScene(renderer, layout, initialState, signal) {
   }
   function update(state) {
     if (disposed) return;
+    shutters.forEach(({ root, panel, ribs, bottom }, id) => {
+      const openness = THREE.MathUtils.clamp(state.gates?.[id] ?? 0, 0, 1);
+      const lowerEdge = openness * 4.8;
+      const height = 4.8 - lowerEdge;
+      root.userData.openness = openness;
+      panel.visible = height > 0.001;
+      panel.scale.y = Math.max(0.001, height);
+      panel.position.y = lowerEdge + height / 2;
+      ribs.forEach((rib, i) => {
+        rib.position.y = lowerEdge + i * 0.3;
+        rib.visible = rib.position.y < 4.77;
+      });
+      bottom.position.y = lowerEdge + 0.045;
+      bottom.visible = openness < 0.999;
+    });
     state.forklifts.forEach(snapshot => {
       const rig = fleet.get(snapshot.id);
       if (!rig) return;
@@ -497,7 +530,7 @@ export function createWarehouseScene(renderer, layout, initialState, signal) {
     dispose() {
       if (disposed) return;
       disposed = true;
-      scene.clear(); fleet.clear(); previousBoxes.clear(); disposeResources();
+      scene.clear(); fleet.clear(); shutters.clear(); previousBoxes.clear(); disposeResources();
     },
   };
 }

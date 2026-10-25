@@ -30,6 +30,21 @@ async function main() {
     await page.addInitScript(({ token }) => {
       localStorage.setItem('boxtrace_jwt', token);
       localStorage.setItem('smarttrace_jwt', token);
+      if (window === window.top) window.__simulationAudioEvidence = [];
+      const NativeAudioContext = window.AudioContext;
+      if (NativeAudioContext && location.pathname === '/warehouse-simulation.html') {
+        window.AudioContext = class extends NativeAudioContext {
+          constructor(...args) {
+            super(...args);
+            const record = { context: this, sources: [] };
+            window.top.__simulationAudioEvidence.push(record);
+            const createSource = this.createBufferSource.bind(this);
+            this.createBufferSource = () => {
+              const source = createSource(); record.sources.push(source); return source;
+            };
+          }
+        };
+      }
     }, { token: auth.token });
     await page.goto(origin, { waitUntil: 'domcontentloaded' });
     const live = page.frameLocator('iframe[title="BoxTrace"],iframe[title="SmartTrace"]');
@@ -54,16 +69,19 @@ async function main() {
     const sim = live.frameLocator('.warehouse-simulation-host iframe');
     await sim.locator('#orbit-view').waitFor();
     await liveFrame.waitForFunction(() => document.fullscreenElement?.classList.contains('warehouse-simulation-host'));
-    assert.equal(await sim.locator('button:visible').count(), 2);
+    assert.equal(await sim.locator('.view-controls button:visible').count(), 3);
     collecting = true;
     await page.waitForTimeout(8500); // covers at least two normal four-second sync polls
     assert.deepEqual(apiDuringSimulation, []);
     await page.screenshot({ path: path.join(output, 'simulation-docker.png') });
     await sim.locator('#first-person-view').click();
     assert.equal(await sim.locator('#first-person-view').getAttribute('aria-pressed'), 'true');
+    await page.waitForFunction(() => window.__simulationAudioEvidence.some(record => record.context.state === 'running' && record.sources.some(source => source.buffer)), null, { timeout: 25000 });
+    assert.equal(await page.evaluate(() => window.__simulationAudioEvidence.length), 1, 'Nested simulation unlocks one real audio context');
     collecting = false;
     await page.keyboard.press('Escape');
     await liveFrame.waitForFunction(() => !window.__warehouseSimulationActive);
+    await page.waitForFunction(() => window.__simulationAudioEvidence.every(record => record.context.state === 'closed'));
     assert.equal(await liveFrame.evaluate(() => {
       const prior = window.__testBeforeSimulation, controller = window.LocationWarehouse3D.active();
       return controller === prior.controller
@@ -88,7 +106,7 @@ async function main() {
     assert.equal(await live.locator('.loc3d-first-person').getAttribute('aria-pressed'), 'true');
     await page.keyboard.press('Escape');
     assert.deepEqual(errors, [], 'No new runtime errors in simulation or return to real scene');
-    console.log(JSON.stringify({ result: 'PASS', checks: ['deployed-entry-button', 'nested-app-fullscreen', 'two-controls', 'no-api-over-two-polls', 'first-person-control', 'Esc-real-controller-camera-data-restore', 'live-first-person-resume', 'zero-new-runtime-errors'], apiDuringSimulation, baselineErrors }));
+    console.log(JSON.stringify({ result: 'PASS', checks: ['deployed-entry-button', 'nested-app-fullscreen', 'view-and-ui-controls', 'no-api-over-two-polls', 'first-person-control', 'Esc-real-controller-camera-data-restore', 'live-first-person-resume', 'zero-new-runtime-errors'], apiDuringSimulation, baselineErrors }));
   } catch (error) {
     await page.screenshot({ path: path.join(output, 'simulation-live-failure.png'), timeout: 10000 }).catch(() => {});
     console.error(JSON.stringify({ liveUrl: page.url(), errors, apiDuringSimulation }));

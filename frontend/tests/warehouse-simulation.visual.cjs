@@ -35,7 +35,7 @@ async function main() {
   }
   clearanceEngine.dispose();
   assert.equal(dockingStates.length, 2, 'Both vehicles reach the upper-shelf docking poses');
-  let snapshotTime = 0;
+  let snapshotTime = 0, gateView = false;
   const server = createServer(async (req, res) => {
     const pathname = new URL(req.url, 'http://localhost').pathname;
     if (pathname.startsWith('/api/')) { res.writeHead(500); res.end('Business API forbidden'); return; }
@@ -47,6 +47,10 @@ async function main() {
       if (pathname === '/warehouse-simulation-engine.mjs') {
         body = body.toString().replace('export function createSimulation(', 'function createSimulationForCapture(')
           + `\nexport function createSimulation() { const engine = createSimulationForCapture(); engine.step(${snapshotTime}); return { ...engine, step() { return engine.getState(); } }; }\n`;
+      }
+      if (pathname === '/warehouse-simulation-view.mjs' && gateView) {
+        body = body.toString().replace('camera.position.set(-18, 10, -34);', 'camera.position.set(-18, 5, -24);')
+          .replace('controls.target.set(0, 1, -16);', 'controls.target.set(-12, 2, -35);');
       }
       res.setHeader('Cache-Control', 'no-store');
       res.setHeader('Content-Type', ({ '.mjs': 'text/javascript', '.js': 'text/javascript', '.html': 'text/html', '.css': 'text/css' })[path.extname(file)] || 'application/octet-stream');
@@ -74,6 +78,33 @@ async function main() {
   const output = path.join(root, '../.simulation-work');
   await mkdir(output, { recursive: true });
   try {
+    // Real dynamic shutters must retract above the vehicle and the incoming
+    // vehicle must disappear only after reversing all the way beyond Gate In.
+    const gateEngine = createSimulation();
+    const gateSamples = [];
+    let sawInbound = false;
+    for (let time = 0; time < 150; time += 0.25) {
+      const state = gateEngine.step(0.25);
+      const truck = state.forklifts[2];
+      if (!gateSamples.length && state.gates?.in === 1 && truck.position.z > -35 && truck.speed > 0) {
+        gateSamples.push({ name: 'gate-in-open', time: time + 0.25 });
+        sawInbound = true;
+      }
+      if (sawInbound && !truck.visible && state.gates?.in === 0) {
+        gateSamples.push({ name: 'gate-in-closed', time: time + 0.25 });
+        break;
+      }
+    }
+    gateEngine.dispose();
+    assert.equal(gateSamples.length, 2, 'Inbound opens, clears the portal, disappears and closes the gate');
+    for (const sample of gateSamples) {
+      snapshotTime = sample.time; gateView = true;
+      await page.goto(`${origin}/warehouse-simulation.html`);
+      await page.waitForFunction(() => window.visualReady || window.visualError, null, { timeout: 30000 });
+      assert.equal(await page.evaluate(() => window.visualError), null);
+      await page.screenshot({ path: path.join(output, `warehouse-${sample.name}.png`) });
+    }
+    gateView = false;
     for (const sample of samples) {
       snapshotTime = sample.time;
       await page.goto(`${origin}/warehouse-simulation.html`);
@@ -98,6 +129,14 @@ async function main() {
       const wheels = [];
       truck.traverse(node => { if (/^Wheel_(FL|FR|RL|RR)$/.test(node.name)) wheels.push(node.userData.wheelRadius); });
       const result = { body: { min: body.min.toArray(), max: body.max.toArray() }, forks: { min: forks.min.toArray(), max: forks.max.toArray() }, wheels };
+      result.shutters = [0, 0.5, 1].map(openness => {
+        graphics.update({ ...state, gates: { in: openness, out: openness } });
+        return ['in', 'out'].map(id => {
+          const gate = graphics.scene.getObjectByName(`simulation-gate-${id}`);
+          const panel = gate.children[0];
+          return { id, openness, visible: panel.visible, lowerEdge: panel.position.y - panel.scale.y / 2, upperEdge: panel.position.y + panel.scale.y / 2 };
+        });
+      }).flat();
       result.mastClearances = dockingStates.map(({ state, truckIndex, rackIndex }) => {
         graphics.update(state);
         graphics.scene.updateMatrixWorld(true);
@@ -119,6 +158,11 @@ async function main() {
     assert.equal(rigBounds.wheels.length, 4);
     assert.ok(rigBounds.wheels.every(radius => Number.isFinite(radius) && radius > 0), 'Every wheel has a usable physical radius');
     assert.ok(rigBounds.mastClearances.every(item => item.clearance >= 0.05), `Real mast and telescoping stages must clear the front shelf beams: ${JSON.stringify(rigBounds.mastClearances)}`);
+    for (const shutter of rigBounds.shutters) {
+      assert.equal(shutter.visible, shutter.openness < 1, 'Open shutters leave a clear portal');
+      assert.ok(Math.abs(shutter.lowerEdge - 4.8 * shutter.openness) < 0.001);
+      assert.ok(Math.abs(shutter.upperEdge - 4.8) < 0.001, 'Shutter rolls into the fixed overhead housing');
+    }
     assert.deepEqual(errors, []);
     assert.deepEqual(forbidden, []);
     console.log(JSON.stringify({ result: 'PASS', samples, screenshots: output, rigBounds, errors, forbidden }));

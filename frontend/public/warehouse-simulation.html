@@ -11,17 +11,22 @@
   </script>
 </head>
 <body>
-  <canvas id="warehouse" aria-label="Warehouse simulation. Orbit: drag to rotate, right drag to pan, scroll to zoom. First person: WASD or arrow keys to walk, drag to look. Escape exits."></canvas>
-  <nav class="view-controls" aria-label="Simulation view">
-    <button id="orbit-view" type="button" aria-pressed="true" title="Orbit · drag to rotate, right drag to pan, scroll to zoom · Esc to exit">
+  <canvas id="warehouse" aria-label="Warehouse simulation. WASD or arrows move. Orbit: drag to rotate, scroll to zoom, Space up, Shift down. First person: move mouse to look; touch: drag to look. F changes view, H toggles controls, question mark shows help, Escape exits."></canvas>
+  <nav class="view-controls" data-simulation-overlay aria-label="Simulation view">
+    <button id="orbit-view" type="button" aria-pressed="true" title="Orbit · WASD / arrows fly · Space up · Shift down · F changes view">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Zm0 0v9m8-4.5L12 12l-8-4.5M12 12v9"/></svg>
       <span>Orbit</span>
     </button>
-    <button id="first-person-view" type="button" aria-pressed="false" title="First person · WASD or arrow keys to walk, drag to look · Esc to exit">
+    <button id="first-person-view" type="button" aria-pressed="false" title="First person · WASD / arrows walk · move mouse to look · F changes view">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="2.5"/><path d="m8 21 1-7-3-3 4-3h4l4 3-3 3 1 7M9 14h6"/></svg>
       <span>First person</span>
     </button>
+    <button id="toggle-ui" type="button" title="Hide all controls · H shows them again" aria-label="Hide all controls. Press H to show them again.">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18M10.6 5.2A11.6 11.6 0 0 1 21 12a14 14 0 0 1-3.1 3.8M6.3 6.3A14 14 0 0 0 3 12s3.2 7 9 7c1.8 0 3.4-.6 4.8-1.5M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>
+      <span>Hide UI</span>
+    </button>
   </nav>
+  <aside id="controls-help" data-simulation-overlay role="status" aria-live="polite" hidden></aside>
   <script type="module">
     import('/warehouse-simulation-view.mjs').catch((error) => {
       window.parent.postMessage({ type: 'warehouse-simulation-error', message: error?.message || 'The warehouse view could not load.' }, window.location.origin);

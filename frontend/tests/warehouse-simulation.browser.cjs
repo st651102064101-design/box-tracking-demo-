@@ -62,7 +62,7 @@ async function main() {
     const frame = page.frameLocator('iframe');
     await frame.locator('#orbit-view').waitFor();
     await page.waitForFunction(() => document.activeElement?.tagName === 'IFRAME');
-    assert.equal(await frame.locator('button:visible').count(), 2);
+    assert.equal(await frame.locator('.view-controls button:visible').count(), 3);
     assert.equal(await page.evaluate(() => window.__warehouseSimulationActive), true);
     await page.screenshot({ path: path.join(root, '../.simulation-work/simulation-orbit.png') });
     const simulationFrame = page.frames().find(item => item.url().includes('/warehouse-simulation.html'));
@@ -79,6 +79,7 @@ async function main() {
       let maximumShipped = 0;
       let state = initial;
       if (!Number.isFinite(engine.cycleDuration)) throw new Error('A finite complete cycle duration is required');
+      engine.step(engine.introDuration || 0);
       for (let i = 0; i < 12002 && state.cycle < 2; i++) {
         state = engine.step(engine.cycleDuration / 6000);
         phases.add(state.phase);
@@ -95,10 +96,10 @@ async function main() {
     assert.equal(loop.maximumFloor, 1); assert.equal(loop.maximumStored, 250); assert.equal(loop.maximumShipped, 250);
     await frame.locator('#first-person-view').click();
     assert.equal(await frame.locator('#first-person-view').getAttribute('aria-pressed'), 'true');
-    await frame.locator('#warehouse').click({ position: { x: 400, y: 400 } });
+    await simulationFrame.waitForFunction(() => document.pointerLockElement?.id === 'warehouse');
     await page.keyboard.down('w'); await page.waitForTimeout(400); await page.keyboard.up('w');
     await page.screenshot({ path: path.join(root, '../.simulation-work/simulation-first-person.png') });
-    await frame.locator('#orbit-view').click();
+    await page.keyboard.press('f');
     assert.equal(await frame.locator('#orbit-view').getAttribute('aria-pressed'), 'true');
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => !window.__warehouseSimulationActive && !document.fullscreenElement);
@@ -207,7 +208,7 @@ async function main() {
     assert.deepEqual(errors, []);
     assert.equal(await page.evaluate(() => window.errors.length), 1, 'Only the deliberately corrupt model produces a user-visible error');
     const { ids, initialIds, ...loopSummary } = loop;
-    console.log(JSON.stringify({ result: 'PASS', checks: ['fullscreen', 'only-two-buttons', 'two-250-box-loops', 'three-independent-roles', 'single-floor-staging', 'first-person-movement', 'view-toggle', 'Esc-restore', 'shortcut-editable-guard', 'shortcut-reentry', 'already-fullscreen-entry', 'already-fullscreen-Esc-cleanup', 'live-object-fetch-focus-restoration', 'Esc-during-module-startup', 'Esc-during-model-load', 'corrupt-model-rolls-back', 'zero-api-requests', 'zero-browser-errors'], restoredFullscreen, apiRequests, loop: loopSummary }));
+    console.log(JSON.stringify({ result: 'PASS', checks: ['fullscreen', 'view-and-ui-controls', 'two-250-box-loops', 'three-independent-roles', 'single-floor-staging', 'first-person-pointer-lock', 'view-toggle', 'Esc-restore', 'shortcut-editable-guard', 'shortcut-reentry', 'already-fullscreen-entry', 'already-fullscreen-Esc-cleanup', 'live-object-fetch-focus-restoration', 'Esc-during-module-startup', 'Esc-during-model-load', 'corrupt-model-rolls-back', 'zero-api-requests', 'zero-browser-errors'], restoredFullscreen, apiRequests, loop: loopSummary }));
   } catch (error) {
     if (page && !page.isClosed()) {
       console.error(JSON.stringify({ diagnostics: await page.evaluate(() => ({ active: window.__warehouseSimulationActive, fullscreen: document.fullscreenElement?.className || document.fullscreenElement?.id || null, liveState: window.liveState, events: window.simulationEventTrace?.slice(-100) })) }));
