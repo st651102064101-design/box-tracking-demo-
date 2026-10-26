@@ -367,5 +367,17 @@ export function createSimulation() {
     return getState();
   }
 
-  return { layout, introDuration: 0, cycleDuration: timeline.duration, getState, step, dispose() { disposed = true; } };
+  function checkpoint() {
+    return { version: 1, timeline: 'longitudinal-300-v1', duration: timeline.duration, elapsed, cycle };
+  }
+  function restore(value) {
+    if (disposed || value?.version !== 1 || value.timeline !== 'longitudinal-300-v1'
+      || value.duration !== timeline.duration || !Number.isFinite(value.elapsed) || value.elapsed < 0 || value.elapsed >= timeline.duration
+      || !Number.isInteger(value.cycle) || value.cycle < 0 || value.cycle > Number.MAX_SAFE_INTEGER) return false;
+    elapsed = value.elapsed;
+    cycle = value.cycle;
+    return true;
+  }
+
+  return { layout, introDuration: 0, cycleDuration: timeline.duration, getState, step, checkpoint, restore, dispose() { disposed = true; } };
 }

@@ -3,6 +3,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createSimulation } from './warehouse-simulation-engine.mjs';
 import { createWarehouseScene } from './warehouse-simulation-scene.mjs';
 import { createSimulationAudio } from './warehouse-simulation-audio.mjs';
+import { createCheckpointStore } from './warehouse-simulation-checkpoint.mjs';
 
 // The host owns fullscreen/live-state restoration; this frame owns only the
 // isolated engine, local graphics, camera and input lifecycle.
@@ -17,6 +18,7 @@ let frame = 0, stopped = false, started = false, exited = false;
 let previousTime = null;
 let helpTimeout = 0, uiHidden = false;
 let audioHintShown = false;
+let saveCheckpoint = () => {}, hasRun = false;
 const tellParent = (type, extra = {}) => window.parent.postMessage({ type, ...extra }, window.location.origin);
 
 function showHelp(message) {
@@ -43,6 +45,7 @@ function enableAudio() {
 }
 function cleanup() {
   if (stopped) return;
+  saveCheckpoint();
   stopped = true;
   cancelAnimationFrame(frame);
   clearTimeout(helpTimeout);
@@ -67,6 +70,7 @@ function fail(error) {
   cleanup();
 }
 window.addEventListener('pagehide', cleanup, eventOptions);
+window.addEventListener('warehouse-simulation-save', () => saveCheckpoint(), eventOptions);
 window.addEventListener('error', event => fail(event.error || new Error(event.message)), eventOptions);
 window.addEventListener('unhandledrejection', event => fail(event.reason), eventOptions);
 window.addEventListener('keydown', event => {
@@ -78,6 +82,7 @@ window.addEventListener('message', event => {
   if (event.source !== window.parent || event.origin !== window.location.origin) return;
   if (event.data?.type !== 'warehouse-simulation-start' || started || exited || stopped) return;
   started = true;
+  hasRun = true;
   previousTime = null;
   enableAudio();
 }, eventOptions);
@@ -86,6 +91,18 @@ window.addEventListener('keydown', event => { if (!event.repeat) enableAudio(); 
 
 async function initialize() {
   simulation = createSimulation();
+  let storage, storageFailed = false;
+  try { storage = window.localStorage; } catch { /* Saved progress is optional when browser storage is blocked. */ }
+  const checkpointStore = createCheckpointStore({
+    storage,
+    profile: new URLSearchParams(window.location.hash.slice(1)).get('profile') || 'local',
+    onError: () => {
+      storageFailed = true;
+      showHelp('Progress cannot be saved in this browser · check local storage settings · Esc exit');
+    },
+  });
+  const saved = checkpointStore.load();
+  const resumed = Boolean(saved && simulation.restore(saved.engine));
   audio = createSimulationAudio({ signal: abort.signal, layout: simulation.layout });
   let state = simulation.getState();
   const { layout } = simulation;
@@ -218,6 +235,35 @@ async function initialize() {
     firstPersonButton.setAttribute('aria-pressed', String(view === 'first-person'));
     showHelp(modeHelp());
   }
+  if (resumed) {
+    warehouse.setBuildingVisible(saved.view.buildingVisible);
+    canvas.dataset.buildingVisible = String(warehouse.buildingVisible);
+    uiHidden = saved.view.uiHidden;
+    document.body.dataset.uiHidden = String(uiHidden);
+    camera.position.fromArray(saved.view.orbit.position);
+    controls.target.fromArray(saved.view.orbit.target);
+    camera.zoom = saved.view.orbit.zoom;
+    camera.updateProjectionMatrix();
+    controls.update();
+    constrainOrbit();
+    walkingPosition.fromArray(saved.view.walkingPosition);
+    walkingPosition.x = THREE.MathUtils.clamp(walkingPosition.x, bounds.minX + 0.5, bounds.maxX - 0.5);
+    walkingPosition.z = THREE.MathUtils.clamp(walkingPosition.z, bounds.minZ + 0.5, bounds.maxZ - 0.5);
+    walkingPosition.y = 1.72;
+    lookYaw = saved.view.lookYaw; lookPitch = saved.view.lookPitch;
+    setView(saved.view.mode);
+  }
+  saveCheckpoint = () => {
+    if (!hasRun || stopped) return;
+    const orbit = view === 'orbit' ? { position: camera.position, target: controls.target, zoom: camera.zoom } : orbitSnapshot;
+    checkpointStore.save(simulation.checkpoint(), {
+      mode: view,
+      orbit: { position: orbit.position.toArray(), target: orbit.target.toArray(), zoom: orbit.zoom },
+      walkingPosition: (view === 'first-person' ? camera.position : walkingPosition).toArray(),
+      lookYaw: Math.atan2(Math.sin(lookYaw), Math.cos(lookYaw)), lookPitch,
+      buildingVisible: warehouse.buildingVisible, uiHidden,
+    });
+  };
   orbitButton.addEventListener('click', () => setView('orbit'), eventOptions);
   firstPersonButton.addEventListener('click', event => {
     setView('first-person');
@@ -297,6 +343,7 @@ async function initialize() {
   const endDrag = () => { lookPointer = null; };
   for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) canvas.addEventListener(event, endDrag, eventOptions);
   document.addEventListener('visibilitychange', () => {
+    saveCheckpoint();
     previousTime = null; keys.clear(); lookPointer = null;
     if (document.hidden) resetInput();
     void audio.setPaused(document.hidden);
@@ -353,13 +400,14 @@ async function initialize() {
 
   await warehouse.ready;
   if (stopped || exited) return;
-  constrainOrbit();
+  if (view === 'orbit') constrainOrbit();
   warehouse.update(state);
   renderer.render(warehouse.scene, camera);
   // Some browsers leave resume() pending instead of rejecting autoplay. Give
   // the gesture hint on entry without waiting for that promise to settle.
-  showHelp(`${modeHelp()} · Click the scene if sound is muted`);
+  showHelp(`${storageFailed ? 'Progress cannot be saved in this browser · ' : resumed ? 'Resumed saved simulation · ' : ''}${modeHelp()} · Click the scene if sound is muted${view === 'first-person' ? ' or to resume mouse look' : ''}`);
   tellParent('warehouse-simulation-ready');
+  let lastSavedTime = -Infinity;
   function animate(time) {
     if (stopped) return;
     try {
@@ -373,6 +421,7 @@ async function initialize() {
       if (!document.hidden) moveCamera(Math.min(0.1, delta));
       if (view === 'orbit') constrainOrbit();
       if (started) audio.update(state, camera);
+      if (started && time - lastSavedTime >= 1000) { saveCheckpoint(); lastSavedTime = time; }
       renderer.render(warehouse.scene, camera);
       frame = requestAnimationFrame(animate);
     } catch (error) { fail(error); }

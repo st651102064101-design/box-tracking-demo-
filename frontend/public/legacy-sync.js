@@ -21,13 +21,23 @@
   var TOKEN_KEY = 'smarttrace_jwt';
   var API = '/api/state';
   var DEBOUNCE_MS = 600;
+  var expiryGuard = null, pendingLogin = false;
 
   function token() {
     try { return localStorage.getItem(TOKEN_KEY) || ''; } catch (e) { return ''; }
   }
   function gotoLogin() {
+    if (expiryGuard) { expiryGuard.expire(); return; }
+    if (window.__warehouseSimulationActive && document.fullscreenElement && document.fullscreenElement.classList.contains('warehouse-simulation-host')) {
+      pendingLogin = true;
+      return;
+    }
+    navigateToLogin();
+  }
+  function navigateToLogin() {
     try { (window.top || window).location.href = '/login?reason=session-expired'; } catch (e) { location.href = '/login?reason=session-expired'; }
   }
+  window.smarttraceSessionExpired = gotoLogin;
 
   /* ── identity: derive the app's "current recorder" name from the JWT,
      not from a per-device localStorage default ─────────────────────────────
@@ -56,19 +66,20 @@
       return JSON.parse(json);
     } catch (e) { return null; }
   }
-  // Redirect at the JWT expiry timestamp even when the operator is idle.
-  // Previously, expiry was only detected by a later API request or refresh.
+  // Both normal expiry and an in-flight 401 wait until the fullscreen local
+  // simulation has saved and exited. This does not renew the server token.
   function scheduleSessionExpiry() {
-    var payload = decodeJwtPayload(token());
-    var expiresAt = Number(payload && payload.exp) * 1000;
-    if (!Number.isFinite(expiresAt)) return;
-    var remainingMs = expiresAt - Date.now();
-    var expire = function () {
-      try { localStorage.removeItem(TOKEN_KEY); } catch (e) {}
-      gotoLogin();
-    };
-    if (remainingMs <= 0) { expire(); return; }
-    setTimeout(expire, remainingMs);
+    import('/warehouse-session-expiry.mjs').then(function (module) {
+      expiryGuard = module.createSessionExpiryGuard({ window: window, getToken: token, onExpire: function () {
+        try { localStorage.removeItem(TOKEN_KEY); } catch (e) {}
+        navigateToLogin();
+      } });
+      if (pendingLogin) expiryGuard.expire();
+      window.addEventListener('pagehide', function () { expiryGuard.dispose(); }, { once: true });
+    }).catch(function () {
+      // Keep the normal server-401 path available if this static module fails.
+      window.addEventListener('warehouse-simulation-change', function () { if (pendingLogin && !window.__warehouseSimulationActive) navigateToLogin(); });
+    });
   }
   (function syncIdentityFromToken() {
     var t = token();

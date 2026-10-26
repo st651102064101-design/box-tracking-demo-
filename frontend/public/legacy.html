@@ -5015,6 +5015,11 @@ function apiWebhookUrl(p){return (API_ROOT||apiHostGuess())+p;}
 function apiRoot(){return API_ROOT||location.origin;}
 var apiFellBack=false;
 function apiHostGuess(){return location.protocol+'//'+location.hostname+':'+API_PORT;}
+function handleSessionExpired(){
+  if(window.smarttraceSessionExpired){window.smarttraceSessionExpired();return;}
+  if(window.WarehouseSimulation&&window.WarehouseSimulation.deferSessionExpiry(handleSessionExpired))return;
+  (window.top||window).location.replace('/login?reason=session-expired');
+}
 /* เรียก API แบบมี fallback: origin เดิมไม่มี /api (404/405) หรือเชื่อมไม่ได้ → ลอง <host>:4000 ครั้งเดียว */
 function apiFetch(path,opt){
   return fetch(apiUrl(path),opt).then(function(r){
@@ -5078,7 +5083,7 @@ function save(){
     headers:Object.assign({'Content-Type':'application/json','X-Client-Id':CLIENT_ID},authHeaders()),
     body:JSON.stringify(S)
   }).then(function(r){
-    if(r.status===401){window.location.href='/login';return null;}
+    if(r.status===401){handleSessionExpired();return null;}
     return r.json().catch(function(){return {};}).then(function(j){
       if(!r.ok){var e=new Error(j.message||'เซิร์ฟเวอร์ปฏิเสธข้อมูลที่ส่งไป');e.status=r.status;e.body=j;throw e;}
       return j;
@@ -5211,7 +5216,7 @@ function normalizeState(d){
 function loadFromServer(){
   return apiFetch('/api/state',{headers:authHeaders()})
     .then(function(r){
-      if(r.status===401){window.location.href='/login';return null;}
+      if(r.status===401){handleSessionExpired();return null;}
       if(!r.ok)throw new Error('HTTP '+r.status);
       return r.json();
     })

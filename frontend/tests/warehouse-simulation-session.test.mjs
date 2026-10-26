@@ -139,3 +139,18 @@ test('child error restores original scene and reports the failure', async () => 
     assert.equal(f.doc.querySelector('iframe'), null); assert.equal(f.errors.length, 1);
   } finally { f.close(); }
 });
+
+test('native fullscreen loss flushes the child before removal and deferred expiry', async () => {
+  const f = fixture(), order = [];
+  try {
+    await f.session.enter(); f.ready();
+    const frame = f.doc.querySelector('iframe');
+    frame.contentWindow.addEventListener('warehouse-simulation-save', () => {
+      assert.ok(frame.isConnected); order.push('saved');
+    });
+    assert.equal(f.session.deferSessionExpiry(() => { assert.equal(frame.isConnected, false); order.push('expired'); }), true);
+    await f.doc.exitFullscreen();
+    assert.deepEqual(order, ['saved', 'expired']);
+    assert.equal(f.session.deferSessionExpiry(() => {}), false);
+  } finally { f.close(); }
+});

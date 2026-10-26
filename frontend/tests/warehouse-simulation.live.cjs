@@ -25,7 +25,7 @@ async function main() {
   // Observe the real graphics instance without adding a hook to shipped code.
   await page.route('**/warehouse-simulation-view.mjs', async route => {
     const response = await route.fetch();
-    const body = (await response.text()).replace('warehouse = createWarehouseScene(renderer, layout, state, abort.signal);', '$&\nwindow.__observedWarehouseGraphics = warehouse; window.__observedWarehouseLayout = layout; window.__observedInitialState = state;');
+    const body = (await response.text()).replace('warehouse = createWarehouseScene(renderer, layout, state, abort.signal);', '$&\nwindow.__observedWarehouseGraphics = warehouse; window.__observedWarehouseLayout = layout; window.__observedInitialState = state; window.__restoredCheckpoint = simulation.checkpoint();');
     await route.fulfill({ response, body });
   });
   page.on('pageerror', error => errors.push(error.message));
@@ -119,6 +119,10 @@ async function main() {
     await page.keyboard.press('Escape');
     await liveFrame.waitForFunction(() => !window.__warehouseSimulationActive);
     await page.waitForFunction(() => window.__simulationAudioEvidence.every(record => record.context.state === 'closed'));
+    const profile = new URLSearchParams(new URL(simulationFrame.url()).hash.slice(1)).get('profile');
+    const checkpointKey = `boxtrace:warehouse-simulation:${encodeURIComponent(profile)}`;
+    const savedAfterExit = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), checkpointKey);
+    assert.ok(savedAfterExit?.engine?.elapsed > 0, 'The deployed scene saves real progress on exit');
     assert.equal(await liveFrame.evaluate(() => {
       const prior = window.__testBeforeSimulation, controller = window.LocationWarehouse3D.active();
       return controller === prior.controller
@@ -130,6 +134,9 @@ async function main() {
     await liveFrame.waitForFunction(() => Boolean(document.pointerLockElement));
     await page.keyboard.press('Shift+s');
     await sim.locator('#orbit-view').waitFor();
+    const secondSimulationFrame = page.frames().find(frame => new URL(frame.url()).pathname === '/warehouse-simulation.html');
+    await secondSimulationFrame.waitForFunction(() => Boolean(window.__restoredCheckpoint));
+    assert.deepEqual(await secondSimulationFrame.evaluate(() => window.__restoredCheckpoint), savedAfterExit.engine, 'Deployed re-entry restores the exact saved engine position');
     await sim.locator('#first-person-view').click();
     await page.keyboard.press('Escape');
     await liveFrame.waitForFunction(() => !window.__warehouseSimulationActive);
@@ -142,8 +149,43 @@ async function main() {
     }
     assert.equal(await live.locator('.loc3d-first-person').getAttribute('aria-pressed'), 'true');
     await page.keyboard.press('Escape');
+    const savedBeforeRefresh = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), checkpointKey);
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await live.locator('#nav [data-tab="setup"]').click({ timeout: 60000 });
+    await live.locator('[data-stab="loc"]').click();
+    await live.locator('[data-lview="3d"]').click();
+    const refreshedLive = page.frames().find(frame => new URL(frame.url()).pathname === '/legacy.html');
+    await refreshedLive.waitForFunction(() => window.LocationWarehouse3D?.active?.() && !window._loc3dRendering, null, { timeout: 90000 });
+    await live.locator('.loc3d-loading').waitFor({ state: 'detached' });
+    await live.locator('.loc3d-toolbar button').filter({ hasText: 'โหมดจำลอง' }).click();
+    await sim.locator('#orbit-view').waitFor();
+    const resumedFrame = page.frames().find(frame => new URL(frame.url()).pathname === '/warehouse-simulation.html');
+    await resumedFrame.waitForFunction(() => Boolean(window.__restoredCheckpoint));
+    assert.deepEqual(await resumedFrame.evaluate(() => window.__restoredCheckpoint), savedBeforeRefresh.engine, 'Full app refresh preserves simulation progress');
+    collecting = true;
+    // Alter only this disposable browser's token expiry. No server account or
+    // database change is needed to exercise the deployed login timers.
+    await page.evaluate(() => {
+      const prior = localStorage.getItem('boxtrace_jwt') || localStorage.getItem('smarttrace_jwt');
+      const segments = prior.split('.');
+      const payload = JSON.parse(atob(segments[1].replace(/-/g, '+').replace(/_/g, '/')));
+      payload.exp = Math.floor(Date.now() / 1000) - 1;
+      segments[1] = btoa(JSON.stringify(payload));
+      for (const key of ['boxtrace_jwt', 'smarttrace_jwt']) localStorage.setItem(key, segments.join('.'));
+      dispatchEvent(new Event('storage'));
+    });
+    await refreshedLive.evaluate(() => dispatchEvent(new Event('storage')));
+    await refreshedLive.evaluate(() => window.handleSessionExpired());
+    await page.waitForTimeout(1200);
+    assert.equal(new URL(page.url()).pathname, '/', 'Expired login cannot interrupt the deployed fullscreen simulation');
+    assert.equal(await refreshedLive.evaluate(() => Boolean(window.__warehouseSimulationActive && document.fullscreenElement)), true);
+    assert.deepEqual(apiDuringSimulation, []);
+    collecting = false;
+    await page.keyboard.press('Escape');
+    await page.waitForURL(url => url.pathname === '/login', { timeout: 15000 });
+    assert.ok(await page.evaluate(key => Boolean(JSON.parse(localStorage.getItem(key))?.engine), checkpointKey), 'Checkpoint survives deferred login navigation');
     assert.deepEqual(errors, [], 'No new runtime errors in simulation or return to real scene');
-    console.log(JSON.stringify({ result: 'PASS', checks: ['deployed-entry-button', 'nested-app-fullscreen', 'deployed-seated-operators', 'longitudinal-paired-preloaded-ground-scene', 'two-view-buttons-only', 'B-H-independent-deployed-shell', 'no-api-over-two-polls', 'first-person-control', 'Ctrl-cursor-retains-fullscreen', 'Esc-real-controller-camera-data-restore', 'live-first-person-resume', 'zero-new-runtime-errors'], apiDuringSimulation, baselineErrors }));
+    console.log(JSON.stringify({ result: 'PASS', checks: ['deployed-entry-button', 'nested-app-fullscreen', 'deployed-seated-operators', 'longitudinal-paired-preloaded-ground-scene', 'two-view-buttons-only', 'B-H-independent-deployed-shell', 'no-api-over-two-polls', 'first-person-control', 'Ctrl-cursor-retains-fullscreen', 'Esc-real-controller-camera-data-restore', 'live-first-person-resume', 'deployed-checkpoint-reentry', 'full-app-refresh-resume', 'expired-login-and-401-deferred', 'checkpoint-before-login-exit', 'zero-new-runtime-errors'], apiDuringSimulation, baselineErrors }));
   } catch (error) {
     await page.screenshot({ path: path.join(output, 'simulation-live-failure.png'), timeout: 10000 }).catch(() => {});
     console.error(JSON.stringify({ liveUrl: page.url(), errors, apiDuringSimulation }));

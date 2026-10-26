@@ -1,3 +1,5 @@
+import { checkpointProfile } from './warehouse-simulation-checkpoint.mjs';
+
 /** Owns only the temporary simulation session; live data never enters its frame. */
 export function createSimulationSession({ window: win, getController, onError = () => {} }) {
   const doc = win.document;
@@ -7,6 +9,9 @@ export function createSimulationSession({ window: win, getController, onError = 
   const announce = active => {
     win.__warehouseSimulationActive = active;
     win.dispatchEvent(new win.CustomEvent('warehouse-simulation-change', { detail: { active } }));
+    try {
+      if (win.top && win.top !== win) win.top.dispatchEvent(new win.top.CustomEvent('warehouse-simulation-change', { detail: { active } }));
+    } catch { /* Only the same-origin app shell receives this notification. */ }
   };
 
   const startWhenReady = session => {
@@ -21,6 +26,9 @@ export function createSimulationSession({ window: win, getController, onError = 
   const exit = async () => {
     const session = current;
     if (!session) return;
+    // A synchronous same-origin flush survives native Escape, which can remove
+    // the iframe before its pagehide or a postMessage round-trip is delivered.
+    try { session.frame.contentWindow?.dispatchEvent(new session.frame.contentWindow.Event('warehouse-simulation-save')); } catch { /* frame may be gone */ }
     current = null; // fullscreenchange/message/keydown may all report the same exit.
     win.clearTimeout(session.timeout);
     const ownedFullscreen = doc.fullscreenElement === session.host;
@@ -35,6 +43,7 @@ export function createSimulationSession({ window: win, getController, onError = 
     announce(false);
     session.controller.resumeFromSimulation();
     if (session.focus?.isConnected) session.focus.focus({ preventScroll: true });
+    for (const callback of session.deferredExpiry) callback();
   };
 
   const enter = async () => {
@@ -55,7 +64,7 @@ export function createSimulationSession({ window: win, getController, onError = 
     frame.setAttribute('allow', 'fullscreen; autoplay');
     frame.style.cssText = 'display:block;width:100%;height:100%;border:0;';
     host.appendChild(frame);
-    const session = { host, frame, controller, originalFetch: win.fetch, focus: doc.activeElement, ready: false, fullscreen: false, started: false, timeout: null };
+    const session = { host, frame, controller, originalFetch: win.fetch, focus: doc.activeElement, ready: false, fullscreen: false, started: false, timeout: null, deferredExpiry: new Set() };
     current = session;
     // Safety net for background app timers: keep all API traffic paused while
     // the memory-only scene is active. Static module/model files remain usable.
@@ -68,7 +77,9 @@ export function createSimulationSession({ window: win, getController, onError = 
     };
     announce(true);
     (doc.fullscreenElement || doc.body).appendChild(host);
-    frame.src = '/warehouse-simulation.html';
+    let profile = 'local';
+    try { profile = checkpointProfile(win.localStorage, typeof win.token === 'function' ? win.token() : undefined); } catch { /* Browser storage may be disabled. */ }
+    frame.src = `/warehouse-simulation.html#profile=${encodeURIComponent(profile)}`;
     session.timeout = win.setTimeout(() => {
       if (current !== session) return;
       void exit();
@@ -121,6 +132,11 @@ export function createSimulationSession({ window: win, getController, onError = 
   return {
     enter, exit,
     isActive: () => Boolean(current),
+    deferSessionExpiry(callback) {
+      if (!current?.fullscreen || doc.fullscreenElement !== current.host || typeof callback !== 'function') return false;
+      current.deferredExpiry.add(callback);
+      return true;
+    },
     dispose() {
       disposed = true;
       void exit();
@@ -141,7 +157,7 @@ export function installSimulationEntry(win) {
     const root = win.document.getElementById('loc3dView');
     return Boolean(root?.querySelector('canvas') && root.getClientRects().length && win.getComputedStyle(root).visibility !== 'hidden');
   };
-  win.WarehouseSimulation = { enter: () => visible3D() ? session.enter() : Promise.resolve(false), exit: session.exit, isActive: session.isActive };
+  win.WarehouseSimulation = { enter: () => visible3D() ? session.enter() : Promise.resolve(false), exit: session.exit, isActive: session.isActive, deferSessionExpiry: session.deferSessionExpiry };
   const onShortcut = event => {
     if (event.code !== 'KeyS' || !event.shiftKey || event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
     if (event.target?.closest?.('input,textarea,select,[contenteditable]:not([contenteditable="false"])') || !visible3D()) return;

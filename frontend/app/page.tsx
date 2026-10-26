@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ApiError, clearToken, getBranding, getToken, me, type SystemBranding } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { createSessionExpiryGuard } from '../public/warehouse-session-expiry.mjs';
 
 /**
  * Auth gate. When signed in, render the legacy app (served verbatim from
@@ -36,29 +37,14 @@ export default function Home() {
   }, [router]);
 
   useEffect(() => {
-    // The API only learns that a JWT is expired on the next request.  Keep a
-    // local timer as well, so an operator left on the dashboard is sent back
-    // to sign-in at the exact expiry time instead of having to refresh first.
-    const token = getToken();
-    if (!token) return;
-    try {
-      const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-      if (!Number.isFinite(payload.exp)) return;
-      const remainingMs = payload.exp * 1000 - Date.now();
-      const expire = () => {
+    const guard = createSessionExpiryGuard({
+      window, getToken,
+      onExpire: () => {
         clearToken();
         router.replace('/login?reason=session-expired');
-      };
-      if (remainingMs <= 0) {
-        expire();
-        return;
-      }
-      const timer = window.setTimeout(expire, remainingMs);
-      return () => window.clearTimeout(timer);
-    } catch {
-      clearToken();
-      router.replace('/login?reason=session-expired');
-    }
+      },
+    });
+    return () => guard.dispose();
   }, [router]);
 
   useEffect(() => {

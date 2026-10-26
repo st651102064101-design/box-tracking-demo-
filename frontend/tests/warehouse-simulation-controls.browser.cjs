@@ -36,6 +36,9 @@ async function main() {
   let simulationFrame;
   const snapshot = () => simulationFrame.evaluate(() => ({ position: window.observedCamera.position.toArray(), target: window.observedControls.target.toArray(), rotation: window.observedCamera.rotation.toArray().slice(0, 3) }));
   const enter = async () => {
+    // These tests exercise default input behavior; checkpoint continuity has
+    // its own browser suite. Give each independent controls case a fresh scene.
+    await page.evaluate(() => { for (const key of Object.keys(localStorage)) if (key.startsWith('boxtrace:warehouse-simulation:')) localStorage.removeItem(key); });
     await page.locator('#enter').click();
     await page.waitForFunction(() => document.activeElement?.tagName === 'IFRAME');
     simulationFrame = page.frames().find(item => item.url().includes('/warehouse-simulation.html'));
