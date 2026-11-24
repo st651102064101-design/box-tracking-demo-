@@ -54,7 +54,11 @@ const sampleState = {
   uiPrefs: { demo: { theme: 'dark', filtBoxStatus: 'warehouse' } },
   gatePrefs: { demo: { lastGate: 2 } },
   auditLog: [
-    { ts: '2026-07-20T03:00:00.000Z', action: 'CREATE', recorder: 'demo', itemId: 'CUST-001', itemName: 'ลูกค้า ก', before: '', after: '{}' },
+    // PUT /api/state only accepts client audit entries newer than the server's
+    // start time (AUDIT_CACHE_CUTOFF in services/state.ts) so a stale browser
+    // cache can never resurrect rows after the audit log was cleared — hence a
+    // timestamp taken now rather than a fixed past date.
+    { ts: new Date(Date.now() + 60_000).toISOString(), action: 'CREATE', recorder: 'demo', itemId: 'CUST-001', itemName: 'ลูกค้า ก', before: '', after: '{}' },
   ],
 };
 
@@ -67,13 +71,17 @@ describe('state bridge (S ↔ Postgres)', () => {
     expect(get.status).toBe(200);
     const s = get.body;
 
-    // maps preserved verbatim
-    expect(s.boxes['BTX-2601-ABCDE']).toEqual(sampleState.boxes['BTX-2601-ABCDE']);
-    expect(s.customers['CUST-001']).toEqual(sampleState.customers['CUST-001']);
-    expect(s.boxtypes['BT-001']).toEqual(sampleState.boxtypes['BT-001']);
-    expect(s.warehouses['WH-001']).toEqual(sampleState.warehouses['WH-001']);
-    expect(s.locations['A-1-2-3']).toEqual(sampleState.locations['A-1-2-3']);
-    expect(s.doRecords['DO-0001']).toEqual(sampleState.doRecords['DO-0001']);
+    // maps preserved verbatim. Boxes additionally carry the derived 3D slot
+    // geometry (slotId/widthCm/…), which composeState adds on top of the
+    // snapshot, so every field the client sent must come back unchanged but
+    // extra derived fields are allowed.
+    expect(s.boxes['BTX-2601-ABCDE']).toMatchObject(sampleState.boxes['BTX-2601-ABCDE']);
+    expect(s.boxes['BTX-2601-ABCDE'].slotId).toBe('A-1-2-3');
+    expect(s.customers['CUST-001']).toMatchObject(sampleState.customers['CUST-001']);
+    expect(s.boxtypes['BT-001']).toMatchObject(sampleState.boxtypes['BT-001']);
+    expect(s.warehouses['WH-001']).toMatchObject(sampleState.warehouses['WH-001']);
+    expect(s.locations['A-1-2-3']).toMatchObject(sampleState.locations['A-1-2-3']);
+    expect(s.doRecords['DO-0001']).toMatchObject(sampleState.doRecords['DO-0001']);
 
     // gates lookup
     expect(s.gates).toEqual(sampleState.gates);
@@ -83,31 +91,36 @@ describe('state bridge (S ↔ Postgres)', () => {
     expect(s.auditLog).toEqual(sampleState.auditLog);
 
     // singletons
-    expect(s.cfg).toEqual(sampleState.cfg);
+    // cfg also carries the optional-putaway switch, which defaults to off
+    expect(s.cfg).toMatchObject(sampleState.cfg);
+    expect(s.cfg.putawayEnabled).toBe(false);
     expect(s.seq).toEqual(sampleState.seq);
 
-    // per-account UI prefs (date filters, toggle/dropdown memory, gate display
-    // prefs) — these have no typed columns of their own, so it's easy for a
-    // schema change to silently start stripping them again (z.object() drops
-    // unknown keys by default); assert them explicitly rather than relying on
-    // one of the maps above to happen to catch it.
-    expect(s.dfPrefs).toEqual(sampleState.dfPrefs);
-    expect(s.uiPrefs).toEqual(sampleState.uiPrefs);
-    expect(s.gatePrefs).toEqual(sampleState.gatePrefs);
+    // Per-account UI prefs no longer ride along in /api/state: stateSchema
+    // never declared them, so they were silently dropped on every save. They
+    // live in their own tables behind /api/ui-prefs and /api/gate-prefs (see
+    // the test below), and must not reappear in the shared snapshot.
+    expect(s.dfPrefs).toBeUndefined();
+    expect(s.uiPrefs).toBeUndefined();
   });
 
-  it('per-account UI prefs survive a reload independent of everything else changing', async () => {
-    await request(ctx.app).put('/api/state').set(auth(ctx.token)).send(sampleState);
+  it('per-account UI prefs survive a full-state save and merge per key', async () => {
+    const prefs = { demo: { ovMove: { mode: 'day', day: 7, month: 1, year: 1, from: '', to: '' } } };
+    const put1 = await request(ctx.app).put('/api/ui-prefs').set(auth(ctx.token)).send(prefs);
+    expect(put1.status).toBe(200);
+
     // Simulate what save()/renderAll() does constantly: PUT the whole S again
-    // with unrelated fields touched but dfPrefs/uiPrefs/gatePrefs untouched.
-    await request(ctx.app)
-      .put('/api/state')
-      .set(auth(ctx.token))
-      .send({ ...sampleState, boxes: {} });
-    const get = await request(ctx.app).get('/api/state').set(auth(ctx.token));
-    expect(get.body.dfPrefs).toEqual(sampleState.dfPrefs);
-    expect(get.body.uiPrefs).toEqual(sampleState.uiPrefs);
-    expect(get.body.gatePrefs).toEqual(sampleState.gatePrefs);
+    // with unrelated fields touched.
+    await request(ctx.app).put('/api/state').set(auth(ctx.token)).send(sampleState);
+    await request(ctx.app).put('/api/state').set(auth(ctx.token)).send({ ...sampleState, boxes: {} });
+
+    // A second tab saving a different key must not erase the first one.
+    await request(ctx.app).put('/api/ui-prefs').set(auth(ctx.token)).send({ theme: 'dark' });
+
+    const get = await request(ctx.app).get('/api/ui-prefs').set(auth(ctx.token));
+    expect(get.status).toBe(200);
+    expect(get.body.demo).toEqual(prefs.demo);
+    expect(get.body.theme).toBe('dark');
   });
 
   it('replaces (not merges) on subsequent PUT', async () => {

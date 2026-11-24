@@ -456,6 +456,8 @@ export async function replaceState(
         customer: boxes.customer,
         doNo: boxes.doNo,
         history: boxes.history,
+        rfidTid: boxes.rfidTid,
+        rfidEpc: boxes.rfidEpc,
       }).from(boxes))
         .map((row) => [row.tag, row]),
     );
@@ -463,6 +465,20 @@ export async function replaceState(
       const b = raw as Record<string, unknown>;
       const history = mergeLprHistory(b.history, persistedBoxes.get(tag)?.history);
       const model = geometry.boxesByTag.get(tag)!;
+      /* RFID is owned by POST/DELETE /api/boxes/:tag/rfid, not by this payload.
+         The legacy UI only holds the snapshot it fetched at page load, so a tag
+         bound afterwards (PDA, another tab) is simply absent from it, and a tag
+         detached afterwards is still present. For a box the database already
+         knows, the stored binding (or its deliberate absence) therefore wins
+         over whatever the payload says. The payload's value is used only for
+         tags this database has never seen, so restoring a JSON backup into an
+         empty database still works. */
+      const kept = persistedBoxes.get(tag);
+      const rfidTid = kept ? kept.rfidTid : ((b.rfidTid as string) ?? null);
+      const rfidEpc = kept ? kept.rfidEpc : ((b.rfidEpc as string) ?? null);
+      const rfidOverridden =
+        !!kept &&
+        (rfidTid !== ((b.rfidTid as string) ?? null) || rfidEpc !== ((b.rfidEpc as string) ?? null));
       return {
         tag,
         type: (b.type as string) ?? null,
@@ -484,8 +500,8 @@ export async function replaceState(
         // that has to re-extract them into the typed columns too — otherwise
         // a save from the legacy UI would silently make the box unfindable
         // by RFID again despite `data.rfidTid` still being right there.
-        rfidTid: (b.rfidTid as string) ?? null,
-        rfidEpc: (b.rfidEpc as string) ?? null,
+        rfidTid,
+        rfidEpc,
         slotId: model.slotId,
         widthCm: model.widthCm,
         heightCm: model.heightCm,
@@ -498,6 +514,9 @@ export async function replaceState(
         // the next SSE-triggered state refresh.
         data: {
           ...b,
+          // rewritten only when the payload disagreed, so the state round-trip
+          // stays byte-for-byte identical otherwise
+          ...(rfidOverridden ? { rfidTid, rfidEpc } : {}),
           history,
           slotId: model.slotId,
           widthCm: model.widthCm,
