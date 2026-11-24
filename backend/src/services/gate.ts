@@ -35,6 +35,20 @@ async function warehouseOfGate(db: DB, gate: number): Promise<string> {
 }
 
 /**
+ * A scan has to land at a gate that actually exists. Without this, a mistyped
+ * or stale gate number (a handheld still configured for a removed gate, an
+ * integration with a typo) was accepted with an empty warehouse: the box
+ * became 'warehouse' with no warehouse at all, and because an unknown
+ * warehouse "fails open" in currentWhOf, it could then be shipped from any
+ * gate. Reject it up front, before anything is touched.
+ */
+async function requireWarehouseOfGate(db: DB, gate: number): Promise<string> {
+  const wh = await warehouseOfGate(db, gate);
+  if (!wh) throw httpError(404, `ไม่พบประตูหมายเลข ${gate} ในระบบ — ตรวจสอบเลขประตูหรือเพิ่มประตูในข้อมูลหลักก่อน`, 'gate_not_found');
+  return wh;
+}
+
+/**
  * Best-effort "which warehouse does this box currently belong to" — the typed
  * `location.wh` when it has one (shelved), otherwise the `wh` off the box's
  * most recent inbound history entry. A box received into pending-putaway
@@ -114,6 +128,7 @@ export interface GateOutInput {
 
 export async function gateOut(db: DB, input: GateOutInput) {
   const { tags, customer, gate } = input;
+  await requireWarehouseOfGate(db, gate);
   const operator = await resolveOperator(db, input.employeeId, input.recorder);
   const { employeeId, recorder } = operator;
   const device = input.device ?? '';
@@ -156,7 +171,7 @@ export async function gateOut(db: DB, input: GateOutInput) {
     throw httpError(409, `จ่ายออกไม่ได้: ${detail}`, 'box_not_shippable');
   }
 
-  const wh = await warehouseOfGate(db, gate);
+  const wh = await requireWarehouseOfGate(db, gate);
   // A box actually sitting in warehouse-A's inventory can't ship from
   // warehouse-B's gate — the same "this device belongs to one warehouse" rule
   // the PDA enforces client-side, repeated here since a physical reader or
@@ -309,6 +324,7 @@ export interface GateInInput {
 
 export async function gateIn(db: DB, input: GateInInput) {
   const { tags, gate } = input;
+  const wh = await requireWarehouseOfGate(db, gate);
   const { employeeId, recorder } = await resolveOperator(db, input.employeeId, input.recorder);
   const device = input.device ?? '';
   const platform = input.platform ?? '';
@@ -316,7 +332,6 @@ export async function gateIn(db: DB, input: GateInInput) {
   const driver = input.driver ?? '';
   const vehicleType = input.vehicleType ?? '';
   const conditions = input.conditions ?? {};
-  const wh = await warehouseOfGate(db, gate);
   const inTs = iso();
   const { resolved, missing } = await resolveBoxesByCodes(db, tags);
   // Same-box dedupe as gateOut — see comment there.

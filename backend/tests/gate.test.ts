@@ -77,6 +77,53 @@ describe('gate operations', () => {
     expect(res.status).toBe(404);
   });
 
+  /* A gate number that is not in the gates table used to be accepted with an
+     empty warehouse: the box became 'warehouse' with no warehouse at all and,
+     because an unknown warehouse fails open in the ownership check, could then
+     be shipped from any gate. */
+  describe('unknown gate', () => {
+    beforeAll(async () => {
+      await request(ctx.app)
+        .post('/api/boxes')
+        .set(auth(ctx.token))
+        .send({ tag: 'BTX-NOGATE', type: 'BT-001' });
+    });
+
+    it('refuses to receive a box at a gate that does not exist, and leaves the box alone', async () => {
+      const res = await request(ctx.app)
+        .post('/api/gate/in')
+        .set(auth(ctx.token))
+        .send({ tags: ['BTX-NOGATE'], gate: 999 });
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe('gate_not_found');
+      expect(res.body.message).toContain('999');
+
+      const box = await request(ctx.app).get('/api/boxes/BTX-NOGATE').set(auth(ctx.token));
+      expect(box.body.status).toBe('pending');
+      expect(box.body.history).toHaveLength(1); // still only the registration entry
+    });
+
+    it('refuses to ship at a gate that does not exist', async () => {
+      const res = await request(ctx.app)
+        .post('/api/gate/out')
+        .set(auth(ctx.token))
+        .send({ tags: ['BTX-1'], customer: 'CUST-001', gate: 999, plate: 'X' });
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe('gate_not_found');
+    });
+
+    it('still receives the same box at a real gate', async () => {
+      const res = await request(ctx.app)
+        .post('/api/gate/in')
+        .set(auth(ctx.token))
+        .send({ tags: ['BTX-NOGATE'], gate: 5 });
+      expect(res.status).toBe(200);
+      expect(res.body.received).toEqual(['BTX-NOGATE']);
+      const box = await request(ctx.app).get('/api/boxes/BTX-NOGATE').set(auth(ctx.token));
+      expect(box.body.history.at(-1).wh).toBe('WH-001');
+    });
+  });
+
   it('rejects scanning in a box that is already in the warehouse', async () => {
     // BTX-1 is back to 'warehouse' from the earlier "receives the box back"
     // test in this same describe block — scanning it in again (a mis-scan,
