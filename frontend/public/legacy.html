@@ -5163,8 +5163,17 @@ function normalizeState(d){
      ที่มาของบั๊ก "สถานะขึ้นรอเข้าคลัง แต่ตำแหน่งบอกว่าอยู่ในคลังแล้ว" ที่ผู้ใช้เจอ — กล่องพวกนี้
      labeled ไปแล้วจริง (เคยผ่านประตูเข้ามาก่อนบั๊กจะถูกแก้) จึงตั้ง labeled:true ด้วย ไม่งั้น
      statusPill ในหน้าอื่นจะยังโชว์ข้อความเดิมทับสถานะในคลังอยู่ (ดูคอมเมนต์ที่บรรทัด 3697) */
+  /* ยกระดับเฉพาะกล่อง 'pending' ที่มีหลักฐานว่าอยู่ในคลังแล้วจริง (มีคลังใน location หรือ
+     เคยมีเหตุการณ์ in/putaway) ซึ่งคือข้อมูลเก่าที่ค้างตามคอมเมนต์ข้างบน ส่วนกล่องที่ PDA/
+     backend เพิ่งลงทะเบียนไว้รอรับเข้า (POST /api/boxes → pending, ยังไม่มีคลัง ไม่มีประวัติเข้า)
+     ต้องคงเป็น 'pending' ไว้ ไม่งั้นแค่เปิดหน้าเว็บก็ข้ามขั้นรับเข้า/Putaway ของ PDA ไปเงียบๆ
+     และเขียนทับสถานะนั้นกลับลงฐานข้อมูลตอน save ครั้งถัดไป */
+  var evidentlyInWarehouse=function(b){
+    if((b.location||{}).wh)return true;
+    return (b.history||[]).some(function(h){return h&&(h.dir==='in'||h.dir==='in-new'||h.dir==='putaway');});
+  };
   Object.values(d.boxes).forEach(function(b){
-    if(b.status==='pending'){b.status='warehouse';b.labeled=true;}
+    if(b.status==='pending'&&evidentlyInWarehouse(b)){b.status='warehouse';b.labeled=true;}
   });
   /* บาร์โค้ด/tag ของกล่องที่หลุดมาพร้อมเครื่องหมาย "*...*" แบบฟอนต์ Code 39 (ดู
      barcodeCell()) — ก่อนแก้ import ("ลงทะเบียนกล่อง") ให้ลอกออกก่อนเก็บ ไฟล์ export
