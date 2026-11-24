@@ -8511,6 +8511,15 @@ function whMapEnsure(){
   if(!isNaN(lat0)&&!isNaN(lng0)){whMapInst.setView([lat0,lng0],15);whMapMarker=L.marker([lat0,lng0]).addTo(whMapInst);}
   whMapInst.on('click',function(e){whMapSetPin(e.latlng.lat,e.latlng.lng);});
 }
+/* ปิดแผนที่ให้ถูกวิธี — แค่ตั้งตัวแปรเป็น null แล้วล้าง innerHTML ไม่พอ: Leaflet ประทับ
+   _leaflet_id ไว้บน container ถ้าไม่เรียก remove() การสร้างแผนที่รอบถัดไปบน #whMap เดิมจะ
+   throw "Map container is already initialized" แผนที่เลยว่างและปักหมุดไม่ได้หลังปิดฟอร์มครั้งแรก */
+function whMapReset(){
+  if(whMapInst){try{whMapInst.remove();}catch(e){}}
+  whMapInst=null;whMapMarker=null;
+  var el=document.getElementById('whMap');
+  if(el){el.innerHTML='';delete el._leaflet_id;}
+}
 /* โหมด "พิมพ์เอง" / "เลือกบนแผนที่" — ดูคอมเมนต์ที่ #whAreaModeSw ในเนื้อ HTML ว่าทำไม
    ต้องแยกเป็นสอง state แทนที่จะโชว์/ซ่อนแผนที่เฉย ๆ แบบเดิม (ปุ่ม #btnPickWhMap เดี่ยว ๆ) */
 function whAreaSetMode(mode){
@@ -8519,7 +8528,7 @@ function whAreaSetMode(mode){
   var isMap=mode==='map';
   wrap.style.display=isMap?'':'none';
   if(areaInput){areaInput.readOnly=isMap;areaInput.placeholder=isMap?'คลิกบนแผนที่หรือค้นหาด้านล่าง':'เช่น สมุทรปราการ';}
-  if(isMap){whMapEnsure();setTimeout(function(){whMapInst.invalidateSize();},50);}
+  if(isMap){whMapEnsure();setTimeout(function(){if(whMapInst)whMapInst.invalidateSize();},50);}
   else{var res=$('#whMapSearchResults');if(res){res.style.display='none';res.innerHTML='';}}
 }
 window.whAreaSetMode=whAreaSetMode;
@@ -8618,12 +8627,12 @@ $('#btnAddWh').onclick=function(){
   save();
   editingWh=null;$('#btnAddWh').textContent='บันทึกคลัง';
   ['whName','whGateFrom','whGateTo','whArea','whLat','whLng','whMapSearch'].forEach(function(i){setv(i,'');});setv('whGateType','both');setv('whStatus','active');syncStatusToggle('whStatus');whIdAuto.reset();
-  whMapMarker=null;whMapInst=null;$('#whMap').innerHTML='';whAreaSetMode('text');
+  whMapReset();whAreaSetMode('text');
   renderWhGateTypeList();renderWhGateBidirectionalList();syncWhRfidEnabled(true);
   toast('บันทึกคลังแล้ว',id+' · ประตู '+from+'-'+to+' · '+gtSummary(S.warehouses[id]));renderAll();if(typeof updateRfidGateAvailability==='function')updateRfidGateAvailability();if(typeof renderRfidGateStatus==='function')renderRfidGateStatus();closeCardDrawerIfActive('whFormCard');};
 $('#btnCancelWh').onclick=function(){editingWh=null;$('#btnAddWh').textContent='บันทึกคลัง';
   ['whName','whGateFrom','whGateTo','whArea','whLat','whLng','whMapSearch'].forEach(function(i){setv(i,'');});setv('whGateType','both');setv('whStatus','active');syncStatusToggle('whStatus');whIdAuto.reset();
-  whMapMarker=null;whMapInst=null;$('#whMap').innerHTML='';whAreaSetMode('text');
+  whMapReset();whAreaSetMode('text');
   renderWhGateTypeList();renderWhGateBidirectionalList();syncWhRfidEnabled(true);closeCardDrawerIfActive('whFormCard');};
 function editWh(id){var w=S.warehouses[id];if(!w)return;editingWh=id;
   /* ย้ายการ์ดเข้า modal ก่อนเซ็ตค่าใดๆ — โดยเฉพาะก่อน whAreaSetMode('map') ด้านล่าง
@@ -8634,7 +8643,7 @@ function editWh(id){var w=S.warehouses[id];if(!w)return;editingWh=id;
   var gs=(w.gates||[]).slice().sort(function(a,b){return a-b;});setv('whGateFrom',gs[0]||'');setv('whGateTo',gs[gs.length-1]||'');
   setv('whGateType',w.gateType||'both');setv('whArea',w.area||'');
   setv('whLat',w.lat!=null?w.lat:'');setv('whLng',w.lng!=null?w.lng:'');setv('whMapSearch','');
-  whMapMarker=null;whMapInst=null;$('#whMap').innerHTML='';
+  whMapReset();
   /* มีพิกัดอยู่แล้ว (เคยปักหมุดไว้ตอนบันทึกครั้งก่อน) → เปิดโหมดแผนที่ให้เห็นหมุดเดิมเลย
      ไม่มี → เริ่มที่โหมดพิมพ์เอง (ค่าเริ่มต้น) */
   whAreaSetMode((w.lat!=null&&w.lng!=null)?'map':'text');
