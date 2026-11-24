@@ -391,7 +391,16 @@ authRouter.get(
        re-checks server-side (requirePermission), because a hidden button is
        not a security boundary. */
     const role = await effectivePermissions(req.user);
-    res.json({ user: req.user, role, permissions: role.permissions });
+    /* The JWT cannot carry firstSetupRequired (it changes after the token is
+       issued), but the root page and /onboarding both read it from here —
+       without it onboarding bounced straight back to "/" and first-time setup
+       was never enforced. */
+    const [account] = await getDb().select().from(users).where(eq(users.id, Number(req.user!.sub)));
+    res.json({
+      user: { ...req.user, firstSetupRequired: !!account?.mustChangePassword },
+      role,
+      permissions: role.permissions,
+    });
   }),
 );
 
