@@ -134,10 +134,10 @@ describe('full box lifecycle', () => {
     const res = await request(ctx.app)
       .post('/api/boxes/BOX-LC-1/rfid')
       .set(auth(ctx.token))
-      .send({ rfid: '3034AABBCCDD' });
+      .send({ rfidEpc: '3034AABBCCDDEEFF00112233' });
     expect(res.status).toBe(200);
     const box = await request(ctx.app).get('/api/boxes/BOX-LC-1').set(auth(ctx.token));
-    expect(box.body.rfid).toBe('3034AABBCCDD');
+    expect(box.body.rfidEpc).toBe('3034AABBCCDDEEFF00112233');
   });
 
   it('refuses re-associating the same code to another box without replace:true', async () => {
@@ -148,7 +148,7 @@ describe('full box lifecycle', () => {
     const res = await request(ctx.app)
       .post('/api/boxes/BOX-LC-2/rfid')
       .set(auth(ctx.token))
-      .send({ rfid: '3034AABBCCDD' });
+      .send({ rfidEpc: '3034AABBCCDDEEFF00112233' });
     expect(res.status).toBe(409);
   });
 

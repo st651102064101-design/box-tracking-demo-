@@ -36,8 +36,14 @@ beforeAll(async () => {
       },
       customers: { 'C-001': { id: 'C-001', name: 'ลูกค้า' } },
       boxtypes: { 'BT-001': { id: 'BT-001', name: 'ลังพลาสติก', value: 450 } },
-      warehouses: { 'WH-001': { id: 'WH-001', name: 'คลัง', gates: [1], gateTypes: { '1': 'both' } } },
-      gates: { '1': 'WH-001' },
+      // WH-009 has to exist: POST /api/boxes/:tag/putaway rejects an unknown
+      // warehouse (warehouse_not_found), and the mark-missing-lost test below
+      // puts a box into it.
+      warehouses: {
+        'WH-001': { id: 'WH-001', name: 'คลัง', gates: [1], gateTypes: { '1': 'both' } },
+        'WH-009': { id: 'WH-009', name: 'คลัง 9', gates: [9], gateTypes: { '9': 'both' } },
+      },
+      gates: { '1': 'WH-001', '9': 'WH-009' },
       cfg: { agingDays: 15, boxValue: 450, lostMode: 'manual' },
     });
 });

@@ -149,6 +149,13 @@ boxesRouter.get(
 const createBoxSchema = z.object({
   tag: z.string().trim().min(1, 'ต้องระบุรหัสกล่อง (บาร์โค้ด)'),
   type: z.string().trim().min(1, 'ต้องระบุประเภทกล่อง'),
+  // Both optional and both free text — scanned off a supplier's own lot/expiry
+  // barcode where one exists, typed where it doesn't. They round-trip through
+  // `data` (composeState returns a box's `data` verbatim), so the print-label
+  // templates that already read b.lot/b.expiry in legacy.html find something
+  // to render instead of always getting undefined.
+  lot: z.string().trim().optional(),
+  expiry: z.string().trim().optional(),
 });
 
 /**
@@ -216,6 +223,8 @@ boxesRouter.post(
       depthCm: geometry.depthCm,
       materialType: geometry.materialType,
       history,
+      ...(input.lot ? { lot: input.lot } : {}),
+      ...(input.expiry ? { expiry: input.expiry } : {}),
     };
     await db.insert(boxes).values({
       tag,

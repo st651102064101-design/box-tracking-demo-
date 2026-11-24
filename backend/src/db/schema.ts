@@ -492,6 +492,10 @@ export const events = pgTable('events', {
   id: serial('id').primaryKey(),
   ts: timestamp('ts', { withTimezone: true }).notNull().defaultNow(),
   data: jsonb('data').notNull().default({}),
+  // Which client sent this gate movement — 'web' (legacy.html on a PC) or
+  // 'pda' (pda_flutter on a handheld) — client-declared, never guessed
+  // server-side, so an un-updated client shows up honestly as unknown (null).
+  platform: text('platform'),
 });
 
 /** FX9600 heartbeat/read status, kept separate from the legacy state blob. */

@@ -3,16 +3,17 @@ import { getDb } from '../db/client.js';
 import { touchReader, getReaderStatuses } from '../services/fx9600.js';
 import { asyncHandler } from '../middleware/error.js';
 import { requireAuth } from '../middleware/auth.js';
+import { requireFx9600Secret } from './rfid.js';
 
 export const fx9600Router = Router();
 
 /**
  * `POST /api/fx9600/webhook` — the FX9600's own HTTP POST Notification.
  *
- * No `requireAuth`: the reader is firmware, it can't hold a JWT session.
- * `requireApiKey` (mounted in app.ts, same as every other operational route)
- * is the actual gate here — set `X-API-Key` in the reader's POST headers, or
- * leave `API_KEY` unset for a LAN-only deployment.
+ * No `requireAuth`: the reader is firmware, it can't hold a JWT session. It
+ * authenticates with the same shared secret as the reader's other webhook
+ * (`/api/rfid/fx9600/:gate/webhook`): `X-Webhook-Secret`, or the password half
+ * of a Basic Authorization header, equal to FX9600_WEBHOOK_SECRET.
  *
  * Configure the reader's notification URL as
  * `.../api/fx9600/webhook?reader=<id>&gate=<gateNo>` — `reader` is whatever
@@ -25,6 +26,7 @@ export const fx9600Router = Router();
  */
 fx9600Router.post(
   '/webhook',
+  requireFx9600Secret,
   asyncHandler(async (req, res) => {
     const readerId = String(req.query.reader ?? req.body?.reader ?? req.body?.readerName ?? '').trim();
     if (!readerId) {

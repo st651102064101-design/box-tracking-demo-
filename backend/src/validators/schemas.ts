@@ -112,6 +112,8 @@ export const gateOutSchema = z.object({
   plate: z.string().optional(),
   driver: z.string().optional(),
   vehicleType: z.string().optional(),
+  /** Which client sent this — 'web' (PC) or 'pda' (handheld). Never defaulted server-side. */
+  platform: z.enum(['web', 'pda']).optional(),
 });
 
 /* ─── RFID tag association ─────────────────────────────────────────────────*/
@@ -168,6 +170,8 @@ export const gateInSchema = z.object({
    *  hand, or omitted to leave the batch in the pending-putaway holding
    *  pattern for later. See services/gate.ts's gateIn for how it's applied. */
   location: gateInLocationSchema.optional(),
+  /** Which client sent this — 'web' (PC) or 'pda' (handheld). Never defaulted server-side. */
+  platform: z.enum(['web', 'pda']).optional(),
 });
 
 /* ─── ตรวจนับ (cycle count) ────────────────────────────────────────────────*/
