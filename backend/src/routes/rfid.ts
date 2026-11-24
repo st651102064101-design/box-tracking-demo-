@@ -144,7 +144,7 @@ function basicAuthPassword(req: Request): string | null {
   }
 }
 
-function requireFx9600Secret(req: Request, res: Response, next: NextFunction) {
+export function requireFx9600Secret(req: Request, res: Response, next: NextFunction) {
   const headerSecret = req.get('X-Webhook-Secret') ?? '';
   const basicSecret = basicAuthPassword(req) ?? '';
   if (headerSecret !== env.fx9600WebhookSecret && basicSecret !== env.fx9600WebhookSecret) {

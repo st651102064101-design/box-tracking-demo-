@@ -26,6 +26,7 @@ import { lineWebhookRouter } from './routes/lineWebhook.js';
 import { lineLinkRouter } from './routes/lineLink.js';
 import { devicesRouter } from './routes/devices.js';
 import { warehouse3dRouter } from './routes/warehouse3d.js';
+import { fx9600Router } from './routes/fx9600.js';
 import { currentVersion, subscriberCount } from './lib/bus.js';
 
 /**
@@ -47,6 +48,18 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'too_many_requests', message: 'พยายามเข้าสู่ระบบบ่อยเกินไป กรุณาลองใหม่ภายหลัง' },
+});
+
+/** FX9600 readers heartbeat far more often than any human-driven endpoint —
+ *  every read cycle, potentially every 1-2s, from potentially several units
+ *  sharing one gateway IP. 600/min per IP covers that comfortably while still
+ *  bounding a runaway or misconfigured device. */
+const fx9600Limiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 600,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'too_many_requests', message: 'FX9600 ส่ง webhook ถี่เกินไป' },
 });
 
 /** Build the Express app (kept separate from listen() so Supertest can import it). */
@@ -123,6 +136,8 @@ export function createApp() {
   app.use('/api/gate', gateRouter);
   app.use('/api/boxes', boxesRouter);
   app.use('/api/rfid', rfidRouter);
+  // POST /webhook is the reader itself (shared secret); GET /status needs a JWT.
+  app.use('/api/fx9600', fx9600Limiter, fx9600Router);
   app.use('/api/masters', mastersRouter);
   app.use('/api/employees', employeePinRouter);
   app.use('/api/cycle-counts', cycleCountsRouter);
