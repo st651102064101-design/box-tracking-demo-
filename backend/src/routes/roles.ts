@@ -228,6 +228,14 @@ rolesRouter.post(
         .values(permissions.map((permission) => ({ roleId: row.id, permission })));
     }
     invalidateRoleCache();
+    await writeAuditLog(db, {
+      action: 'create',
+      actor: req.user!.username,
+      itemId: `ROLE-${row.id}`,
+      itemName: row.name,
+      before: null,
+      after: { name: row.name, description: row.description, active: row.active, permissions: permissions.length },
+    });
     res.status(201).json({ ...row, members: 0, permissions });
   }),
 );
@@ -294,6 +302,14 @@ rolesRouter.put(
       .select()
       .from(rolePermissions)
       .where(eq(rolePermissions.roleId, roleId));
+    await writeAuditLog(db, {
+      action: 'update',
+      actor: req.user!.username,
+      itemId: `ROLE-${roleId}`,
+      itemName: updated.name,
+      before: { name: role.name, description: role.description, active: role.active },
+      after: { name: updated.name, description: updated.description, active: updated.active, permissions: perms.length },
+    });
     res.json({ ...updated, permissions: perms.map((p) => p.permission) });
   }),
 );
@@ -330,6 +346,14 @@ rolesRouter.delete(
        in place costs nothing at runtime. */
     await db.update(roles).set({ deletedAt: new Date() }).where(eq(roles.id, roleId));
     invalidateRoleCache();
+    await writeAuditLog(db, {
+      action: 'delete',
+      actor: req.user!.username,
+      itemId: `ROLE-${roleId}`,
+      itemName: role.name,
+      before: { name: role.name, description: role.description, active: role.active },
+      after: null,
+    });
     res.json({ ok: true });
   }),
 );

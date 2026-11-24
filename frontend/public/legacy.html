@@ -695,7 +695,7 @@ th.cb-th,td.cb-td{width:40px;padding-left:18px;padding-right:6px;}
 @media(prefers-reduced-motion:reduce){.seg-pill{transition:none;}}
 .sf-badge{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;font-size:11px;font-weight:700;
   font-family:var(--mono);background:color-mix(in srgb,var(--ink) 10%,transparent);color:var(--ink2);}
-.sf-badge:empty,.sf-badge[data-zero="1"]{display:none;}
+.sf-badge:empty{display:none;}
 .sf-badge.urgent{background:var(--negSoft);color:var(--neg);}
 tr.row-unlabeled td:first-child{box-shadow:inset 3px 0 0 var(--accent);}
 /* view switcher */
@@ -7092,6 +7092,7 @@ window.doDeleteLocScope = doDeleteLocScope;
 function delLocSlot(code) {
   var occ = locOccupancyMap();
   if (occ[code]) { toast('ลบไม่ได้', code+' ยังมีกล่องอยู่ — ย้ายกล่องออกก่อน', 'err'); return false; }
+  auditEntry('DELETE', USER, code, code, Object.assign({}, S.locations[code]), null);
   delete S.locations[code];
   save(); renderLocDatalist(); renderLocMaster();
   toast('ลบตำแหน่งแล้ว', code, 'ok');
@@ -7583,6 +7584,7 @@ $('#btnAddLoc').onclick = function() {
     reportedFullAt: prevLoc ? (prevLoc.reportedFullAt||null) : null,
     reportedFullBy: prevLoc ? (prevLoc.reportedFullBy||null) : null,
     reportedFullNote: prevLoc ? (prevLoc.reportedFullNote||null) : null };
+  auditEntry(prevLoc ? 'UPDATE' : 'CREATE', USER, code, code, prevLoc ? Object.assign({}, prevLoc) : null, S.locations[code]);
   save();
   ['locShelf','locSlot','locNote','locTypeOther','locZoneOther','locRackOther'].forEach(function(i){setv(i,'');});
   var lt0=$('#locType'); if(lt0)lt0.selectedIndex=0;
@@ -7643,6 +7645,7 @@ function delLoc(code) {
   if (occ) return toast('ลบไม่ได้', 'มีกล่องอยู่ในตำแหน่งนี้ '+occ+' ใบ — ย้ายกล่องออกก่อนจึงจะลบได้', 'err');
   confirmA('ลบตำแหน่ง '+code+'?', 'กล่องที่เคยบันทึกตำแหน่งนี้จะยังคงข้อมูลเดิมไว้', 'ลบ', true).then(function(ok){
     if (!ok) return;
+    auditEntry('DELETE', USER, code, code, Object.assign({}, S.locations[code]), null);
     delete S.locations[code]; save(); renderLocMaster();
     toast('ลบแล้ว', code);
   });
@@ -8349,6 +8352,10 @@ $('#btnAddBtype').onclick=function(){
   var id=val('btId'),nm=val('btName'),unit=val('btUnit');if(!id||!nm)return toast('กรอกข้อมูลไม่ครบ','ต้องมีรหัสและชื่อ','err');
   if(!unit)return toast('กรอกหน่วยนับ','ต้องระบุหน่วยนับของประเภทกล่องนี้','err');
   if(!editingBtype&&S.boxtypes[id])return toast('มีรหัสประเภทนี้แล้ว',id,'err');
+  /* รหัสไม่ซ้ำอย่างเดียวไม่พอ — พนักงานเลือกประเภทจากชื่อ ชื่อซ้ำกันแล้วแยกไม่ออกว่าใบไหนคือใบไหน */
+  var nmKey=nm.trim().toLowerCase();
+  var dupBtName=Object.values(S.boxtypes).filter(function(t){return t.id!==id&&t.id!==editingBtype&&(t.name||'').trim().toLowerCase()===nmKey;})[0];
+  if(dupBtName)return fieldError('btName','มีประเภทกล่องชื่อ “'+dupBtName.name+'” แล้ว ('+dupBtName.id+') — ใช้ชื่ออื่นหรือแก้ไขรายการเดิม');
   if(editingBtype&&editingBtype!==id&&S.boxtypes[id])return toast('รหัสซ้ำ',id,'err');
   /* #btId is readonly today so this can't fire via the UI yet, but the rename branch
      below (delete old key, insert new) has no referential guard — if the field is
@@ -8580,7 +8587,15 @@ $('#btnAddWh').onclick=function(){
     var usedWh=Object.values(S.boxes).filter(function(b){return (b.location&&b.location.wh===editingWh)||b.outWh===editingWh;}).length;
     if(usedWh)return toast('เปลี่ยนรหัสไม่ได้','มีกล่องผูกกับคลังนี้ '+usedWh+' ใบ','err');
   }
-  /* อนุญาตให้ช่วงประตูซ้ำ/ทับซ้อนระหว่างคลังได้ — ไม่ตรวจ clash แล้ว */
+  /* S.gates เป็นแผนที่ ประตู→คลัง แบบ 1:1 (rebuildGates) — ถ้าสองคลังใช้เลขประตูเดียวกัน
+     คลังที่เรียงทีหลังจะแย่งประตูไปเงียบๆ แต่คลังแรกยังโชว์ว่ามีประตูนั้นอยู่ จึงต้องกันไว้ก่อนบันทึก */
+  var gateClash=null;
+  activeWarehouses().forEach(function(w){
+    if(gateClash||w.id===id||w.id===editingWh)return;
+    var hit=(w.gates||[]).filter(function(g){return g>=from&&g<=to;});
+    if(hit.length)gateClash={wh:w,gates:hit};
+  });
+  if(gateClash)return fieldError('whGateFrom','ประตู '+gateClash.gates.join(', ')+' ถูกใช้โดย '+(gateClash.wh.name||gateClash.wh.id)+' แล้ว — เลือกช่วงประตูอื่น');
   var before=editingWh?Object.assign({},S.warehouses[editingWh]):null;
   if(editingWh&&editingWh!==id)delete S.warehouses[editingWh];
   var gates=[];for(var k=from;k<=to;k++)gates.push(k);
@@ -18800,8 +18815,7 @@ function applyInvStatusBadges(counts) {
   Array.prototype.forEach.call(seg.querySelectorAll('[data-badge]'), function(el) {
     var key = el.getAttribute('data-badge');
     var n = counts[key] || 0;
-    el.textContent = n ? nf(n) : '';
-    if (n) el.removeAttribute('data-zero'); else el.setAttribute('data-zero', '1');
+    el.textContent = nf(n);
   });
 }
 function refreshInvStatusBadges() {
