@@ -59,18 +59,16 @@ describe('health + auth', () => {
     expect(res.status).toBe(400);
   });
 
-  it('forgot-password claims success without revealing whether a username exists', async () => {
-    const res = await request(ctx.app).post('/api/auth/forgot-password').send({ username: 'no-such-user' });
-    expect(res.status).toBe(200);
-    expect(res.body.sentTo).toBeNull();
-  });
-
-  it('forgot-password fails clearly when SMTP is not configured (no email actually sent)', async () => {
-    const res = await request(ctx.app).post('/api/auth/forgot-password').send({ username: 'staff1' });
-    // Test env has no SMTP configured — sendMail() throws 503 rather than
-    // silently pretending an email went out, which is the behavior worth
-    // locking in here (see lib/mailer.ts).
-    expect(res.status).toBe(503);
+  /* This test env has no SMTP configured. That is a property of the system, not of
+     any account, so it is reported to every caller alike, whether or not the
+     username exists (an answer that differed would reveal which usernames exist;
+     the per-account behaviour is covered in forgot-password.test.ts). */
+  it('forgot-password reports missing SMTP the same way for known and unknown usernames', async () => {
+    const unknown = await request(ctx.app).post('/api/auth/forgot-password').send({ username: 'no-such-user' });
+    const known = await request(ctx.app).post('/api/auth/forgot-password').send({ username: 'staff1' });
+    expect(unknown.status).toBe(503);
+    expect(known.status).toBe(503);
+    expect(known.body).toEqual(unknown.body);
   });
 
   it('reset-password rejects a wrong OTP', async () => {

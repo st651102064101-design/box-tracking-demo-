@@ -4,7 +4,8 @@ import { eq, sql } from 'drizzle-orm';
 import { getDb } from '../db/client.js';
 import { users, employees, auditLog } from '../db/schema.js';
 import { hashPassword, verifyPassword } from '../lib/password.js';
-import { sendMail } from '../lib/mailer.js';
+import { assertMailConfigured, sendMail } from '../lib/mailer.js';
+import { writeAuditLog } from '../services/audit.js';
 import { signToken } from '../lib/jwt.js';
 import { effectivePermissions } from '../lib/effectivePermissions.js';
 import {
@@ -27,16 +28,16 @@ function genOtp(): string {
   return String(Math.floor(100000 + Math.random() * 900000)); // 6 digits
 }
 
-/** j***n@company.com — enough to confirm "yes, that's my email" without
- *  printing the whole address back over the wire. */
-function maskEmail(email: string): string {
-  const [user, domain] = email.split('@');
-  if (!domain) return '***';
-  const maskedUser = user.length <= 2 ? user[0] + '****' : user.slice(0, 2) + '****';
-  const [dName, dExt] = domain.split('.');
-  const maskedDomain = dName ? dName[0] + '****' + (dExt ? '.' + dExt : '') : domain;
-  return `${maskedUser}@${maskedDomain}`;
-}
+/* A valid bcrypt hash built once, so the "no such account / nothing pending" paths
+   of forgot-password and reset-password pay for the same bcrypt work as the real
+   ones. Without it, response time alone would tell an attacker which usernames exist. */
+let dummyHash: Promise<string> | null = null;
+const timingEqualizerHash = () => (dummyHash ??= hashPassword('boxtrace-timing-equalizer'));
+
+/** One answer for every way a reset can fail — unknown account, nothing pending,
+ *  expired, wrong code — so the response never says which accounts exist. */
+const otpRejected = () =>
+  httpError(400, 'รหัส OTP ไม่ถูกต้องหรือหมดอายุ — กด "ลืมรหัสผ่าน?" เพื่อขอรหัสใหม่', 'otp_invalid');
 
 /** Throttles reset requests per IP — this endpoint sends an email and is
  *  reachable from the login screen by anyone, signed in or not. */
@@ -141,6 +142,17 @@ authRouter.post('/first-setup', requireAuth, asyncHandler(async (req, res) => {
   const data = { id: input.username.toUpperCase(), name: input.name, email: input.email, phone: input.phone, role: 'ผู้ดูแลระบบ', access: 'admin', dept: input.department, wh: input.warehouse, status: 'active' };
   if (existing) await db.update(employees).set({ name: input.name, userId: row.id, roleId: 1, data, updatedAt: new Date() }).where(eq(employees.id, existing.id));
   else await db.insert(employees).values({ id: input.username.toUpperCase(), name: input.name, userId: row.id, roleId: 1, data });
+  /* The onboarding page promises every step is recorded in the Audit Log. This is
+     the step that turns the bootstrap account into a real person's, so it has to
+     be there — what changed, never the password itself. */
+  await writeAuditLog(db, {
+    action: 'credentials_set',
+    actor: updated.username,
+    itemId: updated.username,
+    itemName: input.name,
+    before: { username: row.username, name: row.name, email: row.email },
+    after: { username: updated.username, name: input.name, email: input.email, department: input.department, warehouse: input.warehouse },
+  });
   const token = signToken({ sub: updated.id, username: updated.username, name: updated.name, role: updated.role });
   res.json({ token, user: publicUser(updated) });
 }));
@@ -246,6 +258,10 @@ authRouter.post(
     const identifier = username.trim();
     const db = getDb();
 
+    /* Not configured is a property of the system, not of this account, so it is
+       reported to everyone alike — before any lookup. */
+    assertMailConfigured();
+
     let [userRow] = await db.select().from(users).where(eq(users.username, identifier));
     if (!userRow && identifier.includes('@')) {
       [userRow] = await db.select().from(users).where(sql`lower(${users.email}) = lower(${identifier})`);
@@ -265,14 +281,16 @@ authRouter.post(
           return { kind: 'employee' as const, id: empRow.id, email };
         })();
 
-    // Don't reveal whether the username exists — just claim success either way.
-    if (!account) return res.json({ ok: true, sentTo: null });
-    if (!account.email) {
-      throw httpError(
-        400,
-        'บัญชีนี้ยังไม่มีอีเมลผูกไว้ — ติดต่อผู้ดูแลระบบเพื่อเพิ่มอีเมลก่อน',
-        'no_email_on_file',
-      );
+    /* The reply is the same whether or not the account exists, has an email on
+       file, or the mail went out: { ok: true, sentTo: null }. It used to say
+       "sent to j****@c****.com" for real accounts and fail with
+       no_email_on_file / an SMTP error for real accounts only, which let anyone
+       enumerate usernames. Where the code went is for the person reading their
+       own inbox, not for the response body. */
+    if (!account || !account.email) {
+      await timingEqualizerHash(); // same bcrypt cost as the real path
+      if (account) console.warn(`[forgot-password] ${account.kind} ${account.id} has no email on file — no code sent`);
+      return res.json({ ok: true, sentTo: null });
     }
 
     const otp = genOtp();
@@ -287,7 +305,10 @@ authRouter.post(
         .where(eq(employees.id, account.id));
     }
 
-    await sendMail({
+    /* Not awaited: waiting on SMTP would make real accounts visibly slower than
+       unknown ones, and a delivery failure must not surface as an error only for
+       real accounts. Failures are logged for the operator instead. */
+    void sendMail({
       to: account.email,
       subject: 'รหัส OTP สำหรับตั้งรหัสผ่านใหม่ — BoxTrace',
       text:
@@ -299,9 +320,11 @@ authRouter.post(
         `<p style="font:700 32px monospace;letter-spacing:6px;">${otp}</p>` +
         `<p>ใช้รหัสนี้ที่หน้า "ลืมรหัสผ่าน?" เพื่อตั้งรหัสผ่านใหม่ — รหัสนี้หมดอายุใน 5 นาที และใช้ได้ครั้งเดียว</p>` +
         `<p>หากคุณไม่ได้เป็นผู้ขอ ไม่ต้องดำเนินการใดๆ — รหัสผ่านเดิมของคุณยังใช้งานได้ตามปกติ</p>`,
+    }).catch((error) => {
+      console.error(`[forgot-password] could not send the OTP email for ${account.kind} ${account.id}:`, error);
     });
 
-    res.json({ ok: true, sentTo: maskEmail(account.email) });
+    res.json({ ok: true, sentTo: null });
   }),
 );
 
@@ -323,16 +346,20 @@ authRouter.post(
     if (!userRow && identifier.includes('@')) {
       [userRow] = await db.select().from(users).where(sql`lower(${users.email}) = lower(${identifier})`);
     }
+
+    /* Every way this can fail — no such account, no reset pending, expired, wrong
+       code — throws the same otpRejected(). The old messages ("ยังไม่มีคำขอ…",
+       "หมดอายุแล้ว") only existed for real accounts, so they told an attacker which
+       usernames exist. An unknown account still does one bcrypt compare, so timing
+       does not give it away either. */
+    const verifyOtp = async (hash: string | null, expiresAt: Date | null): Promise<boolean> => {
+      const live = !!hash && !!expiresAt && expiresAt.getTime() >= Date.now();
+      const matches = await verifyPassword(otp, live ? hash! : await timingEqualizerHash());
+      return live && matches;
+    };
+
     if (userRow) {
-      if (!userRow.passwordResetOtpHash || !userRow.passwordResetExpiresAt) {
-        throw httpError(400, 'ยังไม่มีคำขอรีเซ็ตรหัสผ่าน — กด "ลืมรหัสผ่าน?" เพื่อขอรหัสใหม่ก่อน', 'no_reset_pending');
-      }
-      if (userRow.passwordResetExpiresAt.getTime() < Date.now()) {
-        throw httpError(400, 'รหัส OTP หมดอายุแล้ว — กด "ลืมรหัสผ่าน?" เพื่อขอรหัสใหม่', 'otp_expired');
-      }
-      if (!(await verifyPassword(otp, userRow.passwordResetOtpHash))) {
-        throw httpError(400, 'รหัส OTP ไม่ถูกต้อง', 'otp_invalid');
-      }
+      if (!(await verifyOtp(userRow.passwordResetOtpHash, userRow.passwordResetExpiresAt))) throw otpRejected();
       const [updated] = await db
         .update(users)
         .set({ passwordHash, passwordResetOtpHash: null, passwordResetExpiresAt: null })
@@ -349,15 +376,8 @@ authRouter.post(
         .from(employees)
         .where(sql`lower(${employees.data}->>'email') = lower(${identifier})`);
     }
-    if (!empRow) throw httpError(400, 'รหัส OTP ไม่ถูกต้อง', 'otp_invalid');
-    if (!empRow.passwordResetOtpHash || !empRow.passwordResetExpiresAt) {
-      throw httpError(400, 'ยังไม่มีคำขอรีเซ็ตรหัสผ่าน — กด "ลืมรหัสผ่าน?" เพื่อขอรหัสใหม่ก่อน', 'no_reset_pending');
-    }
-    if (empRow.passwordResetExpiresAt.getTime() < Date.now()) {
-      throw httpError(400, 'รหัส OTP หมดอายุแล้ว — กด "ลืมรหัสผ่าน?" เพื่อขอรหัสใหม่', 'otp_expired');
-    }
-    if (!(await verifyPassword(otp, empRow.passwordResetOtpHash))) {
-      throw httpError(400, 'รหัส OTP ไม่ถูกต้อง', 'otp_invalid');
+    if (!(await verifyOtp(empRow?.passwordResetOtpHash ?? null, empRow?.passwordResetExpiresAt ?? null)) || !empRow) {
+      throw otpRejected();
     }
     const [updatedEmp] = await db
       .update(employees)

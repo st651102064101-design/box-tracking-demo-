@@ -4,13 +4,21 @@ import { httpError } from '../middleware/error.js';
 
 let transporter: Transporter | null = null;
 
-function getTransporter(): Transporter {
+/** Throws the clear 503 for a missing SMTP configuration, without building a
+ *  transport. Lets a caller fail up front on a system-wide misconfiguration
+ *  (which says nothing about any one account) instead of only when it reaches
+ *  the send. */
+export function assertMailConfigured(): void {
   if (!env.smtp.host || !env.smtp.user || !env.smtp.pass) {
     // Fails the request with a clear reason instead of nodemailer's own
     // connection-refused stack trace — an admin reading logs should see
     // "SMTP isn't configured" immediately, not have to guess.
     throw httpError(503, 'ระบบยังไม่ได้ตั้งค่าอีเมล — ติดต่อผู้ดูแลระบบ', 'smtp_not_configured');
   }
+}
+
+function getTransporter(): Transporter {
+  assertMailConfigured();
   if (!transporter) {
     transporter = nodemailer.createTransport({
       host: env.smtp.host,
