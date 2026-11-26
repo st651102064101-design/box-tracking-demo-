@@ -29,11 +29,12 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
   final _badgeCodeController = TextEditingController();
   final _badgeCodeFocus = FocusNode(debugLabel: 'Employee badge code');
   bool _manualBadgeOpen = false;
   bool _badgeSubmitting = false;
+  bool _keyboardSeen = false;
   Timer? _onlineLabelTimer;
   bool? _lastOnlineDisplay;
   bool _showOnlineLabel = true;
@@ -74,7 +75,35 @@ class _LoginScreenState extends State<LoginScreen> {
     return matches.length == 1 ? matches.first : null;
   }
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  /// The keyboard can be put away (back key, its own hide button) while the
+  /// field keeps focus, which would leave a cursor blinking on an idle screen.
+  @override
+  void didChangeMetrics() {
+    if (!mounted || !_manualBadgeOpen) return;
+    if (View.of(context).viewInsets.bottom > 0) {
+      _keyboardSeen = true;
+    } else if (_keyboardSeen) {
+      _closeManualBadge();
+    }
+  }
+
+  /// Back to the badge prompt, so the trigger reads badges again.
+  void _closeManualBadge() {
+    if (!_manualBadgeOpen) return;
+    _badgeCodeFocus.unfocus();
+    _badgeCodeController.clear();
+    _keyboardSeen = false;
+    setState(() => _manualBadgeOpen = false);
+  }
+
   void _openManualBadge() {
+    _keyboardSeen = false;
     setState(() => _manualBadgeOpen = true);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _badgeCodeFocus.requestFocus();
@@ -95,6 +124,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _onlineLabelTimer?.cancel();
     _badgeCodeController.dispose();
     _badgeCodeFocus.dispose();
@@ -332,6 +362,7 @@ class _LoginScreenState extends State<LoginScreen> {
         key: const Key('manual-employee-code-input'),
         controller: _badgeCodeController,
         focusNode: _badgeCodeFocus,
+        onTapOutside: (_) => _closeManualBadge(),
         textCapitalization: TextCapitalization.characters,
         textInputAction: TextInputAction.done,
         autocorrect: false,

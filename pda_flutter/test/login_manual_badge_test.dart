@@ -112,4 +112,65 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     c.dispose();
   });
+
+  group('leaving the code field puts the badge prompt back', () {
+    Future<AppController> open(WidgetTester tester) async {
+      final c = await makeController(FakeApi());
+      c.emp = null;
+      c.screen = Screen.login;
+      await tester.pumpWidget(MultiProvider(
+        providers: [
+          ChangeNotifierProvider<AppController>.value(value: c),
+          ChangeNotifierProvider<LocaleController>.value(
+              value: LocaleController(c.prefs)),
+        ],
+        child: const MaterialApp(home: Scaffold(body: LoginScreen())),
+      ));
+      await tester.tap(find.byKey(const Key('open-employee-code-input')));
+      await tester.pump();
+      await tester.enterText(
+          find.byKey(const Key('manual-employee-code-input')), 'EMP');
+      await tester.pump();
+      return c;
+    }
+
+    void expectClosed(WidgetTester tester) {
+      expect(find.byKey(const Key('manual-employee-code-input')), findsNothing);
+      // No blinking cursor anywhere, and the trigger reads badges again.
+      expect(find.byType(EditableText), findsOneWidget,
+          reason: 'only the hidden scan capture is left');
+      expect(tester.widget<ScanCapture>(find.byType(ScanCapture)).enabled,
+          isTrue);
+    }
+
+    testWidgets('on a tap elsewhere', (tester) async {
+      final c = await open(tester);
+      await tester.tap(find.text('เหนี่ยวไกยิงบัตรได้เลย'));
+      await tester.pump();
+      expectClosed(tester);
+
+      await tester.tap(find.byKey(const Key('open-employee-code-input')));
+      await tester.pump();
+      final input = tester.widget<TextField>(
+          find.byKey(const Key('manual-employee-code-input')));
+      expect(input.controller?.text, isEmpty);
+      await tester.pumpWidget(const SizedBox.shrink());
+      c.dispose();
+    });
+
+    testWidgets('when the keyboard is dismissed', (tester) async {
+      final c = await open(tester);
+      tester.view.viewInsets = const FakeViewPadding(bottom: 600);
+      addTearDown(tester.view.reset);
+      await tester.pump();
+      expect(find.byKey(const Key('manual-employee-code-input')), findsOneWidget);
+
+      tester.view.viewInsets = FakeViewPadding.zero;
+      await tester.pump();
+      await tester.pump();
+      expectClosed(tester);
+      await tester.pumpWidget(const SizedBox.shrink());
+      c.dispose();
+    });
+  });
 }
