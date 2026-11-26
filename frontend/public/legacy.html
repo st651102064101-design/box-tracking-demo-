@@ -1829,6 +1829,34 @@ html[data-theme="dark"] .modal .sheet{box-shadow:inset 0 0 0 .5px var(--wgRing),
 .modal .mbody{padding:20px 24px;}
 .modal .mfoot{padding:15px 24px;border-top:.5px solid var(--line);
   background:color-mix(in srgb,var(--ink) 2%,var(--surface));}
+.modal .sheet:has(.rpv){width:720px;}
+.modal .mbody.rpv{padding-top:0;}
+.rpv [hidden]{display:none!important;}
+.rpv-sum{padding:20px 0 6px;}
+.rpv-num{display:flex;align-items:baseline;gap:6px;color:var(--muted);font-size:14px;}
+.rpv-num b{font-size:34px;line-height:1.1;font-weight:700;letter-spacing:-.03em;color:var(--ink);font-variant-numeric:tabular-nums;}
+.rpv-bar{height:6px;margin-top:10px;border-radius:99px;background:color-mix(in srgb,var(--ink) 9%,transparent);overflow:hidden;}
+.rpv-bar i{display:block;height:100%;border-radius:inherit;background:var(--accent);}
+.rpv-sum p{margin-top:10px;font-size:13.5px;color:var(--ink2);}
+.rpv-tools{position:sticky;top:0;z-index:1;display:flex;flex-wrap:wrap;gap:10px;padding:10px 0 12px;background:var(--surface);}
+.rpv-tools input{flex:1 1 220px;width:auto;}
+.rpv-seg{display:flex;gap:2px;padding:3px;border-radius:12px;background:color-mix(in srgb,var(--ink) 7%,transparent);}
+.rpv-seg button{border:0;background:none;border-radius:9px;padding:7px 12px;font:inherit;font-size:13px;color:var(--muted);cursor:pointer;white-space:nowrap;}
+.rpv-seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.18);}
+.rpv-list{columns:2 290px;column-gap:12px;}
+.rpv-mod{break-inside:avoid;margin-bottom:12px;padding:14px 14px 12px;border:1px solid var(--line);border-radius:16px;background:var(--surface2);}
+.rpv-mod header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;}
+.rpv-mod h4{margin:0;font-size:14px;font-weight:650;color:var(--ink);}
+.rpv-count{font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;padding:2px 9px;border-radius:99px;color:var(--muted);background:color-mix(in srgb,var(--ink) 8%,transparent);}
+.rpv-mod[data-state="full"] .rpv-count{background:var(--accentSoft);color:var(--accentInk);}
+.rpv-mod ul{list-style:none;margin:0;padding:0;display:grid;gap:7px;}
+.rpv-mod li{display:flex;align-items:flex-start;gap:8px;font-size:13.5px;line-height:1.5;color:var(--ink2);}
+.rpv-mod li svg{flex:none;width:15px;height:15px;margin-top:2px;fill:none;stroke:var(--accentInk);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;}
+.rpv-mod li.off{color:var(--muted);}
+.rpv-mod li.off svg{stroke:var(--faint);}
+.rpv-empty{padding:28px 0;text-align:center;color:var(--muted);}
+.rpv-hint{margin-right:auto;align-self:center;font-size:12.5px;color:var(--muted);}
+@media (max-width:520px){.rpv-seg{width:100%;}.rpv-seg button{flex:1;}.rpv-hint{width:100%;}}
 html[data-theme="dark"] .modal .mfoot{background:color-mix(in srgb,var(--ink) 4%,var(--surface));}
 @media (prefers-color-scheme:dark){
   html:not([data-theme="light"]):not([data-theme="dark"]) .modal .mfoot{
@@ -1938,6 +1966,64 @@ a{color:var(--accentInk);}
 .gi-strip-main{flex:1;min-width:0}.gi-strip-k{font-size:11.5px;font-weight:600;color:var(--pos);letter-spacing:.04em}.gi-strip-v{font-weight:700;font-size:15.5px;margin-top:1px;}
 .gi-strip.gi-strip-sub{background:var(--surface2);padding:11px 17px}.gi-strip-sub .gi-strip-ic{background:color-mix(in srgb,var(--ink) 9%,transparent);color:var(--ink2)}
 .gi-strip-sub .gi-strip-k{color:var(--muted)}.gi-strip-sub .gi-strip-v{font-size:14px;font-weight:600}
+/* ทุกเมนู: หัวข้อกระชับ งานหลักต้องเห็นทันทีโดยไม่ต้องเลื่อน */
+.tab .hero{padding-top:22px;padding-bottom:18px;}
+.tab .hero .h-title{font-size:clamp(24px,3vw,32px)!important;margin-bottom:0;}
+/* ตัวช่วยแอนิเมชันหั่นหัวข้อเป็นบรรทัด — ให้อยู่บรรทัดเดียว */
+.tab .hero .h-title div:not(.motion-word){display:inline!important;}
+.tab .hero .h-title .motion-word{margin-right:.28em;}
+.tab .hero .h-title br,.tab .hero .h-sub{display:none;}
+#tab-inventory .invtoolbar{margin-bottom:12px;}
+#tab-inventory .invtoolbar .invsearch{align-self:center;margin-bottom:0;flex:1 1 300px;}
+#tab-inventory .inv-status .seg-filter{max-width:100%;overflow-x:auto;}
+#tab-inventory .inv-status .seg-filter{flex-wrap:nowrap;}
+#tab-inventory .inv-status .sf-btn{flex:0 0 auto;white-space:nowrap;}
+.xp-wrap{position:relative;}
+.xp-caret{margin-left:2px;font-size:11px;opacity:.7;}
+#tab-inventory .invtoolbar:has(.xp-menu:not([hidden])){position:relative;z-index:30;}
+.xp-menu{position:absolute;right:0;top:calc(100% + 8px);width:min(300px,calc(100vw - 32px));padding:6px;background:var(--surface);border:1px solid var(--line2);border-radius:16px;box-shadow:0 16px 40px -12px rgba(0,0,0,.45);}
+.xp-menu[hidden]{display:none;}
+.xp-menu.from-left{right:auto;left:0;}
+.xp-menu button{display:block;width:100%;border:0;background:none;border-radius:11px;padding:10px 12px;text-align:left;font:inherit;color:var(--ink);cursor:pointer;}
+.xp-menu button:hover,.xp-menu button:focus-visible{background:color-mix(in srgb,var(--ink) 9%,transparent);outline:none;}
+.xp-menu b{display:block;font-size:14px;}
+.xp-menu small{display:block;margin-top:2px;font-size:12.5px;line-height:1.45;color:var(--muted);}
+.setup-nav{flex-wrap:nowrap!important;overflow-x:auto;gap:4px!important;margin-bottom:18px;padding:5px;background:var(--surface);border:1px solid var(--line);border-radius:18px;scrollbar-width:thin;}
+.setup-nav .btn{flex:0 0 auto;white-space:nowrap;border-color:transparent;padding:8px 11px;font-size:13px;gap:6px;}
+.setup-nav .sf-badge{margin-left:0;}
+@media(min-width:620px){.setup-nav{flex-wrap:wrap!important;}.setup-nav .stab .svgi{display:none;}.setup-nav .spacer{flex:1 1 0;}.setup-nav .setup-gear{font-size:0;gap:0;}.setup-nav .setup-gear .svgi{font-size:16px;}.setup-nav .setup-gear svg{width:17px;height:17px;}}
+.setup-nav .setup-gear{border-color:var(--line2);}
+#tab-setup .wg-top{position:relative;z-index:5;}
+#tab-setup .wg:has(.xp-menu:not([hidden])),#tab-setup .tablecard:has(.xp-menu:not([hidden])){overflow:visible;z-index:20;}
+#tab-setup .twrap th,#tab-setup .twrap td{padding-left:10px;padding-right:10px;}
+.xl-wrap .xp-menu{min-width:190px;width:max-content;}
+.xl-wrap .xp-menu button{display:flex;align-items:center;gap:9px;padding:10px 12px;font-size:14px;transform:none;box-shadow:none;}
+.inv-refine{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:14px;}
+.inv-refine .inv-cust-row{margin:0;padding:0;border:0;background:none;}
+.inv-refine .icr-label{display:none;}
+.inv-refine select{width:auto;min-width:170px;max-width:260px;padding-top:8px;padding-bottom:8px;border-radius:999px;}
+.inv-refine select.is-set{border-color:var(--accent);background-color:var(--accentSoft);}
+@media(max-width:619px){.inv-refine .inv-cust-row.show{flex:1 1 100%;}.inv-refine .icr-pills{width:100%;}.inv-refine select{width:100%;max-width:none;}}
+#gateInModeBar,#gateOutModeBar{width:max-content;max-width:100%;padding:4px;margin-bottom:14px;border-radius:16px;box-shadow:none;}
+#gateInModeBar .gateout-mode-label,#gateInModeBar .gateout-mode-btn small,#gateInModeBar .gateout-mode-icon,#gateOutModeBar .gateout-mode-label,#gateOutModeBar .gateout-mode-btn small,#gateOutModeBar .gateout-mode-icon{display:none;}
+#gateInModeBar .gateout-mode-switch,#gateOutModeBar .gateout-mode-switch{display:flex;gap:4px;}
+#gateInModeBar .gateout-mode-btn,#gateOutModeBar .gateout-mode-btn{min-height:40px;padding:8px 20px;border-color:transparent;background:none;border-radius:12px;justify-content:center;}
+#gateInModeBar .gateout-mode-btn:hover,#gateOutModeBar .gateout-mode-btn:hover{transform:none;}
+#gateInModeBar .gateout-mode-btn.active,#gateOutModeBar .gateout-mode-btn.active{background:var(--accentSoft);border-color:var(--accent);box-shadow:none;}
+#gateInModeBar .rfid-lpr-timing-note,#gateOutModeBar .rfid-lpr-timing-note{max-width:520px;padding:0 10px 6px;}
+#inGateHint:has(.gh-chip){display:none;}
+@media(max-width:619px){#giStrip .gi-strip-ic{display:none;}#gateInModeBar{width:100%;}#gateInModeBar .gateout-mode-btn{flex:1;padding:8px 6px;}}
+@media(max-width:619px){#gateOutModeBar{width:100%;}#gateOutModeBar .gateout-mode-btn{flex:1;padding:8px 6px;}}
+#outGateHint:has(.gh-chip){display:none;}
+#gateOutManualConfig:not(.show-opt) .go-opt{display:none!important;}
+#gateOutManualConfig.is-rfid #goMoreBtn{display:none!important;}
+#gateOutManualConfig.is-rfid .go-manual-only,#gateOutManualConfig:not(.is-rfid) .go-rfid-only{display:none;}
+#goMoreBtn{margin-top:14px;}
+.go-need{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:14px;font-size:13.5px;color:var(--ink2);}
+.go-need button{border:1px solid var(--line2);border-radius:99px;background:var(--surface2);color:var(--ink);font:inherit;font-size:13px;padding:5px 12px;cursor:pointer;}
+.go-need button:hover{border-color:var(--accent);}
+#gateOutBox.go-waiting .pad{opacity:.5;}
+#gateOutBox.go-waiting .pad :disabled{cursor:not-allowed;}
 .gi-step-ic{width:52px;height:52px;margin:0 auto 16px;border-radius:16px;display:grid;place-items:center;background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--accentInk)}
 .gi-step-ic svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .gi-step-t{font-size:clamp(19px,2.1vw,23px);line-height:1.4;margin:0 0 8px}.gi-step-s{font-size:14px;color:var(--muted);line-height:1.55;max-width:52ch;margin:0 auto 22px}
@@ -2795,13 +2881,6 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
     <h1 class="h-title reveal d1">ผ่านประตู<br>ออกได้เลย</h1>
     <p class="h-sub reveal d2">เลือกประตู ตั้งใบส่งของและรถ แล้วจบการยิงข้อมูลในรอบเดียว</p>
   </div>
-  <div class="wg-board reveal">
-    <div class="wg xl wg-table">
-      <div class="wg-top" aria-label="ป้ายทะเบียน · ขาส่งออก" title="ป้ายทะเบียน · ขาส่งออก"><span class="wg-ic" role="img" aria-label="ป้ายทะเบียน · ขาส่งออก"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h5M7 14h3"/></svg></span></span><span class="wg-lbl visually-hidden">ป้ายทะเบียน · ขาส่งออก</span><div class="wg-scope" id="df-gateOutPlate-mount"></div></div>
-      <p class="wg-cap" id="gateOutPlateDesc"></p><div class="wg-body"><div id="gateOutPlateReport"></div></div>
-    </div>
-  </div>
-
   <div class="gateout-mode-panel reveal" id="gateOutModeBar">
     <div class="gateout-mode-label">เลือกวิธีทำรายการ</div>
     <div class="gateout-mode-switch" role="tablist" aria-label="วิธีทำรายการขาออก">
@@ -2831,26 +2910,27 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
     <input type="hidden" id="outGate">
     <div id="outGateHint"></div>
     <div class="grid g3">
-      <div class="field out-rfid-context-extra"><label>เลขที่ DO (สร้างอัตโนมัติ)</label>
+      <div class="field"><label>ลูกค้า / ปลายทาง <span class="req">*</span></label><select id="doCustomer"></select><div id="doCustomerHint" style="display:none;"></div></div>
+      <div class="field out-rfid-context-extra"><label>ทะเบียนรถ <span class="req go-manual-only">*</span> <span class="muted small go-rfid-only">(ถ้ามีจาก LPR)</span></label><input id="outPlate" list="dl-plate" placeholder="82-1234 กทม" autocomplete="off"></div>
+      <div class="field out-rfid-context-extra"><label>ชื่อคนขับ <span class="req">*</span></label><input id="outDriver" list="dl-driver" placeholder="นายสมชาย ใจดี" autocomplete="off"></div>
+      <div class="field out-rfid-context-extra"><label>เบอร์โทรคนขับ <span class="req">*</span></label><input id="outDriverTel" type="tel" inputmode="tel" list="dl-tel" placeholder="08x-xxx-xxxx" maxlength="15" autocomplete="off"></div>
+      <div class="field go-opt out-rfid-context-extra"><label>เลขที่ DO (สร้างอัตโนมัติ)</label>
         <div class="auto-tag-row">
           <input id="doNo" readonly>
           <button type="button" class="btn ghost sm" id="btnOverrideDoNo">แก้เอง</button>
         </div>
       </div>
-      <div class="field out-rfid-context-extra"><label>เลขที่ PO (สร้างอัตโนมัติ)</label>
+      <div class="field go-opt out-rfid-context-extra"><label>เลขที่ PO (สร้างอัตโนมัติ)</label>
         <div class="auto-tag-row">
           <input id="poNo" readonly>
           <button type="button" class="btn ghost sm" id="btnOverridePoNo">แก้เอง</button>
         </div>
       </div>
-      <div class="field"><label>ลูกค้า / ปลายทาง <span class="req">*</span></label><select id="doCustomer"></select><div id="doCustomerHint" style="display:none;"></div></div>
-      <div class="field out-rfid-context-extra"><label>กำหนดคืนภายใน (วันที่)</label><div id="doReturnDatePreview" class="tag">เลือกลูกค้าก่อน</div></div>
+      <div class="field go-opt out-rfid-context-extra"><label>กำหนดคืนภายใน (วันที่)</label><div id="doReturnDatePreview" class="tag">เลือกลูกค้าก่อน</div></div>
       <div class="field" style="display:none;"><label>ผู้บันทึก <span class="req">*</span></label><input id="outRecorder" readonly></div>
-      <div class="field out-rfid-context-extra"><label>ทะเบียนรถ <span class="muted small">(ถ้ามีจาก LPR)</span></label><input id="outPlate" list="dl-plate" placeholder="82-1234 กทม" autocomplete="off"></div>
-      <div class="field out-rfid-context-extra"><label>ประเภทรถ</label><div id="outVehicleField"></div></div>
-      <div class="field out-rfid-context-extra"><label>ชื่อคนขับ <span class="req">*</span></label><input id="outDriver" list="dl-driver" placeholder="นายสมชาย ใจดี" autocomplete="off"></div>
-      <div class="field out-rfid-context-extra"><label>เบอร์โทรคนขับ <span class="req">*</span></label><input id="outDriverTel" type="tel" inputmode="tel" list="dl-tel" placeholder="08x-xxx-xxxx" maxlength="15" autocomplete="off"></div>
+      <div class="field go-opt out-rfid-context-extra"><label>ประเภทรถ</label><div id="outVehicleField"></div></div>
     </div>
+    <button type="button" class="btn ghost sm out-rfid-context-extra" id="goMoreBtn" aria-expanded="false" onclick="toggleGateOutMore()">+ DO · PO · ประเภทรถ</button>
     <div id="doLookupHint" style="margin-top:14px;"></div>
     <div id="outVehicleQuick"></div>
     </div>
@@ -2882,6 +2962,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
       </div>
       <h3 class="wg-scan-t">ประตูสแกนขาออก</h3>
       <p class="wg-scan-s">ยิงหรือพิมพ์รหัส บาร์โค้ด ของกล่อง แล้วกด Enter — ระบบจับคู่กับ DO/ประตูด้านบนอัตโนมัติ</p>
+      <div id="gateOutBoxPrereq" class="go-need" role="status" style="display:none;"></div>
       <div id="gateOutRfidStatus" style="display:none;margin-bottom:14px;"></div>
       <div class="pad" id="gateOutManualPad">
         <div class="scanout-input-wrap"><input id="scanOut" placeholder="แตะแล้วยิงบาร์โค้ด เช่น CRT-04" autocomplete="off"><button type="button" class="mobile-camera-scan" id="btnScanOutCamera" aria-label="เปิดกล้องสแกนบาร์โค้ด" title="เปิดกล้องสแกนบาร์โค้ด"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"></rect><path d="M8 5l1.2-2h5.6L16 5M8 12h.01M12 12h.01M16 12h.01"></path></svg></span></button></div>
@@ -2898,6 +2979,14 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
     <button class="btn ghost" onclick="exportGateOutExcel()" title="ส่งออกประวัติกล่องที่ผ่านประตูขาออกทั้งหมด (.xlsx)"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> ส่งออก Excel</button>
     <span class="muted small" id="outCount"></span>
   </div>
+
+  <div class="wg-board reveal">
+    <div class="wg xl wg-table">
+      <div class="wg-top" aria-label="ป้ายทะเบียน · ขาส่งออก" title="ป้ายทะเบียน · ขาส่งออก"><span class="wg-ic" role="img" aria-label="ป้ายทะเบียน · ขาส่งออก"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h5M7 14h3"/></svg></span></span><span class="wg-lbl visually-hidden">ป้ายทะเบียน · ขาส่งออก</span><div class="wg-scope" id="df-gateOutPlate-mount"></div></div>
+      <p class="wg-cap" id="gateOutPlateDesc"></p><div class="wg-body"><div id="gateOutPlateReport"></div></div>
+    </div>
+  </div>
+
 </section>
 
 <!-- ===================== GATE IN ===================== -->
@@ -2907,13 +2996,6 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
     <h1 class="h-title reveal d1">กลับเข้าคลัง<br>เก็บเข้าชั้น</h1>
     <p class="h-sub reveal d2">รถขนกล่องกลับ เลือกประตูขาเข้า ยิงบาร์โค้ด — ระบบรับกล่องเข้าคลังนั้นทันทีให้อัตโนมัติ แล้วตัดยอดว่า "คืนแล้ว"</p>
   </div>
-  <div class="wg-board reveal">
-    <div class="wg xl wg-table">
-      <div class="wg-top"><span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h5M7 14h3"/></svg></span></span><span class="wg-lbl">ป้ายทะเบียน · ขารับเข้า</span><div class="wg-scope" id="df-gateInPlate-mount"></div></div>
-      <p class="wg-cap" id="gateInPlateDesc"></p><div class="wg-body"><div id="gateInPlateReport"></div></div>
-    </div>
-  </div>
-
   <div class="gateout-mode-panel reveal" id="gateInModeBar">
     <div class="gateout-mode-label">เลือกวิธีทำรายการ</div>
     <div class="gateout-mode-switch" role="tablist" aria-label="วิธีทำรายการขาเข้า">
@@ -2927,6 +3009,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
   <div class="gi-strip reveal" id="giStrip" style="display:none;">
     <span class="gi-strip-ic svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V4a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v17M4 21h16"/><circle cx="13.2" cy="12" r=".9" fill="currentColor" stroke="none"/></svg></span>
     <div class="gi-strip-main"><div class="gi-strip-k">ประตูประจำบัญชีนี้</div><div id="inGateDisplay" class="gi-strip-v">— ยังไม่ได้ตั้งค่า —</div></div>
+    <button type="button" class="btn ghost sm" id="giVehicleBtn" aria-expanded="false" aria-controls="giStepVehicle" onclick="gateInToggleVehicle()"></button>
     <button class="btn ghost sm" id="inGateChangeBtn" onclick="pickGate('in')">เปลี่ยนประตู</button>
   </div>
   <input type="hidden" id="inGate"><div id="inGateHint"></div>
@@ -2936,12 +3019,6 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
     <div class="gi-step-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V4a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v17M4 21h16"/><circle cx="13.2" cy="12" r=".9" fill="currentColor" stroke="none"/></svg></span></div>
     <h3 class="gi-step-t">เลือกประตูขาเข้าก่อนเริ่มรับของ</h3><p class="gi-step-s">ระบบจะจำประตูไว้กับบัญชีนี้และพาไปขั้นตอนรับของทันทีในครั้งถัดไป</p>
     <button class="btn accent big" onclick="pickGate('in')">เลือกประตูขาเข้า</button>
-  </div></div></div>
-
-  <div class="wg-board" id="giStepAsk" style="display:none;"><div class="wg xl wg-form reveal"><div class="wg-body" style="text-align:center;padding:30px 22px;">
-    <div class="gi-step-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h11v8H3zM14 10h4l3 3v2h-7z"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></svg></span></div>
-    <h3 class="gi-step-t">ต้องการบันทึกข้อมูลรถและคนขับหรือไม่?</h3><p class="gi-step-s">ข้อมูลทั้งหมดไม่บังคับ ใช้สำหรับย้อนรอยภายหลัง สามารถข้ามไปสแกนกล่องได้ทันที</p>
-    <div class="gi-choices"><button class="btn accent big" onclick="gateInSkipVehicle()">ข้ามไปสแกนเลย</button><button class="btn ghost big" onclick="gateInFillVehicle()">กรอกข้อมูลรถ</button></div>
   </div></div></div>
 
   <div class="wg-board" id="giStepVehicle" style="display:none;">
@@ -2974,7 +3051,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
     <datalist id="dl-driver"></datalist>
     <datalist id="dl-tel"></datalist>
     </div>
-    <div class="wg-foot"><button class="btn ghost" onclick="gateInGo('ask')">ย้อนกลับ</button><div class="spacer"></div><button class="btn accent" onclick="gateInGo('scan')">ถัดไป — ไปหน้าสแกน</button></div>
+    <div class="wg-foot"><button class="btn ghost" onclick="gateInClearVehicle()">ล้างข้อมูลรถ</button><div class="spacer"></div><button class="btn accent" onclick="gateInToggleVehicle()">เสร็จแล้ว กลับไปสแกน</button></div>
   </div>
   </div>
 
@@ -3023,6 +3100,14 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
     <span class="muted small" id="inCount"></span>
   </div>
   </div>
+
+  <div class="wg-board reveal">
+    <div class="wg xl wg-table">
+      <div class="wg-top"><span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h5M7 14h3"/></svg></span></span><span class="wg-lbl">ป้ายทะเบียน · ขารับเข้า</span><div class="wg-scope" id="df-gateInPlate-mount"></div></div>
+      <p class="wg-cap" id="gateInPlateDesc"></p><div class="wg-body"><div id="gateInPlateReport"></div></div>
+    </div>
+  </div>
+
 </section>
 
 <!-- ===================== INVENTORY ===================== -->
@@ -3033,18 +3118,26 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
     <p class="h-sub reveal d2">มุมมองสต็อกกล่องตามข้อมูลหลัก — รับเข้าด้วยการสแกนบาร์โค้ด ระบบดึงประเภท·หน่วย·พิกัดให้อัตโนมัติ · เลือกหลายใบเพื่อย้ายพิกัด/แจ้งกล่องหายพร้อมกัน · ทุกการเปลี่ยนแปลงบันทึก ประวัติการใช้งาน</p>
   </div>
 
-  <!-- board header: every control below governs BOTH list widgets, so by the
-       system's own rule it lives here rather than inside either of them. -->
-  <div class="wg-hd reveal d2">
-    <span class="wg-hd-t">สต็อกกล่องทั้งหมด</span>
-  </div>
-
   <div class="invtoolbar reveal d2">
     <div class="invsearch">
       <span class="invsearch-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg></span></span>
-      <input id="schInv" placeholder="ค้นหาบาร์โค้ด / ประเภท / ลูกค้า · หลายค่าได้ (Enter หรือ ,)" title="ค้นหาได้หลายค่า — กด Enter หรือคั่นด้วย , เพื่อเพิ่มรายการ" aria-describedby="schInvHint">
-      <span id="schInvHint" class="inv-search-hint">หลายค่าได้ · กด Enter หรือคั่นด้วย ,</span>
+      <input id="schInv" placeholder="ค้นหาบาร์โค้ด ประเภท ลูกค้า" title="ค้นหาหลายค่าได้ — กด Enter หรือคั่นด้วย ," aria-label="ค้นหากล่อง" autocomplete="off">
     </div>
+    <div class="inv-view-sw" id="invViewSw">
+      <button class="ivs-btn active" data-view="serial" title="แสดง 1 บาร์โค้ด ต่อ 1 แถว"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6v.1M4 12v.1M4 18v.1"/></svg></span> รายใบ</button>
+      <button class="ivs-btn" data-view="summary" title="จัดกลุ่มตามประเภทและพิกัด พร้อมแสดงจำนวนรวม"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.4"/><rect x="13" y="4" width="7" height="7" rx="1.4"/><rect x="4" y="13" width="7" height="7" rx="1.4"/><rect x="13" y="13" width="7" height="7" rx="1.4"/></svg></span> สรุปสต็อก</button>
+    </div>
+    <button class="btn accent sm" onclick="document.getElementById('invImportFile').click()" title="เลือกไฟล์ Excel/CSV เพื่อนำเข้ารายการสต็อก — เลือกไฟล์แล้วจับคู่คอลัมน์เอง ไม่ต้องใช้ชื่อหัวคอลัมน์ตายตัว"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button>
+    <div class="xp-wrap">
+      <button class="btn ghost sm" id="invExportBtn" onclick="toggleExportMenu()" aria-haspopup="menu" aria-expanded="false" aria-controls="invExportMenu"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> ส่งออก Excel <span class="xp-caret" aria-hidden="true">▾</span></button>
+      <div class="xp-menu" id="invExportMenu" role="menu" aria-labelledby="invExportBtn" hidden>
+        <button type="button" role="menuitem" data-mode="multi"><b>แยกเป็นแต่ละ Sheet</b><small>ข้อมูลหลักทุกชุด ประวัติ ป้ายทะเบียน และรถ</small></button>
+        <button type="button" role="menuitem" data-mode="single"><b>ข้อมูลหลักรวม</b><small>1 แถวต่อกล่อง ประวัติแยกอีก Sheet</small></button>
+      </div>
+    </div>
+    <input type="file" id="invImportFile" accept=".xlsx,.xlsm,.xls,.xlsb,.csv,application/vnd.ms-excel.sheet.macroEnabled.12,application/vnd.ms-excel.sheet.binary.macroEnabled.12" style="display:none;">
+  </div>
+  <div class="invtoolbar inv-status reveal d2">
     <div class="seg-filter" id="invStatusSeg">
       <button class="sf-btn active" data-st=""><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></span> ทั้งหมด<span class="sf-badge" data-badge=""></span></button>
       <button class="sf-btn" data-st="warehouse" title="ผ่านประตูเข้ามาแล้ว อยู่ในคลัง"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span> จัดเก็บในคลังแล้ว<span class="sf-badge" data-badge="warehouse"></span></button>
@@ -3055,9 +3148,8 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
       <button class="sf-btn" data-st="out"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg></span> ส่งลูกค้า<span class="sf-badge" data-badge="out"></span></button>
       <button class="sf-btn" data-st="lost"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7"/></svg></span> แจ้งกล่องหาย<span class="sf-badge" data-badge="lost"></span></button>
     </div>
-    <span class="tag" id="cntInv" style="flex:0 0 auto;">0 รายการ</span>
   </div>
-  <!-- customer sub-filter row: appears below status bar when "ส่งลูกค้า" is selected -->
+  <div class="inv-refine">
   <div class="inv-cust-row" id="invWhRow">
     <span class="icr-label"><span class="svgi" style="font-size:13px;vertical-align:-2px;margin-right:2px;"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span> แยกตามคลัง</span>
     <div class="icr-pills" id="invWhPills"></div>
@@ -3066,21 +3158,12 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
     <span class="icr-label"><span class="svgi" style="font-size:13px;vertical-align:-2px;margin-right:2px;"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="7" r="4"/><path d="M2 21c0-4 2.7-6 6-6M15 14h6M18 11v6"/></svg></span> แยกตามลูกค้า</span>
     <div class="icr-pills" id="invCustPills"></div>
   </div>
+    <span class="tag" id="cntInv">0 รายการ</span>
+  </div>
   <div class="inv-cust-row" id="invDateRow">
     <span class="icr-label">ช่วงเวลาจากภาพรวม</span>
     <div id="df-invDate-mount"></div>
   </div>
-  <div class="invtoolbar" style="margin-bottom:14px;">
-    <div class="spacer"></div>
-    <div class="inv-view-sw" id="invViewSw">
-      <button class="ivs-btn active" data-view="serial" title="แสดง 1 บาร์โค้ด ต่อ 1 แถว"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6v.1M4 12v.1M4 18v.1"/></svg></span> รายใบ</button>
-      <button class="ivs-btn" data-view="summary" title="จัดกลุ่มตามประเภทและพิกัด พร้อมแสดงจำนวนรวม"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.4"/><rect x="13" y="4" width="7" height="7" rx="1.4"/><rect x="4" y="13" width="7" height="7" rx="1.4"/><rect x="13" y="13" width="7" height="7" rx="1.4"/></svg></span> สรุปสต็อก</button>
-    </div>
-    <button class="btn accent sm" onclick="document.getElementById('invImportFile').click()" title="เลือกไฟล์ Excel/CSV เพื่อนำเข้ารายการสต็อก — เลือกไฟล์แล้วจับคู่คอลัมน์เอง ไม่ต้องใช้ชื่อหัวคอลัมน์ตายตัว"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button>
-    <button class="btn ghost sm" onclick="pickAllMastersExportMode()" title="ส่งออกข้อมูลหลัก พร้อมประวัติการเคลื่อนไหว ป้ายทะเบียน LPR และทะเบียนรถ"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> ส่งออก Excel</button>
-    <input type="file" id="invImportFile" accept=".xlsx,.xlsm,.xls,.xlsb,.csv,application/vnd.ms-excel.sheet.macroEnabled.12,application/vnd.ms-excel.sheet.binary.macroEnabled.12" style="display:none;">
-  </div>
-
   <!-- active-filter banner (shown when navigated from overview) -->
   <div class="filter-bar" id="invFilterBanner" style="display:none;border-radius:14px;margin-bottom:12px;gap:10px;"></div>
 
@@ -3195,10 +3278,6 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
     <p class="h-sub reveal d2">ลงทะเบียนกล่อง · ประเภทกล่อง · คลังและประตู · ลูกค้า · พารามิเตอร์ — ระบบเก็บประวัติเข้า·ออกเบื้องหลังให้อัตโนมัติ</p>
   </div>
 
-  <div class="row no-print reveal" style="margin-bottom:18px;">
-    <button class="btn ghost sm" onclick="openSystemSettingsModal()"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span> ตั้งค่าระบบ</button>
-    <div class="spacer"></div>
-  </div>
 
   <!-- Shared across all 6 Setup sub-tabs — which entity a click targets is
        set by openImportModal() right before .click(), so one hidden input
@@ -3206,7 +3285,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
        instead of six near-identical wired-up inputs. -->
   <input type="file" id="importFileShared" accept=".xlsx,.xlsm,.xls,.xlsb,.csv,application/vnd.ms-excel.sheet.macroEnabled.12,application/vnd.ms-excel.sheet.binary.macroEnabled.12" style="display:none;">
 
-  <div class="row no-print reveal" style="margin-bottom:22px;">
+  <div class="row no-print reveal setup-nav">
     <button class="btn ghost sm stab active" data-stab="btype"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2.2"/><path d="M4 10h16M10 4v16"/></svg></span> ประเภทกล่อง<span class="sf-badge" data-stab-badge="btype"></span></button>
     <button class="btn ghost sm stab" data-stab="box"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6v12M7.5 6v12M11 6v12M14 6v12M17.5 6v12M20 6v12"/></svg></span> ลงทะเบียนกล่อง<span class="sf-badge" data-stab-badge="box"></span></button>
     <button class="btn ghost sm stab" data-stab="wh"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V9l9-6 9 6v12"/><path d="M9 21v-8h6v8"/></svg></span> คลัง &amp; ประตู<span class="sf-badge" data-stab-badge="wh"></span></button>
@@ -3216,6 +3295,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
     <button class="btn ghost sm stab" data-stab="role" id="stabRole"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5.5c0 4.2-2.9 7.6-7 8.5-4.1-.9-7-4.3-7-8.5V6Z"/><path d="m9.2 12.2 2 2 3.6-3.9"/></svg></span> บทบาทและสิทธิ์<span class="sf-badge" data-stab-badge="role"></span></button>
     <button class="btn ghost sm stab" data-stab="audit"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2.2"/><path d="M9 4V3h6v1M9 10h6M9 14h6M9 18h4"/><path d="M9 4a1 1 0 0 0-1 1v1h8V5a1 1 0 0 0-1-1"/></svg></span> ประวัติการใช้งาน<span class="sf-badge" data-stab-badge="audit"></span></button>
     <div class="spacer"></div>
+    <button class="btn ghost sm setup-gear" title="ตั้งค่าระบบ" aria-label="ตั้งค่าระบบ" onclick="openSystemSettingsModal()"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span> ตั้งค่าระบบ</button>
   </div>
 
 
@@ -3858,7 +3938,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
           <button class="ivs-btn" data-lview="3d"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 8 4.5-8 4.5-8-4.5L12 3Z"/><path d="m4 7.5v9L12 21l8-4.5v-9M12 12v9"/></svg></span><span class="loc3d-mode-label"><span data-l="th">มุมมอง 3D</span><span data-l="en">3D View</span></span> <span class="loc3d-demo"><span>(BETA)</span></span></button>
         </div>
         <button class="btn ghost sm" onclick="openImportModal('loc')" title="นำเข้าข้อมูลจากไฟล์ Excel/CSV"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 16V4M7.5 8.5 12 4l4.5 4.5"/></svg></span> นำเข้า Excel</button>
-        <button class="btn ghost sm" onclick="exportLocExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> Export Excel</button>
+        <button class="btn ghost sm" onclick="exportLocExcel()"><span class="svgi hoverbob"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16"/></svg></span> ส่งออก Excel</button>
         <button class="btn ghost sm" id="btnClearOrphanLoc" style="display:none;color:var(--neg);" title="ลบตำแหน่งที่ไม่มีโซน (ข้อมูลตกค้างจากบั๊กเดิม)"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span> ล้างตำแหน่งไม่มีโซน</button>
       </div>
       <!-- Apple-style filter bar — rendered by JS into #locFilterBar -->
@@ -5065,6 +5145,8 @@ function save(){
   // Audit is append-only on the server. Do not round-trip an unbounded event
   // history with every UI save; this keeps handheld/browser state compact.
   if(Array.isArray(S.auditLog)&&S.auditLog.length>500)S.auditLog=S.auditLog.slice(0,500);
+  /* baseTags = กล่องที่หน้านี้รู้จัก: เซิร์ฟเวอร์ใช้แยก "ลบจริง" ออกจาก "กล่องที่เครื่องอื่นเพิ่งเพิ่ม" */
+  var sentTags=Object.keys(S.boxes||{});
   return apiFetch('/api/state',{
     method:'PUT',
     headers:Object.assign({'Content-Type':'application/json','X-Client-Id':CLIENT_ID},authHeaders()),
@@ -5079,6 +5161,7 @@ function save(){
     /* เซิร์ฟเวอร์รับเฉพาะส่วนที่บัญชีนี้มีสิทธิ์แก้ ส่วนที่ไม่มีสิทธิ์จะถูกคืนค่าเดิม
        แล้วบอกกลับมาใน rejected — ต้องบอกผู้ใช้และโหลดของจริงมาทับ ไม่งั้นหน้าจอจะ
        ยังโชว์สิ่งที่ถูกปฏิเสธไปแล้วเหมือนบันทึกสำเร็จ */
+    if(Array.isArray(S.baseTags))sentTags.forEach(function(t){if(S.baseTags.indexOf(t)<0)S.baseTags.push(t);});
     if(j&&j.rejected&&j.rejected.length)onStateRejected(j.rejected);
     return true;
   }).catch(function(e){
@@ -5098,6 +5181,12 @@ function save(){
 /* กันเตือนรัวตอนหน้าเดียวยิง save() ติด ๆ กันหลายครั้ง */
 var _rejectToastAt=0;
 var _oversizeToastAt=0;
+/* กู้คืนข้อมูลสำรอง: ตั้งใจเขียนทับของใหม่กว่า (เซิร์ฟเวอร์ยอมเฉพาะผู้ดูแล) */
+function saveReplacingAll(){
+  delete S.baseTags;S.restore=true;
+  var done=save();delete S.restore;   /* save() แปลงข้อมูลเป็นข้อความไปแล้ว */
+  return done.then(function(ok){return loadFromServer().then(function(){btSuppressSave(renderAll);return ok;});});
+}
 function onStateRejected(rejected){
   var now=Date.now();
   if(now-_rejectToastAt>4000){
@@ -6268,23 +6357,37 @@ function refreshRfidLprTimingNotes(){
   if(inn)inn.style.display=gateInEntryMode==='rfid'?'':'none';
 }
 window.refreshRfidLprTimingNotes=refreshRfidLprTimingNotes;
+/* ช่องสแกนมองเห็นเสมอ แต่ยังพิมพ์ไม่ได้จนกว่าข้อมูลที่จำเป็นจะครบ และบอกว่าขาดอะไร */
+var GATE_OUT_REQUIRED=[['doCustomer','ลูกค้า'],['outPlate','ทะเบียนรถ'],['outDriver','ชื่อคนขับ'],['outDriverTel','เบอร์โทรคนขับ']];
+function gateOutMissing(){return GATE_OUT_REQUIRED.filter(function(f){return !val(f[0]).trim();});}
 function refreshGateOutManualVisibility(){
   var card=$('#gateOutBox'),hint=$('#gateOutBoxPrereq');
   if(!card)return;
   /* Only the barcode/manual workflow needs the operator identity fields up
      front. RFID + LPR has its own device-driven readiness flow. */
-  var manual=gateOutEntryMode==='manual';
-  var ready=!manual||(!!val('doCustomer').trim()&&!!val('outPlate').trim()&&!!val('outDriver').trim()&&!!val('outDriverTel').trim());
-  card.style.display=ready?'':'none';
-  /* This guidance belongs to the device-driven RFID/LPR workflow only. Keep
-     manual scanning clean; its fields already communicate what is required. */
-  if(hint){var rfid=gateOutEntryMode==='rfid';hint.style.display=rfid?'':'none';hint.textContent='กรอกข้อมูลลูกค้า ทะเบียนรถ ชื่อคนขับ และเบอร์โทรให้ครบก่อนยิงกล่อง';}
+  var missing=gateOutEntryMode==='manual'?gateOutMissing():[];
+  ['scanOut','btnScanOut','btnScanOutCamera'].forEach(function(id){var el=$('#'+id);if(el)el.disabled=!!missing.length;});
+  card.classList.toggle('go-waiting',!!missing.length);
+  if(hint){
+    hint.style.display=missing.length?'':'none';
+    hint.innerHTML=missing.length?'<span>กรอกให้ครบก่อนสแกน</span>'+missing.map(function(f){
+      return '<button type="button" onclick="focusGateOutField(\''+f[0]+'\')">'+f[1]+'</button>';
+    }).join(''):'';
+  }
 }
+function focusGateOutField(id){var el=$('#'+id);if(el){el.scrollIntoView({block:'center',behavior:'smooth'});el.focus({preventScroll:true});}}
+function toggleGateOutMore(){
+  var card=$('#gateOutManualConfig'),btn=$('#goMoreBtn');if(!card)return;
+  var open=card.classList.toggle('show-opt');
+  if(btn){btn.setAttribute('aria-expanded',open?'true':'false');btn.textContent=open?'ซ่อนรายละเอียดเพิ่มเติม':'+ DO · PO · ประเภทรถ';}
+}
+window.focusGateOutField=focusGateOutField;window.toggleGateOutMore=toggleGateOutMore;
 window.refreshGateOutManualVisibility=refreshGateOutManualVisibility;
 function refreshGateOutRfidWorkflow(){
   var rfid=gateOutEntryMode==='rfid',ready=gateOutRfidCustomerReady();
   var board=$('#gateOutManualBoard'),bar=$('#outGateBar'),label=$('#outGateLabel'),hint=$('#outGateHint'),lookup=$('#doLookupHint'),quick=$('#outVehicleQuick'),acts=$('#gateOutManualActions'),confirm=$('#btnShipOut');
   var customerField=$('#doCustomer')&&$('#doCustomer').closest('.field');
+  var config=$('#gateOutManualConfig');if(config)config.classList.toggle('is-rfid',rfid);
   $all('.out-rfid-context-extra').forEach(function(el){el.style.display=rfid?'none':'';});
   if(customerField)customerField.style.gridColumn=rfid?'1 / -1':'';
   /* Gate is the physical binding for both FX9600 and LPR; it must remain
@@ -6320,7 +6423,10 @@ function applyGateOutEntryMode(mode,openPicker){
   $all('[data-gateout-mode]').forEach(function(btn){var active=btn.dataset.gateoutMode===gateOutEntryMode;btn.classList.toggle('active',active);btn.setAttribute('aria-selected',active?'true':'false');});
   uiPrefSet('gateOutMode',gateOutEntryMode);
   setTimeout(function(){
-    if(gateOutEntryMode==='manual'){var s=$('#scanOut');if(s)s.focus();}
+    if(gateOutEntryMode==='manual'){
+      refreshGateOutManualVisibility();
+      var first=gateOutMissing()[0],s=$(first?'#'+first[0]:'#scanOut');if(s)s.focus({preventScroll:true});
+    }
     if(gateOutEntryMode==='rfid'){renderRfidGateStatus();syncRfidOutboundSession();if(gateOutRfidCustomerReady())fx9600OutQueuePoll();}
     else clearRfidAutoSession(fixedGatesRef().out);
   },100);
@@ -8938,7 +9044,8 @@ var EMP_ACCESS={operator:'ปฏิบัติการ',supervisor:'หัว�
    the backend also independently enforces this on every write (see /api/state, /api/masters,
    /api/auth/users/:id/role), so this client-side check is UX-only, not the real gate. ===== */
 function currentEmp(){
-  if(MY_EMPLOYEE_ID&&(S.employees||{})[MY_EMPLOYEE_ID])return S.employees[MY_EMPLOYEE_ID];
+  var mine=MY_EMPLOYEE_ID||((window.RBAC&&RBAC.selfIds)||[])[0];
+  if(mine&&(S.employees||{})[mine])return S.employees[mine];
   var list=Object.values(S.employees||{});for(var i=0;i<list.length;i++){if(list[i].name===USER)return list[i];}
   return null;
 }
@@ -8954,7 +9061,25 @@ function isSuperAdminUser(){
      โดย backend ยังตรวจ Super Admin ซ้ำก่อนบันทึกทุกครั้ง */
   return MY_ROLE==='admin'||!!(window.RBAC&&RBAC.role&&RBAC.role.key==='super_admin');
 }
-function isSelfEmp(id){return MY_EMPLOYEE_ID?MY_EMPLOYEE_ID===id:!!(currentEmp()&&currentEmp().id===id);}
+/* เซิร์ฟเวอร์เป็นผู้บอกว่าระเบียนไหนคือ "ตัวเอง" (/api/auth/me) — ห้ามเดาจากชื่อ */
+function isSelfEmp(id){
+  return MY_EMPLOYEE_ID===id||!!(window.RBAC&&(RBAC.selfIds||[]).indexOf(id)>=0);
+}
+/* กับบัญชีตัวเอง: แก้ข้อมูลติดต่อได้ แต่สถานะ/บทบาทต้องให้ผู้ดูแลคนอื่นทำ */
+function lockSelfEmpFields(){
+  var self=!!(editingEmp&&isSelfEmp(editingEmp));
+  var buttons=$all('[data-target="eStatus"] button');
+  buttons.forEach(function(b){b.disabled=self;b.style.opacity=self?'.45':'';b.style.cursor=self?'not-allowed':'';});
+  var st=$('#eStatus'),role=$('#eRoleId');
+  if(self){if(st)st.disabled=true;if(role)role.disabled=true;}
+  var note=$('#eSelfNote');
+  if(!note&&role){
+    note=document.createElement('p');note.id='eSelfNote';note.className='muted small';note.style.margin='6px 0 0';
+    note.textContent='นี่คือบัญชีของคุณเอง — เปลี่ยนบทบาทและสถานะไม่ได้ ให้ผู้ดูแลคนอื่นทำ';
+    role.parentNode.appendChild(note);
+  }
+  if(note)note.style.display=self?'':'none';
+}
 window.isAdmin=isAdmin;window.isSuperAdminUser=isSuperAdminUser;window.currentEmp=currentEmp;window.isSelfEmp=isSelfEmp;
 var EMP_STATUS={active:{t:'ปฏิบัติงาน',c:'ok'},leave:{t:'ลา/พักงาน',c:'warn'},inactive:{t:'พ้นสภาพ',c:'bad'}};
 /* รหัสพนักงานของคนที่มีอยู่แล้วห้ามแก้ในหน้านี้ — มันคือคีย์ที่ประวัติการผ่านประตู, บัตร PDA
@@ -9071,6 +9196,9 @@ $('#btnAddEmp').onclick=function(){
   var firstEver=isNew&&Object.keys(S.employees).length===0;
   var before=editingEmp?Object.assign({},S.employees[editingEmp]):null;
   var rec=empFields();rec.id=id;rec.phone=normPhoneDigits(ePhoneRaw);
+  if(prevEmp&&isSelfEmp(editingEmp)){
+    ['status','access','roleId','roleName'].forEach(function(k){rec[k]=prevEmp[k];});
+  }
   /* The scan code is what the PDA matches a badge against, so every employee needs one —
      default it to their own id rather than leaving people unable to sign in at the gate.
      It must also be unique, or a badge scan would resolve to two different people. */
@@ -9241,7 +9369,7 @@ function setEmpCredentials(id,name,currentUsername,currentEmail){
     +'<p class="desc">การเปลี่ยน username หรือ password จะบังคับออกจากระบบทุกอุปกรณ์ทันที</p>'
     +'</div>'
     +'<div class="mfoot">'
-      +(existing?'<button class="btn gray" onclick="revokeEmpSessions(\''+esc(id)+'\')">บังคับออกจากระบบ</button><button class="btn gray" onclick="setEmpAccountStatus(\''+esc(id)+'\','+(e.accountActive?'false':'true')+')">'+(e.accountActive?'ระงับบัญชี':'เปิดใช้บัญชี')+'</button>':'')
+      +(existing?'<button class="btn gray" onclick="revokeEmpSessions(\''+esc(id)+'\')">บังคับออกจากระบบ</button>'+(isSelfEmp(id)?'':'<button class="btn gray" onclick="setEmpAccountStatus(\''+esc(id)+'\','+(e.accountActive?'false':'true')+')">'+(e.accountActive?'ระงับบัญชี':'เปิดใช้บัญชี')+'</button>')+'':'')
       +'<div class="spacer"></div><button class="btn gray" data-close>ยกเลิก</button><button class="btn accent" id="ecSaveBtn">บันทึก</button></div>');
   $('#ecSaveBtn').onclick=function(){
     if(!validateForm(VALIDATION_SCHEMAS.credentials,$('#modalSheet')))return;
@@ -12800,11 +12928,11 @@ function fx9600InQueuePoll(){
   fx9600InPolling=true;
   apiFetch('/api/rfid/pending/'+encodeURIComponent(g),{headers:authHeaders()}).then(function(r){return r.ok?r.json():null;}).then(function(d){
     if(!d||!Array.isArray(d.tags))return;var added=0;
-    d.tags.forEach(function(tag){var b=S.boxes[tag];if(b&&b.status!=='warehouse'&&pendingIn.indexOf(tag)<0){pendingIn.push(tag);inConditionMap[tag]=inConditionMap[tag]||'good';added++;}});
+    d.tags.forEach(function(tag){var b=S.boxes[tag];if(b&&b.status!=='warehouse'&&!isFlaggedBox(b)&&pendingIn.indexOf(tag)<0){pendingIn.push(tag);inConditionMap[tag]=inConditionMap[tag]||'good';added++;}});
     if(added){
-      /* Here the operator explicitly chose Gate In, so a real read can skip
-         the optional vehicle prompt without guessing direction globally. */
-      if(gateInStep==='ask')gateInSkipVehicle();else{gateInStep='scan';renderGateInStep();}
+      /* The operator explicitly chose Gate In, so a real read goes straight
+         to the queue without guessing direction globally. */
+      gateInStep='scan';renderGateInStep();
       renderInResult();
       toast(btT('พบกล่องจาก RFID Gate'),btT(added+' ใบ · ประตู '+g),'ok');
       /* Gate In RFID is an unattended receiving flow.  LPR is optional
@@ -13614,7 +13742,7 @@ function clearGateOut(){
 window.clearGateOut=clearGateOut;
 
 /* ===== GATE IN ===== */
-var gateInEntryMode='manual',gateInStep='ask',gateInVehicleSkipped=false;
+var gateInEntryMode='manual',gateInStep='scan',gateInVehicleOpen=false;
 function applyGateInEntryMode(mode,persist){
   gateInEntryMode=(mode==='excel'||mode==='rfid')?mode:'manual';
   if(gateInEntryMode==='rfid'&&fixedGatesRef().in)gateInStep='scan';
@@ -13627,7 +13755,9 @@ function chooseGateInEntryMode(mode){if(mode==='rfid'&&!warehouseRfidEnabledForG
 window.applyGateInEntryMode=applyGateInEntryMode;window.chooseGateInEntryMode=chooseGateInEntryMode;
 function renderGateInStep(){
   if(gateInEntryMode==='excel'){
-    ['giStrip','giStepGate','giStepAsk','giStepVehicle','gateInManualBoard','gateInManualActions'].forEach(function(id){var el=$('#'+id);if(el)el.style.display='none';});
+    var g=fixedGatesRef().in,bar=$('#giStrip'),vb=$('#giVehicleBtn');
+    if(bar)bar.style.display=g?'flex':'none';if(vb)vb.style.display='none';
+    ['giStepGate','giStepVehicle','gateInManualBoard','gateInManualActions'].forEach(function(id){var el=$('#'+id);if(el)el.style.display='none';});
     var scan=$('#giStepScan'),imp=$('#gateInImportBoard');if(scan)scan.style.display='';if(imp)imp.style.display='';
     return;
   }
@@ -13636,13 +13766,16 @@ function renderGateInStep(){
   /* RFID + LPR is the unattended receive flow: do not ask for optional
      vehicle/driver data before the first tag arrives. LPR fills the plate
      context when it is available, while the box scan remains immediate. */
-  else if(gateInEntryMode==='rfid')gateInStep='scan';
-  else if(gateInStep==='gate')gateInStep='ask';
+  else gateInStep='scan';
   if(pendingIn.length)gateInStep='scan';
-  var ids={gate:'giStepGate',ask:'giStepAsk',vehicle:'giStepVehicle',scan:'giStepScan'};
+  if(gateInStep!=='scan'||gateInEntryMode==='rfid')gateInVehicleOpen=false;
+  var ids={gate:'giStepGate',scan:'giStepScan'};
   Object.keys(ids).forEach(function(k){var el=$('#'+ids[k]);if(el)el.style.display=k===gateInStep?'':'none';});
   var strip=$('#giStrip');if(strip)strip.style.display=gate?'flex':'none';
-  if(gateInStep==='scan'&&gateInEntryMode==='manual')setTimeout(function(){var s=$('#scanIn');if(s)s.focus();},60);
+  var vehicle=$('#giStepVehicle');if(vehicle)vehicle.style.display=gateInVehicleOpen?'':'none';
+  var vehicleBtn=$('#giVehicleBtn');if(vehicleBtn)vehicleBtn.style.display=gateInEntryMode==='manual'?'':'none';
+  refreshGateInVehicleBtn();
+  if(gateInStep==='scan'&&gateInEntryMode==='manual'&&!gateInVehicleOpen)setTimeout(function(){var s=$('#scanIn');if(s)s.focus();},60);
   var imp=$('#gateInImportBoard'),manual=$('#gateInManualBoard'),actions=$('#gateInManualActions');
   if(imp)imp.style.display='none';
   if(manual)manual.style.display=gateInStep==='scan'?'':'none';
@@ -13654,19 +13787,31 @@ function renderGateInStep(){
   if(gateInEntryMode==='rfid'){renderRfidGateStatus();fx9600InQueuePoll();}
   refreshScreenGateDecisionActions();
 }
-function gateInGo(step){gateInStep=step;if(step==='scan')gateInVehicleSkipped=!([val('inPlate'),val('inDriver'),val('inVehicle'),val('inDriverTel'),val('inNote')].some(Boolean));renderGateInStep();}
-function gateInSkipVehicle(){['inPlate','inVehicle','inDriver','inDriverTel','inNote'].forEach(function(id){setv(id,'');});gateInVehicleSkipped=true;gateInGo('scan');}
-function gateInFillVehicle(){gateInVehicleSkipped=false;gateInGo('vehicle');}
-function gateInResetBatch(){gateInStep=fixedGatesRef().in?(gateInEntryMode==='rfid'?'scan':'ask'):'gate';gateInVehicleSkipped=false;renderGateInStep();}
-window.renderGateInStep=renderGateInStep;window.gateInGo=gateInGo;window.gateInSkipVehicle=gateInSkipVehicle;window.gateInFillVehicle=gateInFillVehicle;window.gateInResetBatch=gateInResetBatch;
+/* ข้อมูลรถไม่บังคับ — เปิดกรอกเมื่อต้องการ ปุ่มบอกว่าตอนนี้กรอกอะไรไว้ */
+function refreshGateInVehicleBtn(){
+  var btn=$('#giVehicleBtn');if(!btn)return;
+  var filled=['inPlate','inDriver','inVehicle','inDriverTel','inNote'].some(function(id){return !!val(id);});
+  var supplier=!!$('#inGateModeSw [data-mode="supplier"].active');
+  var label=supplier?'รับจากซัพพลายเออร์':(val('inPlate')?'ทะเบียน '+val('inPlate'):(filled?'มีข้อมูลรถแล้ว':'+ ข้อมูลรถ (ไม่บังคับ)'));
+  btn.textContent=gateInVehicleOpen?'ปิดข้อมูลรถ':label;
+  btn.setAttribute('aria-expanded',gateInVehicleOpen?'true':'false');
+}
+function gateInToggleVehicle(){gateInVehicleOpen=!gateInVehicleOpen;renderGateInStep();}
+function gateInClearVehicle(){['inPlate','inVehicle','inDriver','inDriverTel','inNote'].forEach(function(id){setv(id,'');});renderVehicleTypeField('in');refreshGateInVehicleBtn();}
+function gateInResetBatch(){gateInStep=fixedGatesRef().in?'scan':'gate';gateInVehicleOpen=false;renderGateInStep();}
+window.renderGateInStep=renderGateInStep;window.gateInToggleVehicle=gateInToggleVehicle;window.gateInClearVehicle=gateInClearVehicle;window.gateInResetBatch=gateInResetBatch;
 function buildQuickIn(){
   /* หน้า Gate รับเข้าตาม UX ของ Thai Summit ไม่มีปุ่มข้อมูลเดโมยิงเร็ว */
   var quick=$('#quickIn');if(quick)quick.innerHTML='';
 }
+/* พัก/ชำรุด = ยังอยู่ในคลัง การรับเข้าซ้ำห้ามปลดสถานะให้เอง */
+function isFlaggedBox(b){return !!b&&(b.status==='hold'||b.status==='damage');}
+window.isFlaggedBox=isFlaggedBox;
 function scanIn(tag){var raw=(tag||val('scanIn')).trim();tag=resolveTag(raw);if(!tag)return;
   var b=S.boxes[tag];
   if(!b){$('#resultIn').innerHTML='<div class="banner bad">ไม่พบกล่อง '+esc(tag)+(looksThaiGarbled(raw)?' — คีย์บอร์ดอาจอยู่โหมดภาษาไทย กรุณาเปลี่ยนเป็นภาษาอังกฤษแล้วสแกนใหม่':'')+'</div>';setv('scanIn','');return;}
   if(b.status==='warehouse'){$('#resultIn').innerHTML='<div class="banner warn">'+esc(tag)+' อยู่ในคลังอยู่แล้ว</div>';setv('scanIn','');return;}
+  if(isFlaggedBox(b)){$('#resultIn').innerHTML='<div class="banner warn">'+esc(tag)+' ถูกพักหรือชำรุดอยู่ — ปลดสถานะที่หน้าคลังกล่องก่อน</div>';setv('scanIn','');return;}
   if(pendingIn.indexOf(tag)<0){pendingIn.push(tag);inConditionMap[tag]=inConditionMap[tag]||'good';}
   setv('scanIn','');renderInResult();$('#scanIn').focus();
 }
@@ -15312,6 +15457,7 @@ function rbacBoot(){
        array. Treat that as "RBAC unavailable", never as a user with zero
        permissions; otherwise every navigation item disappears. */
     RBAC.available=Array.isArray(me.permissions);
+    RBAC.selfIds=me.selfEmployeeIds||[];
     RBAC.perms=RBAC.available?me.permissions:[];RBAC.role=me.role||null;RBAC.identityConflicts=me.identityConflicts||[];
     if(RBAC.identityConflicts.length&&!sessionStorage.getItem('identity_conflicts_seen')){
       sessionStorage.setItem('identity_conflicts_seen','1');
@@ -15635,6 +15781,7 @@ function renderPermPicker(){
   });
   var cnt=$('#rlPermCount');
   if(cnt)cnt.textContent=nf(Object.keys(rlSel).length)+'/'+nf(RBAC.total)+' สิทธิ์';
+  lockOwnRoleFields();
 }
 function togglePermMod(key){
   rlOpen[key]=(rlOpen[key]===false);
@@ -15682,11 +15829,22 @@ function editRole(id){
     var save2=$('#btnSaveRole');if(save2)save2.textContent='บันทึกการเปลี่ยนแปลง';
   }
   renderPermPicker();
+  lockOwnRoleFields();
   openCardDrawer('roleFormCard',(rlLocked?'บทบาทของระบบ · ':'แก้ไขบทบาท · ')+roleDisplayName(r),
     rlLocked?'บทบาทนี้มีสิทธิ์ทั้งหมดเสมอ และแก้ไขไม่ได้':'แก้ชื่อ คำอธิบาย สถานะ หรือสิทธิ์ของบทบาทนี้');
 }
 window.addRole=addRole;window.editRole=editRole;
 
+/* บทบาทของตัวเอง: ปิดใช้งาน หรือถอนสิทธิ์จัดการบทบาทไม่ได้ */
+function isOwnRoleOpen(){return !!(rlEditing&&RBAC.role&&RBAC.role.roleId===rlEditing);}
+function lockOwnRoleFields(){
+  var own=isOwnRoleOpen();
+  if(!rlLocked)$all('[data-target="rlActive"] button').forEach(function(b){b.disabled=own;b.title=own?'ปิดใช้งานบทบาทของตัวเองไม่ได้':'';});
+  if(!own||rlLocked)return;
+  ['role.manage','permission.manage'].forEach(function(k){
+    $all('#roleFormCard input[data-perm="'+k+'"]').forEach(function(c){if(c.checked){c.disabled=true;c.title='ถอนจากบทบาทของตัวเองไม่ได้';}});
+  });
+}
 function saveRole(){
   if(!validateForm(VALIDATION_SCHEMAS.role,$('#roleFormCard')))return;
   var name=(val('rlName')||'').trim();
@@ -15786,6 +15944,10 @@ function empAccessForRole(id){
   return 'operator';
 }
 function renderEmpRoleOptions(selected,empId){
+  fillEmpRoleOptions(selected,empId);
+  lockSelfEmpFields();
+}
+function fillEmpRoleOptions(selected,empId){
   var sel=$('#eRoleId');if(!sel)return;
   sel._empId=empId||null;   /* ให้ loadRoles() วาดใหม่ได้ถูกคนเมื่อโหลดสำเร็จ/พลาดทีหลัง */
   var roles=(RBAC.roles||[]);
@@ -15869,25 +16031,65 @@ function persistEmpRoleChoice(){
 function viewRolePerms(){
   var r=empRoleById(val('eRoleId'));if(!r)return;
   var granted={};(r.permissions||[]).forEach(function(k){granted[k]=true;});
-  var body=(RBAC.modules||[]).map(function(m){
-    var on=m.permissions.filter(function(p){return granted[p.key];});
-    if(!on.length)return '';
-    return '<div style="margin-top:14px;">'
-      +'<div style="font-size:13px;font-weight:600;color:var(--ink);">'+esc(m.label)
-        +' <span class="mono small muted">'+on.length+'/'+m.permissions.length+'</span></div>'
-      +'<div class="small" style="color:var(--ink2);margin-top:4px;line-height:1.7;">'
-        +on.map(function(p){return esc(p.label);}).join(' · ')+'</div>'
-    +'</div>';
+  var total=0,have=0;
+  var check='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.2 4.2L19 7"/></svg>';
+  var dash='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 12h10"/></svg>';
+  var cards=(RBAC.modules||[]).map(function(m){
+    var n=m.permissions.filter(function(p){return granted[p.key];}).length;
+    total+=m.permissions.length;have+=n;
+    var state=n===m.permissions.length?'full':(n?'part':'none');
+    return '<section class="rpv-mod" data-state="'+state+'">'
+      +'<header><h4>'+esc(m.label)+'</h4><span class="rpv-count">'+n+'/'+m.permissions.length+'</span></header>'
+      +'<ul>'+m.permissions.map(function(p){
+        var on=!!granted[p.key];
+        return '<li class="'+(on?'on':'off')+'">'+(on?check:dash)+'<span>'+esc(p.label)+'</span>'
+          +(on?'':'<span class="visually-hidden"> (ไม่มีสิทธิ์)</span>')+'</li>';
+      }).join('')+'</ul></section>';
   }).join('');
+  var partial=have<total;
+  var pct=total?Math.round(have*100/total):0;
   openModal(
-    '<div class="mhead"><h3>สิทธิ์ของบทบาท '+esc(roleDisplayName(r))+'</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
-    +'<div class="mbody">'
-      +(r.description?'<p class="desc">'+esc(r.description)+'</p>':'')
-      +'<p class="small muted" style="margin-top:6px;">รวม '+nf((r.permissions||[]).length)+' สิทธิ์ — แก้ไขได้ที่แท็บ "บทบาทและสิทธิ์"</p>'
-      +(body||'<p class="desc" style="margin-top:14px;">บทบาทนี้ยังไม่มีสิทธิ์ใด ๆ</p>')
+    '<div class="mhead"><h3>สิทธิ์ของบทบาท '+esc(roleDisplayName(r))+'</h3><button class="x" data-close aria-label="ปิด"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
+    +'<div class="mbody rpv">'
+      +'<div class="rpv-sum">'
+        +'<div class="rpv-num"><b>'+nf(have)+'</b><span>/ '+nf(total)+' สิทธิ์</span></div>'
+        +'<div class="rpv-bar" role="img" aria-label="'+pct+'%"><i style="width:'+pct+'%"></i></div>'
+        +(r.description?'<p>'+esc(r.description)+'</p>':'')
+      +'</div>'
+      +'<div class="rpv-tools">'
+        +'<input type="search" id="rpvSearch" placeholder="ค้นหาสิทธิ์…" aria-label="ค้นหาสิทธิ์" autocomplete="off">'
+        +(partial?'<div class="rpv-seg" role="group">'
+          +'<button type="button" data-f="all" aria-pressed="true">ทั้งหมด</button>'
+          +'<button type="button" data-f="on" aria-pressed="false">มีสิทธิ์</button>'
+          +'<button type="button" data-f="off" aria-pressed="false">ไม่มีสิทธิ์</button></div>':'')
+      +'</div>'
+      +'<div class="rpv-list">'+cards+'</div>'
+      +'<p class="rpv-empty" id="rpvEmpty" hidden>ไม่พบสิทธิ์ที่ค้นหา</p>'
     +'</div>'
-    +'<div class="mfoot"><button class="btn gray" data-close>ปิด</button></div>'
+    +'<div class="mfoot"><span class="rpv-hint">แก้ไขได้ที่แท็บ "บทบาทและสิทธิ์"</span><button class="btn gray" data-close>ปิด</button></div>'
   );
+  var filter='all';
+  function apply(){
+    var q=(val('rpvSearch')||'').trim().toLowerCase(),shown=0;
+    $all('#modalSheet .rpv-mod').forEach(function(card){
+      /* ชื่อหมวดตรงกับคำค้น = แสดงทั้งหมวด */
+      var modHit=!q||card.querySelector('h4').textContent.toLowerCase().indexOf(q)>=0,n=0;
+      Array.prototype.forEach.call(card.querySelectorAll('li'),function(li){
+        var ok=(filter==='all'||li.classList.contains(filter))&&(modHit||li.textContent.toLowerCase().indexOf(q)>=0);
+        li.hidden=!ok;if(ok)n++;
+      });
+      card.hidden=!n;shown+=n;
+    });
+    $('#rpvEmpty').hidden=!!shown;
+  }
+  $('#rpvSearch').addEventListener('input',apply);
+  $all('#modalSheet .rpv-seg button').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      filter=btn.getAttribute('data-f');
+      $all('#modalSheet .rpv-seg button').forEach(function(x){x.setAttribute('aria-pressed',x===btn?'true':'false');});
+      apply();
+    });
+  });
 }
 window.viewRolePerms=viewRolePerms;
 (function bindEmpRole(){
@@ -15923,6 +16125,7 @@ window.assignEmpRoleOnServer=assignEmpRoleOnServer;
    โมดัลกลางตัวเดิมของระบบ — ไม่ได้สร้างเส้นทางบันทึกสิทธิ์ขึ้นมาใหม่ */
 function quickAssignRole(id){
   var e=S.employees[id];if(!e)return;
+  if(isSelfEmp(id))return toast('เปลี่ยนไม่ได้','เปลี่ยนบทบาทของตัวเองไม่ได้ ให้ผู้ดูแลคนอื่นทำ','err');
   if(!hasPerm('permission.manage'))return toast('ไม่มีสิทธิ์','ต้องมีสิทธิ์จัดการสิทธิ์ (permission.manage) จึงจะกำหนดบทบาทได้','err');
   var roles=(RBAC.roles||[]).filter(function(r){return r.active;});
   if(!roles.length)return toast('ยังไม่มีบทบาทให้เลือก','สร้างบทบาทที่แท็บ "บทบาทและสิทธิ์" ก่อน','err');
@@ -16046,7 +16249,7 @@ window.empAccessCredentialAction=empAccessCredentialAction;
    บทบาทเพิ่มปุ่ม "กำหนดบทบาท" กะทัดรัดไว้ก่อนลูกศร กดแล้วไม่ต้องพึ่ง event bubbling ของ
    แถว (stopPropagation) เหมือนเดิม */
 function empManageCellHtml(e){
-  var assign=empAccessNeedsAssignAction(e)
+  var assign=empAccessNeedsAssignAction(e)&&!isSelfEmp(e.id)
     ? '<button class="btn ghost sm" onclick="event.stopPropagation();quickAssignRole(\''+esc(e.id)+'\')">กำหนดบทบาท</button>'
     : '';
   return assign+'<span class="muted">›</span>';
@@ -16108,6 +16311,7 @@ function renderEmpAccessFilters(){
   wrap.innerHTML=EMP_ACCESS_FILTERS.map(function(f){
     var count=employees.filter(function(e){return empAccessFilterMatch(e,f.key);}).length;
     var on=active===f.key;
+    if(!count&&!on&&f.key)return '';
     return '<button type="button" class="emp-filter-chip'+(on?' active':'')+'" aria-pressed="'+(on?'true':'false')+'"'
       +' onclick="setEmpAccessFilter(\''+f.key+'\')" title="แสดงพนักงาน: '+esc(f.label)+'">'
       +empAccessFilterIcon(f.key)+'<span>'+esc(f.label)+'</span><span class="emp-filter-count">'+nf(count)+'</span></button>';
@@ -16309,6 +16513,7 @@ function renderSetup(){
     else if(!empAdmin&&empSelfEditing)eRoleSel.disabled=true;   /* บทบาทไม่อยู่ใน EMP_SELF_EDITABLE */
     else renderEmpRoleOptions(eRoleSel.value||'',eRoleSel._empId||null);   /* แอดมิน — ให้เจ้าของ state ตัดสินเอง */
   }
+  lockSelfEmpFields();
   var empAddBtn=$('#btnAddEmp');
   if(empAddBtn)empAddBtn.disabled=!(empAdmin||empSelfEditing);
   /* ปุ่ม "+ เพิ่มพนักงาน" เหนือตาราง — เพิ่มพนักงานใหม่เป็นสิทธิ์แอดมินล้วน (ต่างจาก
@@ -16703,7 +16908,7 @@ function doImportJSON(file){
       /* Copy only the supported schema keys from an untrusted backup. */
       objectKeys.concat(arrayKeys).forEach(function(k){if(data[k]!=null)blank[k]=data[k];});
       S=blank;
-      save();closeModal();toast('นำเข้าข้อมูลแล้ว');renderAll();
+      saveReplacingAll();closeModal();toast('นำเข้าข้อมูลแล้ว');renderAll();
     });
   };
   reader.readAsText(file);
@@ -16712,7 +16917,7 @@ window.doImportJSON=doImportJSON;
 function resetAll(){confirmA('ล้างข้อมูลทั้งหมด?','ลบทุกอย่างถาวร — ระบบจะดาวน์โหลดไฟล์สำรองให้อัตโนมัติก่อนลบ','ล้าง',true).then(function(ok){if(!ok)return;
   doBackup();
   S={boxes:{},customers:{},boxtypes:{},warehouses:{},gates:{},events:[],cfg:{agingDays:15,boxValue:450,lostMode:'manual'},seq:{do:0,emp:0},inventory:{},auditLog:[],vehicles:{},putaway:{},doRecords:{},employees:{},locations:{}};
-  save();closeModal();toast('ล้างข้อมูลแล้ว','ดาวน์โหลดข้อมูลสำรองไว้ให้แล้ว');renderAll();});}
+  saveReplacingAll();closeModal();toast('ล้างข้อมูลแล้ว','ดาวน์โหลดข้อมูลสำรองไว้ให้แล้ว');renderAll();});}
 window.resetAll=resetAll;
 
 /* ล้างข้อมูลทั้งหมด "ยกเว้นพนักงาน" — เหมือน resetAll() ทุกอย่าง แต่เก็บ
@@ -16727,7 +16932,7 @@ function clearAllExceptEmployees(){
     var keepEmployees=S.employees,keepEmpSeq=(S.seq||{}).emp||0;
     S={boxes:{},customers:{},boxtypes:{},warehouses:{},gates:{},events:[],cfg:{agingDays:15,boxValue:450,lostMode:'manual'},
       seq:{do:0,emp:keepEmpSeq},inventory:{},auditLog:[],vehicles:{},putaway:{},doRecords:{},employees:keepEmployees,locations:{}};
-    save();closeModal();toast('ล้างข้อมูลแล้ว','ดาวน์โหลดข้อมูลสำรองไว้ให้แล้ว · เก็บข้อมูลพนักงานไว้');renderAll();
+    saveReplacingAll();closeModal();toast('ล้างข้อมูลแล้ว','ดาวน์โหลดข้อมูลสำรองไว้ให้แล้ว · เก็บข้อมูลพนักงานไว้');renderAll();
   });
 }
 window.clearAllExceptEmployees=clearAllExceptEmployees;
@@ -17218,7 +17423,7 @@ function seedDemo(){
   });
 
   S.events.sort(function(a,b){return new Date(a.ts)-new Date(b.ts);});
-  save();
+  saveReplacingAll();
   toast('ใส่ข้อมูลตัวอย่างแล้ว','15 กล่อง (3 ประเภท × 5) · 6 ในคลัง · 6 ออก · 3 สูญหาย · 8 กล่องในคลังกล่อง · 19 รายการประวัติการใช้งาน');
   renderAll();
 }
@@ -17227,7 +17432,7 @@ window.seedDemo=seedDemo;
 /* file restore */
 (function(){var inp=document.createElement('input');inp.type='file';inp.id='fileR';inp.accept='.json';inp.style.display='none';
   inp.addEventListener('change',function(e){var f=e.target.files[0];if(!f)return;var r=new FileReader();
-    r.onload=function(){try{S=normalizeState(JSON.parse(r.result));save();closeModal();toast('นำเข้าข้อมูลแล้ว');renderAll();}catch(err){toast('ไฟล์ไม่ถูกต้อง',null,'err');}};r.readAsText(f);});
+    r.onload=function(){try{S=normalizeState(JSON.parse(r.result));saveReplacingAll();closeModal();toast('นำเข้าข้อมูลแล้ว');renderAll();}catch(err){toast('ไฟล์ไม่ถูกต้อง',null,'err');}};r.readAsText(f);});
   document.body.appendChild(inp);})();
 
 
@@ -17450,12 +17655,13 @@ function invShipRecvText(b) {
    ทันทีว่าใกล้/ไกลแค่ไหน — คลิกได้เพื่อดูวันที่จริงเป็น toast (title เฉยๆ ใช้ไม่ได้
    บนจอสัมผัส ไม่มี hover) */
 function invDueDateText(b) {
-  if (b.status !== 'out' || !b.dueDate) return '<span class="muted small">—</span>';
-  var onclick = 'event.stopPropagation();toast(\'วันที่ต้องคืน\',\'' + b.dueDate + '\',\'info\')';
+  var due = b.dueDate || (b.dueAt ? dstr(new Date(b.dueAt)) : '');
+  if (b.status !== 'out' || !due) return '<span class="muted small">—</span>';
+  var onclick = 'event.stopPropagation();toast(\'วันที่ต้องคืน\',\'' + due + '\',\'info\')';
   if (isOverdue(b)) {
-    return '<span class="pill bad" style="cursor:pointer;" onclick="' + onclick + '">' + esc(relOverdueText(b.dueAt) || b.dueDate) + '</span>';
+    return '<span class="pill bad" style="cursor:pointer;" onclick="' + onclick + '">' + esc(relOverdueText(b.dueAt) || due) + '</span>';
   }
-  return '<span class="small" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;" onclick="' + onclick + '">' + esc(relRemainingText(b.dueAt) || b.dueDate) + '</span>';
+  return '<span class="small" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;" onclick="' + onclick + '">' + esc(relRemainingText(b.dueAt) || due) + '</span>';
 }
 function canRelocateBox(b) {
   return !!b && b.status === 'warehouse';
@@ -17821,7 +18027,7 @@ function clearInvFilter() {
   invStatusFilter='';invCustFilter='';invWhFilter='';invDoFilter='';
   invDateFilterActive=false;invDateField='lastSeenAt';
   uiSort.inv='desc';uiPrefSet('sort:inv','desc');refreshSortToggleUI('inv');
-  invSearchTokens=[];renderInvSearchTokens();setv('schInv','');
+  invSearchTokens=[];renderInvSearchTokens();setv('schInv','');uiPrefSet('filter:schInv','');
   $all('#invStatusSeg .sf-btn').forEach(function(b){b.classList.toggle('active',b.dataset.st==='');});
   $all('#invWhPills .sf-btn,#invCustPills .sf-btn').forEach(function(b){b.classList.remove('active');});
   saveInvFilters();pagerReset('inv');
@@ -17870,7 +18076,8 @@ function filteredInvBoxes(opts) {
        any box shipped out, even though the box genuinely still belongs to
        that warehouse — the status TAB is what should decide status-based
        hiding, not the warehouse pill. */
-    if (invWhFilter) {
+    var whFilter = opts && opts.wh !== undefined ? opts.wh : invWhFilter;
+    if (whFilter) {
       var boxWh = (b.location || {}).wh;
       /* A box with no location.wh yet (registered but never actually put
          away/scanned into a specific warehouse — e.g. straight from
@@ -17884,8 +18091,8 @@ function filteredInvBoxes(opts) {
          count) — this is what "badge says 11, table shows 0" was. */
       if (!boxWh) {
         var whs = activeWarehouses();
-        if (whs.length !== 1 || whs[0].id !== invWhFilter) return false;
-      } else if (boxWh !== invWhFilter) {
+        if (whs.length !== 1 || whs[0].id !== whFilter) return false;
+      } else if (boxWh !== whFilter) {
         return false;
       }
     }
@@ -17928,7 +18135,8 @@ function filteredInvBoxes(opts) {
     } else if (invStatusFilter && b.status !== invStatusFilter) return false;
     }
     /* customer sub-filter */
-    if (invCustFilter && b.customer !== invCustFilter) return false;
+    var custFilter = opts && opts.cust !== undefined ? opts.cust : invCustFilter;
+    if (custFilter && b.customer !== custFilter) return false;
     if (!searchTerms.length) return true;
     var loc = b.location || {};
     var hay = (b.tag + typeName(b.type) + custName(b.customer) + (b.do||'') + whName(loc.wh) + (loc.zone||'') + (loc.rack||'')).toLowerCase();
@@ -17949,12 +18157,16 @@ function buildInvWhPills() {
   }
   whRow.classList.add('show');
   whs.sort(function(a, b) { return (a.name||'').localeCompare(b.name||'', 'th'); });
-  var html = '<button class="icr-pill' + (invWhFilter === '' ? ' active' : '') + '" onclick="setInvWh(\'\')">ทุกคลัง</button>';
-  whs.forEach(function(w) {
-    var cnt = Object.values(S.boxes).filter(function(b) { return b.status === 'warehouse' && (b.location||{}).wh === w.id; }).length;
-    html += '<button class="icr-pill' + (invWhFilter === w.id ? ' active' : '') + '" onclick="setInvWh(\''+esc(w.id)+'\')">'+esc(w.name)+' <span style="opacity:.55;font-size:11px;">('+cnt+')</span></button>';
-  });
-  pillsEl.innerHTML = html;
+  var list = filteredInvBoxes({wh:''});
+  pillsEl.innerHTML = invSelectHtml('คลัง', 'setInvWh', invWhFilter, 'ทุกคลัง', list.length, whs.map(function(w) {
+    return {id:w.id, name:w.name, n:list.filter(function(b){ return (b.location||{}).wh === w.id; }).length};
+  }));
+}
+function invSelectHtml(label, fn, current, allLabel, total, items) {
+  return '<select aria-label="'+label+'" class="'+(current?'is-set':'')+'" onchange="'+fn+'(this.value)">'
+    + '<option value="">'+allLabel+' ('+nf(total)+')</option>'
+    + items.map(function(i){ return '<option value="'+esc(i.id)+'"'+(i.id===current?' selected':'')+'>'+esc(i.name)+' ('+nf(i.n)+')</option>'; }).join('')
+    + '</select>';
 }
 function setInvWh(id) {
   invWhFilter = id;
@@ -17975,12 +18187,10 @@ function buildInvCustPills() {
     if (b.status === 'out' && b.customer && custIds.indexOf(b.customer) < 0) custIds.push(b.customer);
   });
   custIds.sort(function(a, b) { return custName(a).localeCompare(custName(b), 'th'); });
-  var html = '<button class="icr-pill' + (invCustFilter === '' ? ' active' : '') + '" onclick="setInvCust(\'\')">ทุกลูกค้า</button>';
-  custIds.forEach(function(id) {
-    var cnt = Object.values(S.boxes).filter(function(b) { return b.status === 'out' && b.customer === id; }).length;
-    html += '<button class="icr-pill' + (invCustFilter === id ? ' active' : '') + '" onclick="setInvCust(\''+esc(id)+'\')">'+esc(custName(id))+' <span style="opacity:.55;font-size:11px;">('+cnt+')</span></button>';
-  });
-  pillsEl.innerHTML = html;
+  var list = filteredInvBoxes({cust:''});
+  pillsEl.innerHTML = invSelectHtml('ลูกค้า', 'setInvCust', invCustFilter, 'ทุกลูกค้า', list.length, custIds.map(function(id) {
+    return {id:id, name:custName(id), n:list.filter(function(b){ return b.customer === id; }).length};
+  }));
 }
 function setInvCust(id) {
   invCustFilter = id;
@@ -18033,6 +18243,20 @@ function refreshInvStatusBadges() {
   applyInvStatusBadges(localStatusCounts());
 }
 
+/* ตัวกรองที่จำไว้จากครั้งก่อนต้องเห็นบนปุ่มด้วย ไม่ใช่กรองอยู่เงียบ ๆ */
+function syncInvControls() {
+  var moved = false;
+  $all('#invStatusSeg .sf-btn').forEach(function(b) {
+    var on = b.dataset.st === invStatusFilter;
+    if (b.classList.contains('active') !== on) { b.classList.toggle('active', on); moved = true; }
+  });
+  if (moved) segPillMoveAll($('#invStatusSeg').parentNode, true);
+  $all('#invViewSw .ivs-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.view === invViewMode); });
+  var serial = $('#invSerialWrap'), summary = $('#invSummaryWrap');
+  if (serial) serial.style.display = invViewMode === 'summary' ? 'none' : '';
+  if (summary) summary.style.display = invViewMode === 'summary' ? '' : 'none';
+  if (window.refreshManagementClearButtons) refreshManagementClearButtons();
+}
 function renderInventory() {
   var dateRow = $('#invDateRow');
   if (dateRow) {
@@ -18042,6 +18266,7 @@ function renderInventory() {
   buildInvWhPills();
   buildInvCustPills();
   refreshInvStatusBadges();
+  syncInvControls();
   if (invViewMode === 'summary') { renderInvSummary(); return; }
   var body = $('#invBody'); if (!body) return;
   var boxes = filteredInvBoxes().sort(function(a, b) {
@@ -19757,17 +19982,79 @@ window.exportAuditExcel = exportAuditExcel;
    Setup tabs and export each one individually. Mirrors the exact
    headers/rows each single-entity exportXxxExcel() above already produces
    — this doesn't invent a new shape, just bundles them into one file. */
-function pickAllMastersExportMode() {
-  var h = '<div class="mhead"><h3>ส่งออกข้อมูลหลักทั้งหมด</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
-    + '<div class="mbody" style="padding-top:4px;">'
-    + '<button class="btn ghost" style="width:100%;justify-content:flex-start;gap:10px;margin-bottom:8px;text-align:left;" onclick="closeModal();exportAllMastersExcel(\'multi\');">'
-    + '<div><b>แยกเป็นแต่ละ Sheet</b><div class="muted small" style="font-weight:400;">ครบทั้ง Master, ประวัติการเคลื่อนไหว, ป้ายทะเบียน LPR และทะเบียนรถ</div></div></button>'
-    + '<button class="btn ghost" style="width:100%;justify-content:flex-start;gap:10px;text-align:left;" onclick="closeModal();exportAllMastersExcel(\'single\');">'
-    + '<div><b>ข้อมูลหลักรวม</b><div class="muted small" style="font-weight:400;">สรุป Master ใน Sheet หลัก 1 แถวต่อกล่อง และแยก Sheet ประวัติไว้เพื่อไม่ให้ข้อมูลหลายเที่ยวหาย</div></div></button>'
-    + '</div>';
-  openModal(h);
+function toggleExportMenu(open) {
+  var menu = $('#invExportMenu'), btn = $('#invExportBtn'); if (!menu || !btn) return;
+  if (open === undefined) open = menu.hidden;
+  menu.hidden = !open;
+  btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  if (!open) return;
+  /* ชิดขวาของปุ่ม เว้นแต่จะล้นขอบซ้ายของจอ (ปุ่มตกบรรทัดบนมือถือ) */
+  menu.classList.remove('from-left');
+  if (menu.getBoundingClientRect().left < 8) menu.classList.add('from-left');
+  menu.querySelector('[role=menuitem]').focus({preventScroll:true});
 }
-window.pickAllMastersExportMode = pickAllMastersExportMode;
+window.toggleExportMenu = toggleExportMenu;
+/* ทุกรายการข้อมูลหลักมี "นำเข้า" กับ "ส่งออก" เป็นสองปุ่ม — รวมเป็นเมนูเดียว โดยย้ายปุ่มตัวจริง
+   เข้าไป (handler และการซ่อนตามสิทธิ์จึงทำงานเหมือนเดิม) */
+function bundleExcelMenus() {
+  var groups = [];
+  $all('#tab-setup button').forEach(function(b) {
+    if (b.closest('.xp-menu') || !/Excel/.test(b.textContent)) return;
+    var g = groups.filter(function(x) { return x.parent === b.parentNode; })[0];
+    if (!g) groups.push(g = {parent: b.parentNode, buttons: []});
+    g.buttons.push(b);
+  });
+  groups.forEach(function(g) {
+    if (g.buttons.length < 2) return;
+    var wrap = document.createElement('div'); wrap.className = 'xp-wrap xl-wrap';
+    wrap.innerHTML = '<button type="button" class="btn ghost sm xl-btn" aria-haspopup="menu" aria-expanded="false">Excel <span class="xp-caret" aria-hidden="true">▾</span></button><div class="xp-menu" role="menu" hidden></div>';
+    g.parent.insertBefore(wrap, g.buttons[0]);
+    g.buttons.forEach(function(b) { b.setAttribute('role', 'menuitem'); wrap.lastChild.appendChild(b); });
+  });
+}
+function closeExcelMenus(except) {
+  $all('.xl-wrap').forEach(function(w) {
+    if (w === except) return;
+    w.lastChild.hidden = true; w.firstChild.setAttribute('aria-expanded', 'false');
+  });
+}
+document.addEventListener('click', function(e) {
+  var wrap = e.target.closest && e.target.closest('.xl-wrap');
+  closeExcelMenus(wrap);
+  if (!wrap) return;
+  var menu = wrap.lastChild, trigger = e.target.closest('.xl-btn');
+  menu.hidden = trigger ? !menu.hidden : true;
+  wrap.firstChild.setAttribute('aria-expanded', menu.hidden ? 'false' : 'true');
+  if (!menu.hidden) {
+    menu.classList.remove('from-left');
+    if (menu.getBoundingClientRect().left < 8) menu.classList.add('from-left');
+  }
+});
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeExcelMenus(); });
+bundleExcelMenus();
+/* แถบเมนูตั้งค่าบนมือถือเลื่อนแนวนอน — เมนูที่เลือกต้องมองเห็นเสมอ */
+$all('.setup-nav .stab').forEach(function(tab) {
+  tab.addEventListener('click', function() {
+    var nav = tab.parentNode;
+    nav.scrollLeft = tab.offsetLeft - nav.offsetLeft - (nav.clientWidth - tab.offsetWidth) / 2;
+  });
+});
+document.addEventListener('click', function(e) {
+  var menu = $('#invExportMenu'); if (!menu || menu.hidden) return;
+  var item = e.target.closest && e.target.closest('#invExportMenu [data-mode]');
+  if (item) { toggleExportMenu(false); exportAllMastersExcel(item.getAttribute('data-mode')); return; }
+  if (!e.target.closest('.xp-wrap')) toggleExportMenu(false);
+});
+document.addEventListener('keydown', function(e) {
+  var menu = $('#invExportMenu'); if (!menu || menu.hidden) return;
+  if (e.key === 'Escape') { toggleExportMenu(false); $('#invExportBtn').focus(); return; }
+  if (e.key === 'Tab') { toggleExportMenu(false); return; }
+  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+  e.preventDefault();
+  var items = Array.prototype.slice.call(menu.querySelectorAll('[role=menuitem]'));
+  var at = items.indexOf(document.activeElement);
+  items[(at + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length].focus();
+});
 function exportAllMastersExcel(mode){
   fetchRfidReadersForExport().then(function(readers){exportAllMastersExcelWithReaders(mode,readers);});
 }
@@ -21498,6 +21785,7 @@ function openColumnMapModal(opts){
     var isNewlyRegistered=false;
     if(!b){ b=autoRegisterInBox(tag); isNewlyRegistered=true; }
     if(!isNewlyRegistered&&b.status==='warehouse')return {ok:false,code:'inwh',tag:tag,reason:'อยู่ในคลังอยู่แล้ว'};
+    if(!isNewlyRegistered&&isFlaggedBox(b))return {ok:false,code:'inwh',tag:tag,reason:'ถูกพักหรือชำรุดอยู่'};
     return {ok:true,tag:tag,type:typeName(b.type),isNew:isNewlyRegistered};
   }
 
@@ -22795,7 +23083,7 @@ document.addEventListener('change',function(e){
     'คิดครั้งเดียวต่อกล่อง 1 ใบที่มีสถานะ "สูญหาย" (ไม่ผูกกับจำนวนวัน) — รวมกับค่าปรับOverdueแยกกันคนละก้อน':'Charged once per lost box, independent of days — calculated separately from overdue fees',
     'เลือกบทบาทเพื่อกำหนดสิทธิ์ของพนักงานคนนี้':'Select a role to assign this employee’s permissions',
     'กดเพื่อกรองเฉพาะคนที่ตั้งค่าสิทธิ์ยังไม่ครบ':'Filter employees whose access setup is incomplete',
-    'กรองตามสถานะการเข้าถึงระบบ':'Filter by system-access status','ดูสิทธิ์ไม่ได้':'Permissions unavailable',
+    'กรองตามสถานะการเข้าถึงระบบ':'Filter by system-access status','ดูสิทธิ์ไม่ได้':'Permissions unavailable','ข้อมูลหลักทุกชุด ประวัติ ป้ายทะเบียน และรถ':'All master data, history, plates and vehicles','1 แถวต่อกล่อง ประวัติแยกอีก Sheet':'One row per box, history on a separate sheet','ค้นหาบาร์โค้ด ประเภท ลูกค้า':'Search barcode, type, customer','+ DO · PO · ประเภทรถ':'+ DO · PO · Vehicle type','ซ่อนรายละเอียดเพิ่มเติม':'Hide extra details','กรอกให้ครบก่อนสแกน':'Fill these in before scanning','+ ข้อมูลรถ (ไม่บังคับ)':'+ Vehicle info (optional)','ปิดข้อมูลรถ':'Close vehicle info','ล้างข้อมูลรถ':'Clear vehicle info','เสร็จแล้ว กลับไปสแกน':'Done — back to scanning','มีข้อมูลรถแล้ว':'Vehicle info added','รับจากซัพพลายเออร์':'From supplier','มีสิทธิ์':'Granted','ไม่มีสิทธิ์':'Not granted','ค้นหาสิทธิ์…':'Search permissions…','ไม่พบสิทธิ์ที่ค้นหา':'No matching permission','แก้ไขได้ที่แท็บ "บทบาทและสิทธิ์"':'Edit in the "Roles & permissions" tab',
     'ไม่เปิดบัญชี Web':'No web account','ยังไม่มีบัญชีเว็บ':'No web account',
     'โหลดข้อมูลสิทธิ์ไม่สำเร็จ':'Permission data failed to load','บทบาทของระบบ แก้ไขหรือลบไม่ได้':'System role — cannot be edited or deleted',
     'ดูรายชื่อผู้ถือบทบาทนี้':'View employees assigned to this role','ปิด (Esc)':'Close (Esc)',
