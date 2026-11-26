@@ -2243,7 +2243,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
 .locmap-zone{border:.5px solid var(--line);border-radius:16px;overflow:hidden;margin-bottom:16px;background:var(--surface2);}
 .locmap-zone:last-child{margin-bottom:0;}
 .locmap-zonehead{display:flex;align-items:center;gap:12px;padding:12px 16px;
-  background:var(--ink);color:var(--bg);}
+  background:color-mix(in srgb,var(--ink) 5%,transparent);color:var(--ink);border-bottom:.5px solid var(--line);}
 .locmap-zbadge{font-family:var(--mono);font-weight:800;font-size:16px;flex:0 0 auto;
   width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;
   background:var(--accent);color:var(--accentContrast);}
@@ -5164,6 +5164,7 @@ function save(){
        ยังโชว์สิ่งที่ถูกปฏิเสธไปแล้วเหมือนบันทึกสำเร็จ */
     if(Array.isArray(S.baseTags))sentTags.forEach(function(t){if(S.baseTags.indexOf(t)<0)S.baseTags.push(t);});
     if(j&&j.rejected&&j.rejected.length)onStateRejected(j.rejected);
+    if(window.btRefresh3d)window.btRefresh3d();
     return true;
   }).catch(function(e){
     console.warn('[Smart Tracking] save to server failed',e);
@@ -6734,14 +6735,21 @@ window.openLocDrawer=openLocDrawer;
    Location Master only: zone > rack > shelf > slot. */
 var _loc3dRendering=false;
 var _loc3dRefreshTimer=null;
-function renderLoc3D(){
+function renderLoc3D(rebuild){
   var root=$('#loc3dView');if(!root)return;
   if(_loc3dRendering||window.LocationWarehouse3D?.isBusy?.()){
     clearTimeout(_loc3dRefreshTimer);
-    _loc3dRefreshTimer=setTimeout(function(){if(_locViewMode==='3d')renderLoc3D();},500);
+    _loc3dRefreshTimer=setTimeout(function(){if(_locViewMode==='3d')renderLoc3D(rebuild);},500);
     return;
   }
   clearTimeout(_loc3dRefreshTimer);
+  /* ฉากที่เปิดอยู่ของคลังเดิม: ให้ฉากเล่นการเปลี่ยนแปลง (รถยกวิ่งเอง) ก่อน
+     แล้วค่อยสร้างใหม่ถ้าข้อมูลต่างจากที่แสดงอยู่ */
+  var shown=window.LocationWarehouse3D?.active?.();
+  if(rebuild!==true&&shown&&root.querySelector('canvas')&&shown.getView().warehouseId===_loc3dWh){
+    shown.refreshInventory().then(function(current){if(!current)renderLoc3D(true);});
+    return;
+  }
   var all=Object.values(S.locations||{}).filter(function(l){return l&&l.wh&&l.zone&&l.rack;});
   var whs=[];all.forEach(function(l){if(whs.indexOf(l.wh)<0)whs.push(l.wh);});
   if(!_loc3dWh||whs.indexOf(_loc3dWh)<0)_loc3dWh=whs[0]||'';
@@ -23312,7 +23320,7 @@ function stateSig(st){
      counters unchanged, so include their canonical payload in the comparison.
      UI-only actions do not alter /api/state and therefore remain silent. */
   const master=JSON.stringify({
-    boxTypes:st.boxTypes||{},warehouses:st.warehouses||{},customers:st.customers||{},
+    boxTypes:st.boxtypes||{},warehouses:st.warehouses||{},customers:st.customers||{},
     employees:st.employees||{},locations:st.locations||{}
   });
   return b.join('|')+'#'+(st.pendingIn||[]).join(',')+'#'+(st.pendingOut||[]).join(',')
@@ -23362,14 +23370,17 @@ function scheduleLive3DRefresh(){
      not set this short-lived guard and still receive the normal realtime sync. */
   if(Date.now() < Number(window.bt3dSuppressRefreshUntil||0))return;
   clearTimeout(live3dRefreshTimer);
-  live3dRefreshTimer=setTimeout(()=>{
+  live3dRefreshTimer=setTimeout(async()=>{
     const root=document.getElementById('loc3dView');
     if(!root||root.style.display==='none')return;
     const controller=window.LocationWarehouse3D?.active?.();
-    if(controller?.refreshInventory){ controller.refreshInventory(); return; }
+    if(controller?.refreshInventory&&await controller.refreshInventory())return;
+    /* renderLoc3D waits while the forklift is carrying something */
     if(typeof Wn.renderLoc3D==='function')Wn.renderLoc3D();
   },250);
 }
+/* this page's own changes are not echoed back by the live stream */
+Wn.btRefresh3d=scheduleLive3DRefresh;
 async function syncNow(notifyExternal){
   if(syncing)return;
   syncing=true;
@@ -23475,6 +23486,7 @@ function connectStream(){
   });
   var lastRfidAlertId='';
   es.addEventListener('rfid-read',ev=>{
+    scheduleLive3DRefresh();   /* a reader hit opens that door in the 3D view */
     liveStream=true;renderLiveSyncIndicator();
     let d=null;try{d=JSON.parse(ev.data);}catch(_){ }
     if(!d)return;
@@ -23823,9 +23835,8 @@ document.addEventListener('visibilitychange',()=>{
 .loc3d-hud span.loc3d-oversize{color:#ff8fe6;border-color:#ff3bd4}.loc3d-hud,.loc3d-hud span{pointer-events:auto}.loc3d-hud span{cursor:help}
 /* HUD explanations are lightweight in-scene toasts, not native title alerts.
    They stack down from the upper-left so several hovered metrics remain readable. */
-.loc3d-hover-toast-zone{position:absolute;top:78px;left:14px;z-index:6;display:flex;flex-direction:column;align-items:flex-start;gap:8px;width:min(390px,calc(100% - 28px));pointer-events:none}.loc3d-hover-toast-zone .toast{width:100%;min-width:0;max-width:none;padding:11px 14px;border-radius:12px;font-size:13px;line-height:1.35;pointer-events:none}.loc3d-hover-toast-zone .toast .sub{font-size:12px;line-height:1.35;white-space:normal}.loc3d-hover-toast-zone .toast.out{pointer-events:none}
 .loc3d-forklift-lift{position:absolute;right:14px;top:170px;bottom:auto;z-index:5;display:none;align-items:center;gap:7px;padding:6px 8px;border:1px solid rgba(168,249,49,.48);border-radius:11px;background:rgba(9,14,11,.9);color:#dfffaf;box-shadow:0 7px 20px rgba(0,0,0,.35);font:700 11px/1 var(--font);backdrop-filter:blur(10px)}.loc3d-forklift-lift.show{display:flex}.loc3d-forklift-lift button{width:30px;height:30px;padding:0;border:1px solid rgba(255,255,255,.2);border-radius:8px;background:rgba(255,255,255,.08);color:#fff;font:800 20px/1 var(--font);cursor:pointer}.loc3d-forklift-lift button:hover{border-color:var(--accent);color:var(--accent)}
 </style>
-<script type="module" src="/warehouse-3d-runtime.js?v=20260911-multi-forklift-select2"></script>
+<script type="module" src="/warehouse-3d-runtime.js?v=20261126-autopilot11"></script>
 </body>
 </html>

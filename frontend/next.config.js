@@ -23,7 +23,7 @@ const nextConfig = {
     // a stale module parse error prevents the entire warehouse view from booting.
     return [
       {
-        source: '/:runtime(loc3d|warehouse-3d-runtime)\\.js',
+        source: '/:runtime(loc3d|loc3d-plan|warehouse-3d-runtime)\\.js',
         headers: [{ key: 'Cache-Control', value: 'no-store, max-age=0' }],
       },
     ];

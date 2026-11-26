@@ -8,6 +8,8 @@ export const CENTIMETRES_PER_METRE = 100;
 // A 2.7 m clear bay accommodates two standard pallets side by side with
 // operating clearance. Rack width is derived from the number of bays.
 export const DEFAULT_SLOT_CM = Object.freeze({ width: 270, height: 140, depth: 110 });
+/** Clear space between neighbouring racks laid out automatically. */
+export const RACK_GAP_CM = 150;
 export const DEFAULT_BOX_CM = Object.freeze({ width: 60, height: 40, depth: 40 });
 
 export interface RackGeometryRow extends Record<string, unknown> {
@@ -173,6 +175,8 @@ export function deriveWarehouseGeometry(
   const groupEntries = [...groups.entries()].sort(([, a], [, b]) =>
     natural(a[0].wh, b[0].wh) || natural(a[0].zone, b[0].zone) || natural(a[0].rack, b[0].rack));
   const indexByWarehouse = new Map<string, number>();
+  /** Right-hand edge of the last rack placed in each warehouse row. */
+  const rowEdge = new Map<string, number>();
   const rackRows: RackGeometryRow[] = [];
   const slotRows: SlotGeometryRow[] = [];
   const slotByIdentity = new Map<string, string>();
@@ -194,16 +198,29 @@ export function deriveWarehouseGeometry(
     const defaultWidth = Math.max(290, widestShelf * DEFAULT_SLOT_CM.width + 20);
     const defaultHeight = Math.max(170, shelves.length * 150 + 20);
 
+    /* Rows of four, spaced by real width. A stored position that is exactly the
+       old fixed 10 m grid was never chosen by anyone, so it is laid out again. */
+    const row = Math.floor(warehouseIndex / 4);
+    const width = pickNumber([dimensions, rack3d], ['width', 'widthCm'], existing?.widthCm ?? defaultWidth, true);
+    const oldGridX = (warehouseIndex % 4) * 1000;
+    const oldGridZ = row * 600;
+    const autoPlaced = !existing || (existing.positionXCm === oldGridX && existing.positionZCm === oldGridZ);
+    const edgeKey = `${first.wh}\0${row}`;
+    const previousEdge = rowEdge.get(edgeKey);
+    const flowX = previousEdge === undefined ? 0 : previousEdge + RACK_GAP_CM + Math.ceil(width / 2);
+    const positionXCm = pickNumber([position, rack3d], ['x', 'positionXCm', 'positionX'], autoPlaced ? flowX : existing.positionXCm);
+    rowEdge.set(edgeKey, positionXCm + Math.ceil(width / 2));
+
     const rackRow: RackGeometryRow = {
       id: rackId,
       warehouseId: first.wh,
       zone: first.zone,
       code: first.rack,
-      positionXCm: pickNumber([position, rack3d], ['x', 'positionXCm', 'positionX'], existing?.positionXCm ?? (warehouseIndex % 4) * 1000),
+      positionXCm,
       positionYCm: pickNumber([position, rack3d], ['y', 'positionYCm', 'positionY'], existing?.positionYCm ?? 0),
       positionZCm: pickNumber([position, rack3d], ['z', 'positionZCm', 'positionZ'], existing?.positionZCm ?? Math.floor(warehouseIndex / 4) * 600),
       rotationYDeg: pickNumber([rack3d], ['rotationYDeg', 'rotationY', 'yaw'], existing?.rotationYDeg ?? 0),
-      widthCm: pickNumber([dimensions, rack3d], ['width', 'widthCm'], existing?.widthCm ?? defaultWidth, true),
+      widthCm: width,
       heightCm: pickNumber([dimensions, rack3d], ['height', 'heightCm'], existing?.heightCm ?? defaultHeight, true),
       depthCm: pickNumber([dimensions, rack3d], ['depth', 'depthCm'], existing?.depthCm ?? 110, true),
       materialType: text(rack3d.materialType) || existing?.materialType || 'powder_coated_steel',

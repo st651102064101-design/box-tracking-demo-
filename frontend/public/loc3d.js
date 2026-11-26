@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import { planJobs, mastLimits, mastPose, canStart, shouldYield, parkingBays, standingPoints, clearSpot, palletSides, palletFit, PALLET_HEIGHT } from './loc3d-plan.js';
 // The app maps `three` to the WebGPU build. WebGLRenderer lives only in the
 // standard build, so the fallback needs its own import-map alias.
 import { WebGLRenderer } from 'three/webgl';
@@ -99,6 +100,15 @@ function legacyModel(locations, occupancy) {
     stats: { racks: racks.length, slots: racks.reduce((sum, rack) => sum + rack.slots.length, 0), boxes: 0 },
     fallback: true,
   };
+}
+
+/** What the scene is built from; forklift positions and gate activity are live
+ *  values that never require a rebuild. */
+function sceneSignature(model) {
+  return JSON.stringify([
+    model.racks, model.boxes, model.stagingBoxes,
+    (model.doors || []).map((door) => [door.gateNo, door.type]),
+  ]);
 }
 
 async function loadModel(locations, occupancy) {
@@ -441,70 +451,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   warehouseTitle.append(warehouseTitleCaption, warehouseTitleRow);
   stage.appendChild(warehouseTitle);
 
-  // A small contextual action that follows the currently hovered rack. It is
-  // deliberately a CSS2D button so it feels attached to the physical model.
-  const rackActionButton = document.createElement('button');
-  rackActionButton.type = 'button';
-  rackActionButton.className = 'loc3d-rack-action';
-  rackActionButton.setAttribute('aria-label', 'เครื่องมือแร็ก ยังไม่พร้อมใช้งาน');
-  rackActionButton.title = 'เครื่องมือแร็ก (ยังไม่พร้อมใช้งาน)';
-  rackActionButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M19.43 12.98c.04-.32.07-.65.07-.98s-.02-.66-.07-.98l2.11-1.65a.5.5 0 0 0 .12-.64l-2-3.46a.5.5 0 0 0-.61-.22l-2.49 1a7.6 7.6 0 0 0-1.7-.98L14.5 2.42A.5.5 0 0 0 14 2h-4a.5.5 0 0 0-.5.42l-.38 2.65c-.61.25-1.18.58-1.7.98l-2.49-1a.5.5 0 0 0-.61.22l-2 3.46a.5.5 0 0 0 .12.64l2.11 1.65c-.04.32-.07.65-.07.98s.02.66.07.98l-2.11 1.65a.5.5 0 0 0-.12.64l2 3.46a.5.5 0 0 0 .61.22l2.49-1c.52.4 1.09.73 1.7.98l.38 2.65A.5.5 0 0 0 10 22h4a.5.5 0 0 0 .5-.42l.38-2.65c.61-.25 1.18-.58 1.7-.98l2.49 1a.5.5 0 0 0 .61-.22l2-3.46a.5.5 0 0 0-.12-.64l-2.11-1.65ZM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5Z"/></svg>';
-  const rackActionObject = new CSS2DObject(rackActionButton);
-  rackActionObject.visible = false;
-  scene.add(rackActionObject);
-  let actionPointerOver = false;
-  rackActionButton.addEventListener('pointerenter', () => { actionPointerOver = true; });
-  rackActionButton.addEventListener('pointerleave', () => { actionPointerOver = false; });
-  rackActionButton.addEventListener('pointerdown', (event) => event.stopPropagation());
-  rackActionButton.addEventListener('click', (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    const toastZone = document.getElementById('toastZone');
-    const fullscreenHost = document.fullscreenElement;
-    const originalToastParent = toastZone?.parentElement;
-    const movedToastIntoFullscreen = Boolean(fullscreenHost && toastZone && !fullscreenHost.contains(toastZone));
-    if (movedToastIntoFullscreen) fullscreenHost.appendChild(toastZone);
-    window.toast?.('เครื่องมือแร็กยังไม่พร้อมใช้งาน', '', 'ok');
-    if (movedToastIntoFullscreen) {
-      window.setTimeout(() => {
-        if (toastZone.parentElement === fullscreenHost && originalToastParent) originalToastParent.appendChild(toastZone);
-      }, 3200);
-    }
-  });
-
   const hud = document.createElement('div');
   hud.className = 'loc3d-hud';
   hud.innerHTML = `<span class="ok">1 unit = 1 m</span><span>${rendererName(renderer)}</span><span>${model.stats?.racks || 0} แร็ก · ${model.stats?.slots || 0} ช่อง · ${model.stats?.boxes || 0} กล่อง</span>${model.stats?.stagingBoxes ? `<span class="warn">รอ Putaway ${model.stats.stagingBoxes} กล่อง</span>` : ''}<span class="loc3d-perf">กำลังวัด FPS…</span>`;
   stage.appendChild(hud);
-  const hudToastZone = document.createElement('div');
-  hudToastZone.className = 'loc3d-hover-toast-zone';
-  hudToastZone.setAttribute('aria-live', 'polite');
-  stage.appendChild(hudToastZone);
-  let lastHudHelp = '';
-  let lastHudHelpAt = 0;
-  const showHudHelpToast = (title, help) => {
-    const now = performance.now();
-    // Pointer jitter on a badge must not create a pile of identical toasts.
-    if (lastHudHelp === help && now - lastHudHelpAt < 1200) return;
-    lastHudHelp = help;
-    lastHudHelpAt = now;
-    const toast = document.createElement('div');
-    toast.className = 'toast info';
-    toast.innerHTML = `<div class="ti">i</div><div class="toast-copy"><div>${title}</div><div class="sub">${help}</div></div>`;
-    hudToastZone.appendChild(toast);
-    while (hudToastZone.children.length > 4) hudToastZone.firstElementChild?.remove();
-    window.setTimeout(() => {
-      toast.classList.add('out');
-      window.setTimeout(() => toast.remove(), 420);
-    }, 5200);
-  };
-  const hudHelp = ['ตารางพื้น 1 ช่อง เท่ากับ 1 × 1 เมตร', 'ตัวเรนเดอร์กราฟิกที่เบราว์เซอร์กำลังใช้งาน', 'จำนวนแร็ค ช่องเก็บ และกล่องจากฐานข้อมูล', 'จำนวนกล่องที่รอรถยกนำไป Putaway', 'FPS และจำนวน draw calls ต่อเฟรม'];
-  [...hud.querySelectorAll('span')].forEach((badge, index) => {
-    const help = hudHelp[index] || '';
-    // Do not use `title`: browsers render it as a native tooltip/alert.
-    badge.removeAttribute('title');
-    badge.addEventListener('mouseenter', () => { if (help) showHudHelpToast(badge.textContent || 'ข้อมูลมุมมอง 3D', help); });
-  });
+  // Do not use `title`: browsers render it as a native tooltip/alert.
+  hud.querySelectorAll('span').forEach((badge) => badge.removeAttribute('title'));
 
   // Keep the scene controls inside the 3D stage, so fullscreen expands only
   // the warehouse view instead of the whole application shell.
@@ -1384,6 +1336,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     };
   };
   const oversizedIds = new Set();
+  const slotSize = (slotEntry) => ({ width: slotEntry.scale.x, height: slotEntry.scale.y, depth: slotEntry.scale.z });
   const canonicalMaterialType = (box) => {
     const raw = `${box.materialType || ''} ${box.boxTypeName || ''}`.toLowerCase();
     if (/เหล็ก|โลหะ|steel|metal/.test(raw)) return 'metal_box';
@@ -1410,23 +1363,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     if (oversized) oversizedIds.add(box.id);
     const boxesInSlot = boxesBySlot.get(String(box.slotId)) || [box];
     const boxIndex = Math.max(0, boxesInSlot.indexOf(box));
-    // A slot carries two pallet positions. Spread every stored box across the
-    // DB-defined slot width so records do not render directly on top of each
-    // other, while retaining each box's own dimensions from the API.
-    const spread = boxesInSlot.length > 1
-      ? Math.min(width * 1.25, Math.max(0, (slotEntry.scale.x - width) / Math.max(1, boxesInSlot.length - 1)))
-      : 0;
-    const explicitSide = box.slotSide === 'right' ? 1 : box.slotSide === 'left' ? -1 : 0;
-    const lateralOffsetCm = explicitSide
-      ? explicitSide * Math.max(0, slotEntry.scale.x - width) * 0.5 / CM_TO_M
-      : boxesInSlot.length === 1
-        ? -Math.max(0, slotEntry.scale.x - width) * 0.5 / CM_TO_M
-        : (boxIndex - (boxesInSlot.length - 1) / 2) * spread / CM_TO_M;
+    // A slot carries two pallet positions; box and pallet sit in one of them.
+    const side = palletSides(boxesInSlot).get(String(box.id));
+    const fit = palletFit(slotSize(slotEntry), side, { width, height, depth });
     const slotBottomCm = num(slotEntry.slot.localPositionCm?.y) - positive(slotEntry.slot.dimensionsCm?.height, 70) / 2;
     const position = worldPoint(
       slotEntry.rack,
-      num(slotEntry.slot.localPositionCm?.x) + lateralOffsetCm,
-      slotBottomCm + 16 + height / CM_TO_M / 2,
+      num(slotEntry.slot.localPositionCm?.x) + fit.offset / CM_TO_M,
+      slotBottomCm + fit.boxCentre / CM_TO_M,
       slotEntry.slot.localPositionCm?.z,
     );
     return [{
@@ -1460,46 +1404,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     boxMesh.computeBoundingSphere();
     scene.add(boxMesh);
   }
-  const refreshInventoryInPlace = async () => {
-    if (!boxMesh || disposed) return false;
-    try {
-      const response = await fetch(`/api/warehouse-3d?warehouseId=${encodeURIComponent(model.warehouseId)}`, { headers: requestHeaders() });
-      if (!response.ok) return false;
-      const latest = await response.json();
-      const byId = new Map((latest.boxes || []).map((box) => [String(box.id), box]));
-      occupiedSlotIds = new Set((latest.boxes || []).map((box) => String(box.slotId)));
-      boxEntries.forEach((entry, index) => {
-        const next = byId.get(String(entry.box.id));
-        if (!next?.slotId || !slotById.has(next.slotId)) {
-          boxMesh.setMatrixAt(index, new THREE.Matrix4().makeScale(0, 0, 0));
-          return;
-        }
-        const slotEntry = slotById.get(next.slotId);
-        const { width, height, depth, oversized } = fitToSlot(
-          positive(next.dimensionsCm?.width, 60) * CM_TO_M,
-          positive(next.dimensionsCm?.height, 40) * CM_TO_M,
-          positive(next.dimensionsCm?.depth, 40) * CM_TO_M,
-          slotEntry,
-        );
-        const lateral = next.slotSide === 'right' ? 1 : -1;
-        const lateralOffsetCm = lateral * Math.max(0, slotEntry.scale.x - width) * 0.5 / CM_TO_M;
-        const slotBottomCm = num(slotEntry.slot.localPositionCm?.y) - positive(slotEntry.slot.dimensionsCm?.height, 70) / 2;
-        entry.box = next;
-        entry.slotEntry = slotEntry;
-        entry.position = worldPoint(slotEntry.rack, num(slotEntry.slot.localPositionCm?.x) + lateralOffsetCm, slotBottomCm + 16 + height / CM_TO_M / 2, slotEntry.slot.localPositionCm?.z);
-        entry.quaternion = slotEntry.quaternion;
-        entry.scale.set(width, height, depth);
-        entry.color = boxStatusColor(next, oversized);
-        boxMesh.setMatrixAt(index, matrixAt(entry.position, entry.quaternion, entry.scale));
-        boxMesh.setColorAt(index, entry.color);
-      });
-      boxMesh.instanceMatrix.needsUpdate = true;
-      boxMesh.instanceColor.needsUpdate = true;
-      slotMesh?.instanceColor && slotEntries.forEach((entry, index) => slotMesh.setColorAt(index, slotColor(entry)));
-      if (slotMesh) slotMesh.instanceColor.needsUpdate = true;
-      return true;
-    } catch { return false; }
-  };
   // Inbound staging is deliberately a one-box-per-pallet grid, rather than a
   // decorative stack. It keeps the 3D view honest while leaving every waiting
   // box directly selectable for the next forklift/putaway task.
@@ -1533,7 +1437,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         UNIT_BOX,
         new THREE.MeshStandardMaterial({ color: canonicalBoxColor, roughness: 0.69, metalness: 0.04 }),
       );
-      carton.position.set(x, 0.12 + height / 2, z);
+      carton.position.set(x, PALLET_HEIGHT + height / 2, z);
       carton.scale.set(width, height, depth);
       carton.castShadow = carton.receiveShadow = true;
       carton.userData.stagingBox = box;
@@ -2480,21 +2384,25 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     warehousePowerFixtures.forEach((fixture) => { fixture.material.emissiveIntensity = warehousePowerOn ? 2.2 : 0; });
     warehousePowerLights.forEach((light) => { light.intensity = warehousePowerOn ? 8 : 0; });
   };
-  const toggleDockDoor = (index) => {
-    const entry = dockDoors[index];
-    if (!entry) return;
-    entry.open = !entry.open;
-    const lampColor = entry.open ? 0x63e65d : entry.typeColor;
-    entry.statusLamp.material.color.set(lampColor);
-    entry.statusLamp.material.emissive.set(lampColor);
-    // Make the actionable surface unambiguous: the door itself is the
-    // control, and the status lamp gives an immediate open/close cue.
-    entry.leaf.userData.doorAction = entry.open ? 'คลิกบานประตูเพื่อปิด' : 'คลิกบานประตูเพื่อเปิด';
-    window.toast?.(
-      entry.open ? 'เปิดประตูแล้ว' : 'ปิดประตูแล้ว',
-      entry.open ? 'คลิกที่บานประตูอีกครั้งเพื่อปิด' : 'คลิกที่บานประตูเพื่อเปิด',
-      'ok',
-    );
+  /* A door is open while the database shows something passing through it (a
+     scan or a reader hit) and closes by itself. It is not a control. */
+  const DOOR_OPEN_MS = 15000;
+  const showGateActivity = (doorRows) => {
+    const byGate = new Map((doorRows || []).map((row) => [Number(row.gateNo), row.activityAgeMs]));
+    dockDoors.forEach((door) => {
+      const age = byGate.get(Number(door.door.gateNo));
+      if (Number.isFinite(age) && age < DOOR_OPEN_MS) {
+        door.openUntil = Math.max(door.openUntil || 0, performance.now() + DOOR_OPEN_MS - age);
+      }
+    });
+  };
+  const updateDoorState = (door, now) => {
+    const open = (door.openUntil || 0) > now;
+    if (open === door.open) return;
+    door.open = open;
+    const lampColor = open ? 0x63e65d : door.typeColor;
+    door.statusLamp.material.color.set(lampColor);
+    door.statusLamp.material.emissive.set(lampColor);
   };
   const floorMarkTextures = safetySignTextures;
   // One grid division represents one metre across the complete warehouse floor.
@@ -2623,9 +2531,19 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   // Overall lift limit reduced by 10% while keeping the fork/mast motion
   // relationship unchanged.
   const forkliftLiftMax = 5.9085;
+  const autopilotOnly = true;
+  let autopilotTick = () => {};
+  // Where a pallet sits on the forks, in metres from the truck's origin.
+  const FORK_REST_HEIGHT = 0.49;
+  const FORK_CARRY_REACH = 1.03;
+  const FORK_PICKUP_REACH = 0.68;
+  const FORK_POCKET = 0.1; // how far the tines sit above a carried pallet's underside
+  const FORK_HEEL = 0.62; // from the truck's centre to the back of the tines
+  let trucks = [];
+  let setUpTrucks = () => {};
   // Use the fixed lower rail first; engage the telescoping inner rail only
   // after the fork carriage reaches the top of that fixed section.
-  const forkliftMastEngageHeight = 3.0;
+  const forkliftMastEngageHeight = 1.875;
   let forkliftClearance = 1.15;
   let forkliftMotion = null;
   let forkliftDropTarget = null;
@@ -2904,6 +2822,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     remoteForkliftPreviousPosition = remoteForkliftPosition.clone();
   };
   const onRemoteForkliftState = (event) => {
+    if (autopilotOnly) return;
     const detail = event.detail;
     if (!detail || String(detail.warehouseId) !== String(model.warehouseId)) return;
     if (String(detail.forkliftId || 'forklift-1') !== String(activeForkliftId)) return;
@@ -2913,6 +2832,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   };
   window.addEventListener('loc3d-forklift-state', onRemoteForkliftState);
   const syncForkliftPosition = async () => {
+    if (autopilotOnly) return;
     if (forkliftSyncInFlight || !model.warehouseId || forkliftMotion || forkliftSelected) return;
     forkliftSyncInFlight = true;
     try {
@@ -2999,24 +2919,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   let hoverForkliftRoot = null;
   let hoverStagingBox = null;
   let hoverStagingMesh = null;
-  let hoverRackCode = '';
-  const actionAnchor = new THREE.Vector3();
-  const hideRackAction = () => {
-    rackActionObject.visible = false;
-    hoverRackCode = '';
-  };
-  const showRackAction = (rack) => {
-    if (forkliftSelected) return hideRackAction();
-    if (!rack) return hideRackAction();
-    hoverRackCode = String(rack.code || rack.id || 'rack');
-    const rackEntry = rackEntries.find((entry) => entry.rack === rack);
-    if (!rackEntry) return hideRackAction();
-    // One stable affordance per rack: always float at the centre of the top
-    // beam, never beside every individual slot or box.
-    actionAnchor.set(rackEntry.base.x, rackEntry.base.y + rackEntry.height + 0.55, rackEntry.base.z);
-    rackActionObject.position.copy(actionAnchor);
-    rackActionObject.visible = true;
-  };
   const setPointerFromEvent = (event) => {
     const rect = canvas.getBoundingClientRect();
     pointer.set(
@@ -3029,52 +2931,11 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     pointer.set(0, 0);
     raycaster.setFromCamera(pointer, camera);
   };
-  const forkliftHit = () => {
-    const hit = forkliftPickMeshes.length ? raycaster.intersectObjects(forkliftPickMeshes, false)[0] : null;
-    if (!hit) return null;
-    let root = hit.object;
-    while (root.parent && root.parent !== scene) root = root.parent;
-    return { hit, root };
-  };
+  /* The scene only shows what the database says: the truck is driven by the
+     autopilot below, never by the viewer. */
+  const forkliftHit = () => null;
   const isForkliftHit = () => Boolean(forkliftHit());
-  const setForkliftSelected = async (selected, { release = true } = {}) => {
-    const wantsControl = Boolean(selected && forkliftRoot);
-    if (wantsControl && !forkliftSelected) {
-      const claimed = await claimForkliftControl(false);
-      if (!claimed) return false;
-    }
-    const wasOwned = forkliftControlOwned;
-    forkliftSelected = wantsControl;
-    if (forkliftSelected) labelObject.visible = false;
-    if (forkliftSelected) hideRackAction();
-    if (forkliftSelection) forkliftSelection.visible = forkliftSelected;
-    forkliftLiftControls.classList.toggle('show', forkliftSelected);
-    if (!forkliftSelected) {
-      rackPickupCameraLocked = false;
-      controls.enableRotate = true;
-      forkliftMotion = null;
-      // Clear the persisted motion flag as soon as the operator cancels
-      // selection. Otherwise a spectator update can re-enable the forklift
-      // ring from the previous `moving: true` snapshot and leave the effect
-      // visibly stuck under an idle truck.
-      remoteForkliftMoving = false;
-      remoteForkliftTarget = null;
-      if (forkliftSelection) forkliftSelection.visible = false;
-      if (forkliftRoot && model.warehouseId && wasOwned && release) {
-        saveForkliftPosition(true);
-        forkliftReleaseAfterBroadcast = true;
-        if (!forkliftBroadcastInFlight) {
-          forkliftReleaseAfterBroadcast = false;
-          releaseForkliftControl();
-        }
-      }
-      routeLine.visible = false;
-      targetMarker.visible = false;
-      targetRipple.visible = false;
-      missionBeacon.visible = false;
-    }
-    return forkliftSelected;
-  };
+  const setForkliftSelected = async () => false;
   onForkliftControlLost = () => {
     setForkliftSelected(false, { release: false });
     window.toast?.('สิทธิ์ควบคุมรถถูกย้ายแล้ว', 'อุปกรณ์นี้เปลี่ยนเป็นโหมดผู้ชม', 'warn');
@@ -3112,7 +2973,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   forkliftLiftControls.addEventListener('pointerleave', stopForkliftLiftInput);
   window.addEventListener('pointerup', stopForkliftLiftInput);
   window.addEventListener('keydown', onForkliftLiftKey, { passive: false });
-  const findForkliftPath = (start, target) => {
+  const findForkliftPath = (start, target, obstacles = []) => {
     const cell = 0.5;
     const minX = center.x - halfWarehouseWidth + forkliftClearance;
     const maxX = center.x + halfWarehouseWidth - forkliftClearance;
@@ -3121,6 +2982,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     const cols = Math.max(1, Math.floor((maxX - minX) / cell) + 1);
     const rows = Math.max(1, Math.floor((maxZ - minZ) / cell) + 1);
     const blocked = rackEntries.map(({ collisionBox }) => collisionBox?.clone().expandByScalar(forkliftClearance)).filter(Boolean);
+    obstacles.forEach((box) => blocked.push(box));
     // Stored and staging boxes use the identical manufacturer pallet model;
     // staging differs only by its floor location and selectable workflow.
     boxEntries.concat(stagingEntries).forEach((entry) => {
@@ -3290,7 +3152,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     hoverStagingBox = null;
     hoverStagingMesh = null;
     hoverSlotPoint = null;
-    hideRackAction();
   };
   const updatePointer = (event) => {
     if (isCameraDragging) {
@@ -3333,14 +3194,8 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     const nextConsumerUnit = nextBox < 0 && consumerIsClosest;
     const next = nextBox >= 0 || nextStagingBox || nextConsumerUnit || nextDoor >= 0 ? -1 : (Number.isInteger(slotHit?.instanceId) ? slotHit.instanceId : -1);
     hoverSlotPoint = next >= 0 ? slotHit.point.clone() : null;
-    const nextRack = nextBox >= 0
-      ? boxEntries[nextBox].slotEntry?.rack
-      : next >= 0
-        ? slotEntries[next].rack
-        : rackHit?.object?.userData?.rackByInstance?.[rackHit.instanceId] || null;
-    const nextRackCode = nextRack ? String(nextRack.code || nextRack.id || 'rack') : '';
     const carryingPallet = forkliftSelected && Boolean(forkliftLoadAssembly || forkliftMotion?.pickupMesh || forkliftPutawayPhase);
-    if (!carryingPallet && next === hoverIndex && nextBox === hoverBoxIndex && nextStagingBox === hoverStagingBox && nextStagingMesh === hoverStagingMesh && nextConsumerUnit === hoverConsumerUnit && nextDoor === hoverDockDoorIndex && nextForklift === hoverForklift && nextRackCode === hoverRackCode) return;
+    if (!carryingPallet && next === hoverIndex && nextBox === hoverBoxIndex && nextStagingBox === hoverStagingBox && nextStagingMesh === hoverStagingMesh && nextConsumerUnit === hoverConsumerUnit && nextDoor === hoverDockDoorIndex && nextForklift === hoverForklift) return;
     if (hoverIndex >= 0) slotMesh.setColorAt(hoverIndex, baseColor(hoverIndex));
     if (hoverBoxIndex >= 0 && boxMesh) boxMesh.setColorAt(hoverBoxIndex, boxEntries[hoverBoxIndex].color);
     hoverIndex = next;
@@ -3426,11 +3281,11 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       const door = dockDoors[hoverDockDoorIndex];
       const doorPosition = new THREE.Vector3();
       door.leaf.getWorldPosition(doorPosition);
-      labelElement.textContent = `ประตู ${door.door.gateNo} · ${door.open ? 'เปิดอยู่ · คลิกบานประตูเพื่อปิด' : 'ปิดอยู่ · คลิกบานประตูเพื่อเปิด'}`;
+      labelElement.textContent = `ประตู ${door.door.gateNo} · ${door.open ? 'เปิด — มีกล่องผ่าน' : 'ปิด'}`;
       labelElement.className = 'loc3d-slot-label occupied';
       labelObject.position.copy(doorPosition).add(new THREE.Vector3(0, 2.35, 0));
       labelObject.visible = true;
-      canvas.style.cursor = 'pointer';
+      canvas.style.cursor = 'default';
     } else if (hoverIndex >= 0) {
       const entry = slotEntries[hoverIndex];
       const state = slotState(entry);
@@ -3488,7 +3343,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       canvas.style.cursor = 'default';
     }
     if (forkliftSelected && !Boolean(forkliftLoadAssembly || forkliftMotion?.pickupMesh || forkliftPutawayPhase)) labelObject.visible = false;
-    showRackAction(hoverConsumerUnit || hoverDockDoorIndex >= 0 || hoverForklift ? null : nextRack);
     if (slotMesh) slotMesh.instanceColor.needsUpdate = true;
   };
   const onPointerMove = (event) => {
@@ -3598,7 +3452,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
             forkliftReturnTarget = dynamicRackSlot;
             forkliftReturnPosition = hoverStagingMesh.userData.sourcePosition?.clone?.() || palletPoint.clone();
             hoverStagingMesh.userData.pickupLiftHeight = THREE.MathUtils.clamp(
-              palletPoint.y - forkliftRoot.position.y - 0.78, 0, forkliftLiftMax,
+              palletPoint.y - forkliftRoot.position.y - FORK_REST_HEIGHT, 0, forkliftLiftMax,
             );
           }
           const palletSide = forkliftRoot.position.clone().sub(palletPoint).setY(0);
@@ -3662,7 +3516,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
           pickupMesh.userData.sourcePosition = entry.position.clone();
           // Capture world height BEFORE the proxy is attached to the truck.
           pickupMesh.userData.pickupLiftHeight = THREE.MathUtils.clamp(
-            entry.position.y - forkliftRoot.position.y - 0.78, 0, forkliftLiftMax,
+            entry.position.y - forkliftRoot.position.y - FORK_REST_HEIGHT, 0, forkliftLiftMax,
           );
           forkliftReturnTarget = entry.slotEntry;
           forkliftReturnPosition = entry.position.clone();
@@ -3830,7 +3684,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         }
       }
       else if (hoverConsumerUnit) setWarehousePower(!warehousePowerOn);
-      else if (hoverDockDoorIndex >= 0) toggleDockDoor(hoverDockDoorIndex);
       else if (forkliftSelected) {
         // A single click on the floor is the forklift drive command. Keep the
         // same raycast for overview and first-person modes so operators do
@@ -3871,9 +3724,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     hoverStagingMesh = null;
     labelObject.visible = false;
     canvas.style.cursor = 'default';
-    window.setTimeout(() => {
-      if (!actionPointerOver) hideRackAction();
-    }, 0);
   };
   const onPointerOut = (event) => {
     if (!event.relatedTarget || !canvas.contains(event.relatedTarget)) onPointerLeave();
@@ -3968,88 +3818,34 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     0.34,
     new THREE.Vector3(exitX, warehouseFloorY + 2.56, exitWallZ - 0.025),
   );
-  // Use the supplied manufacturer pallet model for both stored cartons and
-  // the staging bay. The placement list is still derived only from DB boxes.
-  assets.load('/models/wooden_pallets.glb').then(({ scene: palletTemplate }) => {
-    if (disposed) return;
-    palletTemplate.traverse((object) => {
-      if (!object.isMesh) return;
-      // This GLB contains two pallet variants. Pallet_2 has the solid,
-      // close-boarded top deck requested for the warehouse; discard the open
-      // slatted alternative so every displayed pallet uses the same type.
-      if (object.name !== 'Pallet_2_Pallet_2_0') {
-        object.removeFromParent();
-        return;
-      }
-      // Preserve the source wood grain but warm the albedo to match a real
-      // timber pallet rather than the washed-out grey seen under warehouse LEDs.
-      object.material = object.material.clone();
-      object.material.color.setHex(0xc08a57);
-      object.material.roughness = 0.78;
-      object.material.metalness = 0;
-      if ('emissive' in object.material) {
-        object.material.emissive.setHex(0x1c0d05);
-        object.material.emissiveIntensity = 0.08;
-      }
-      object.castShadow = true;
-      object.receiveShadow = true;
-    });
-    const rawBounds = new THREE.Box3().setFromObject(palletTemplate);
-    const rawSize = rawBounds.getSize(new THREE.Vector3());
-    const rawCenter = rawBounds.getCenter(new THREE.Vector3());
-    const addPallet = (position, quaternion, width, depth, yOffset = 0, stagingBoxId = '') => {
-      const pallet = palletTemplate.clone(true);
-      if (stagingBoxId) {
-        pallet.userData.stagingBoxId = stagingBoxId;
-        pallet.traverse((object) => { object.userData.stagingBoxId = stagingBoxId; });
-      }
-      // Every pallet footprint is 1.00 × 1.20 m. Keep Y proportional to the
-      // smaller horizontal scale so the source model's feet remain realistic.
-      const scaleX = width / Math.max(rawSize.x, 0.01);
-      const scaleZ = depth / Math.max(rawSize.z, 0.01);
-      const scaleY = Math.min(scaleX, scaleZ);
-      pallet.position.copy(position);
-      pallet.position.y += yOffset;
-      pallet.quaternion.copy(quaternion);
-      pallet.scale.set(scaleX, scaleY, scaleZ);
-      const baseOffset = new THREE.Vector3(
-        -rawCenter.x * scaleX,
-        -rawBounds.min.y * scaleY,
-        -rawCenter.z * scaleZ,
-      ).applyQuaternion(quaternion);
-      pallet.position.add(baseOffset);
-      scene.add(pallet);
-      // The downloaded asset has a very thin silhouette under a loaded box.
-      // Add the real deck boards and runners so the pallet is visibly a
-      // pallet from aisle height — shared by rack stock and staging stock.
-      const timber = new THREE.MeshStandardMaterial({ color: 0xb97a3e, roughness: 0.8, metalness: 0 });
-      const addTimber = (sx, sy, sz, localX, localY, localZ) => {
-        const board = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), timber);
-        if (stagingBoxId) board.userData.stagingBoxId = stagingBoxId;
-        board.position.copy(new THREE.Vector3(localX, localY + yOffset, localZ).applyQuaternion(quaternion).add(position));
-        board.quaternion.copy(quaternion);
-        board.castShadow = board.receiveShadow = true;
-        scene.add(board);
-      };
-      [-0.43, -0.215, 0, 0.215, 0.43].forEach((localZ) => addTimber(width * 0.94, 0.04, depth * 0.15, 0, 0.16, localZ * depth));
-      [-0.38, 0, 0.38].forEach((localZ) => addTimber(width * 0.72, 0.11, depth * 0.13, 0, 0.075, localZ * depth));
-      [-0.37, 0.37].forEach((localZ) => addTimber(width * 0.94, 0.035, depth * 0.11, 0, 0.018, localZ * depth));
+  /* A timber pallet whose origin is the middle of its underside. */
+  const timber = new THREE.MeshStandardMaterial({ color: 0xb97a3e, roughness: 0.8, metalness: 0 });
+  const makePallet = (width, depth) => {
+    const pallet = new THREE.Group();
+    const board = (sx, sy, sz, x, y, z) => {
+      const mesh = new THREE.Mesh(UNIT_BOX, timber);
+      mesh.scale.set(sx, sy, sz);
+      mesh.position.set(x, y, z);
+      mesh.castShadow = mesh.receiveShadow = true;
+      pallet.add(mesh);
     };
-    boxEntries.concat(stagingEntries).forEach((entry) => {
-      const palletWidth = 1.0;
-      const palletDepth = 1.2;
-      const palletCenter = entry.position.clone();
-      palletCenter.y -= entry.scale.y / 2 + 0.085;
-      addPallet(
-        palletCenter,
-        entry.quaternion,
-        palletWidth,
-        palletDepth,
-        0,
-        entry.box.id,
-      );
-    });
-  }).catch((error) => console.warn('[Warehouse3D] Wooden pallet asset could not be loaded.', error));
+    [-0.43, -0.215, 0, 0.215, 0.43].forEach((z) => board(width, 0.03, depth * 0.14, 0, PALLET_HEIGHT - 0.015, z * depth));
+    [-0.45, 0, 0.45].forEach((x) => [-0.43, 0, 0.43].forEach((z) => board(width * 0.1, PALLET_HEIGHT - 0.055, depth * 0.14, x * width, 0.015 + (PALLET_HEIGHT - 0.055) / 2 + 0.01, z * depth)));
+    [-0.43, 0, 0.43].forEach((z) => board(width, 0.025, depth * 0.14, 0, 0.0125, z * depth));
+    return pallet;
+  };
+  const palletsById = new Map();
+  boxEntries.concat(stagingEntries).forEach((entry) => {
+    const fit = entry.slotEntry
+      ? palletFit(slotSize(entry.slotEntry), 1, { width: entry.scale.x, height: entry.scale.y, depth: entry.scale.z })
+      : { width: 1.2, depth: 1.0 };
+    const pallet = makePallet(fit.width, fit.depth);
+    pallet.position.copy(entry.position);
+    pallet.position.y -= entry.scale.y / 2 + PALLET_HEIGHT;
+    pallet.quaternion.copy(entry.quaternion);
+    scene.add(pallet);
+    palletsById.set(String(entry.box.id), pallet);
+  });
   // Render the detailed source truck unchanged.  Its geometry must never be
   // edited at runtime: the old wheel implementation mutated this shared mesh
   // and stretched the mast into the ceiling.
@@ -4069,13 +3865,10 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     });
     const rawBounds = new THREE.Box3().setFromObject(forklift);
     const rawSize = rawBounds.getSize(new THREE.Vector3());
-    // Use the operator canopy height as the physical reference: the roof is
-    // The visual reference requested here is deliberately larger than the
-    // original downloaded truck.  Keep a single explicit multiplier so this
-    // does not get lost in a near-identical footprint normalization again.
-    const targetForkliftRoofHeight = 2.4;
-    const forkliftScaleMultiplier = 1.6;
-    const scale = (targetForkliftRoofHeight / Math.max(rawSize.y, 0.01)) * forkliftScaleMultiplier;
+    // Real counterbalance truck: 2.4 m with the mast down (about 1.1 m wide and
+    // 3.2 m long with forks), so it sits correctly beside 1.7–3.2 m racks.
+    const targetForkliftHeight = 2.4;
+    const scale = targetForkliftHeight / Math.max(rawSize.y, 0.01);
     forkliftAssetScale = scale;
     forklift.scale.setScalar(scale);
     const scaledBounds = new THREE.Box3().setFromObject(forklift);
@@ -4175,6 +3968,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         ? Number(savedForkliftTwo.rotationY) : forkliftCloneRoot.rotation.y;
     }
     scene.add(forkliftCloneRoot);
+    setUpTrucks();
     if (forkliftWasRelocated) {
       window.toast?.(
         'นำรถ Forklift กลับจุดจอดแล้ว',
@@ -4398,7 +4192,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
               // rather than preserving its former staging-bay coordinates.
               // Seat the deck directly over the fork carriage: lift it clear
               // of the floor and keep the pallet holes around the fork tips.
-              loadAssembly.position.set(0, 0.78 + forkliftLiftHeight, 1.08);
+              loadAssembly.position.set(0, FORK_REST_HEIGHT + forkliftLiftHeight, FORK_PICKUP_REACH);
               // Turn the pallet so its fork pockets face the mast/forks,
               // rather than exposing the pocket openings sideways.
               loadAssembly.rotation.set(0, Math.PI * 0.5, 0);
@@ -4568,33 +4362,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       }
       if (forkliftSelection?.visible) forkliftSelection.position.set(forkliftRoot.position.x, warehouseFloorY + 0.025, forkliftRoot.position.z);
     }
-    if (forkliftCarriageForks) {
-      if (forkliftLiftInput) {
-        // 3 m/s is quick enough for a held press while every rendered frame
-        // still changes the target in sub-centimetre increments.
-        forkliftLiftTarget = THREE.MathUtils.clamp(forkliftLiftTarget + forkliftLiftInput * 6 * deltaSeconds, 0, forkliftLiftMax);
-      }
-      // Putaway lift/lower motion is intentionally slower so the forks and
-      // pallet visibly align with the rack shelf instead of snapping.
-      forkliftLiftHeight = THREE.MathUtils.damp(forkliftLiftHeight, forkliftLiftTarget, 9, deltaSeconds);
-      // Publish manual mast movement as it animates, so other viewers follow
-      // the same height without being allowed to overwrite this operator.
-      if (forkliftSelected && Math.abs(forkliftLiftHeight - forkliftLiftTarget) > 0.003) saveForkliftPosition();
-      forkliftCarriageForks.position.x = forkliftCarriageBaseX;
-      forkliftCarriageForks.position.y = forkliftCarriageBaseY + forkliftLiftHeight / forkliftAssetScale;
-      // This is the original tall steel stage from the GLB (its exported name
-      // is CarriageForks). A two-stage mast travels roughly half the carriage
-      // distance, keeping the factory rail nested in the fixed outer mast and
-      // connected to the original fork assembly throughout the lift.
-      if (forkliftMastInner) {
-        forkliftMastInner.position.copy(forkliftMastInnerBasePosition).addScaledVector(
-          forkliftMastInnerLiftAxis,
-          // Once engaged, the inner rail follows the remaining lift distance
-          // at full travel so it can reach the upper rack level.
-          Math.max(0, forkliftLiftHeight - forkliftMastEngageHeight) / forkliftAssetScale,
-        );
-      }
-    }
+    autopilotTick(deltaSeconds);
     // Keep the ring locked to the forklift root every frame. Previously its
     // position was only refreshed during local route movement, so the beat
     // effect could lag behind (or remain offset from) the vehicle after a
@@ -4623,6 +4391,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       if (elapsed >= 1) targetRipple.visible = false;
     }
     dockDoors.forEach((door) => {
+      updateDoorState(door, frameNow);
       const target = door.open ? 1 : 0;
       door.progress += (target - door.progress) * (1 - Math.exp(-8 * deltaSeconds));
       // A sectional door retracts upward: preserve its top edge while the
@@ -4636,7 +4405,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     // frame, never to a former world coordinate in the staging bay.
     if (forkliftLoadAssembly?.parent === forkliftRoot) {
       // Seat the pallet farther out on the tines, clear of the mast/cab.
-      forkliftLoadAssembly.position.set(0, 0.78 + forkliftLiftHeight, 1.65);
+      forkliftLoadAssembly.position.set(0, FORK_REST_HEIGHT + forkliftLiftHeight, FORK_CARRY_REACH);
       forkliftLoadAssembly.rotation.set(0, Math.PI * 0.5, 0);
     }
     if (firstPerson) {
@@ -4734,9 +4503,326 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   renderer.setAnimationLoop(animate);
   stage.querySelector('.loc3d-loading')?.remove();
 
+  showGateActivity(model.doors);
+  /* ---- autopilot: act out database changes with the truck ---------------- */
+  const DRIVE_SPEED = 5; // m/s
+  const TURN_SPEED = 4; // rad/s
+  const LIFT_SPEED = 1.5; // m/s
+  const floorPoint = (point) => point.clone().setY(warehouseFloorY + 0.025);
+  const doorSpot = (gateNo) => {
+    const entry = dockDoors.find((door) => Number(door.door.gateNo) === Number(gateNo)) || dockDoors[0];
+    if (!entry) return floorPoint(center);
+    const at = entry.leaf.getWorldPosition(new THREE.Vector3());
+    const inward = center.clone().sub(at).setY(0).normalize();
+    return floorPoint(at.addScaledVector(inward, 2.2));
+  };
+  const openDoor = (gateNo) => {
+    const entry = dockDoors.find((door) => Number(door.door.gateNo) === Number(gateNo));
+    if (entry) entry.openUntil = performance.now() + DOOR_OPEN_MS;
+  };
+  /** Where a load is, or is going: the middle of the pallet's underside, the box
+   *  and pallet sizes, and (in a rack) the loading face. */
+  const spotFor = (place, box, latest) => {
+    const size = {
+      width: positive(box.dimensionsCm?.width, 60) * CM_TO_M,
+      height: positive(box.dimensionsCm?.height, 40) * CM_TO_M,
+      depth: positive(box.dimensionsCm?.depth, 40) * CM_TO_M,
+    };
+    if (place.kind === 'slot') {
+      const slotEntry = slotById.get(place.slotId);
+      if (!slotEntry) return null;
+      const fitted = fitToSlot(size.width, size.height, size.depth, slotEntry);
+      const sharing = (latest.boxes || []).filter((other) => other.slotId === place.slotId);
+      const side = palletSides(sharing).get(String(box.id)) ?? (place.side === 'right' ? 1 : -1);
+      const fit = palletFit(slotSize(slotEntry), side, fitted);
+      const bottomCm = num(slotEntry.slot.localPositionCm?.y) - positive(slotEntry.slot.dimensionsCm?.height, 70) / 2;
+      const bottom = worldPoint(slotEntry.rack, num(slotEntry.slot.localPositionCm?.x) + fit.offset / CM_TO_M,
+        bottomCm + fit.bottom / CM_TO_M, slotEntry.slot.localPositionCm?.z);
+      return {
+        bottom, size: fitted, pallet: fit, quaternion: slotEntry.quaternion,
+        face: new THREE.Vector3(0, 0, 1).applyQuaternion(slotEntry.quaternion).setY(0).normalize(),
+      };
+    }
+    const pallet = { width: 1.2, depth: 1.0 };
+    const waiting = place.kind === 'staging' && stagingEntries.find((entry) => String(entry.box.id) === String(box.id));
+    const bottom = waiting
+      ? waiting.position.clone().setY(waiting.position.y - waiting.scale.y / 2 - PALLET_HEIGHT)
+      /* a door, or a staging place this scene has not drawn yet */
+      : doorSpot(place.gateNo ?? latest.doors?.[0]?.gateNo).setY(warehouseFloorY);
+    return { bottom, size, pallet, quaternion: waiting?.quaternion || new THREE.Quaternion(), face: null };
+  };
+  const makeLoad = (spot) => {
+    const load = makePallet(spot.pallet.width, spot.pallet.depth);
+    const carton = new THREE.Mesh(UNIT_BOX, new THREE.MeshStandardMaterial({ color: canonicalBoxColor.clone(), roughness: 0.7 }));
+    carton.scale.set(spot.size.width, spot.size.height, spot.size.depth);
+    carton.position.y = PALLET_HEIGHT + spot.size.height / 2;
+    carton.castShadow = carton.receiveShadow = true;
+    load.add(carton);
+    return load;
+  };
+  const hideBox = (id) => {
+    const index = boxEntries.findIndex((entry) => String(entry.box.id) === String(id));
+    if (index >= 0 && boxMesh) {
+      boxMesh.setMatrixAt(index, new THREE.Matrix4().makeScale(0, 0, 0));
+      boxMesh.instanceMatrix.needsUpdate = true;
+    }
+    stagingBoxPickMeshes.filter((mesh) => String(mesh.userData.stagingBoxId) === String(id))
+      .forEach((mesh) => { mesh.visible = false; });
+    const pallet = palletsById.get(String(id));
+    if (pallet) pallet.visible = false;
+  };
+  const turnTowards = (truck, yaw, delta) => {
+    const error = Math.atan2(Math.sin(yaw - truck.root.rotation.y), Math.cos(yaw - truck.root.rotation.y));
+    const step = Math.sign(error) * Math.min(Math.abs(error), TURN_SPEED * delta);
+    truck.root.rotation.y += step;
+    return Math.abs(error - step) < 0.03;
+  };
+  const applyMast = (truck, lift) => {
+    const pose = mastPose(lift, truck.limits);
+    truck.lift = pose.lift;
+    truck.carriage.position.x = forkliftCarriageBaseX;
+    truck.carriage.position.y = truck.carriageBaseY + pose.lift / forkliftAssetScale;
+    truck.inner.position.copy(truck.innerBase)
+      .addScaledVector(forkliftMastInnerLiftAxis, pose.inner / forkliftAssetScale);
+    if (truck.load) truck.load.position.y = truck.forkRest + pose.lift - FORK_POCKET;
+  };
+  /* Each step is called every frame until it says it is done. */
+  const drive = (truck, target, { reverse = false, direct = false } = {}) => {
+    let path = null;
+    let waited = 0;
+    return (delta) => {
+      if (!path) {
+        /* Go round trucks that are standing still. */
+        const parked = trucks.filter((other) => other !== truck && !other.moving).map((other) => {
+          const at = other.root.position;
+          return new THREE.Box3(at.clone().addScalar(-1.5), at.clone().addScalar(1.5));
+        });
+        path = direct ? [] : findForkliftPath(truck.root.position, target, parked).slice(1);
+        path.push(floorPoint(target));
+      }
+      const next = path[0];
+      const away = next.clone().sub(truck.root.position).setY(0);
+      const distance = away.length();
+      if (distance < 0.05) {
+        path.shift();
+        truck.moving = path.length > 0;
+        return path.length === 0;
+      }
+      const heading = Math.atan2(away.x, away.z) + (reverse ? Math.PI : 0);
+      if (!turnTowards(truck, heading, delta)) return false;
+      const step = Math.min(distance, DRIVE_SPEED * delta);
+      const to = truck.root.position.clone().addScaledVector(away.normalize(), step);
+      const inTheWay = trucks.some((other) => other !== truck && shouldYield(to, truck.root.position, other.root.position));
+      /* Different patience, so two trucks facing each other cannot wait forever. */
+      if (inTheWay && waited < truck.patience) {
+        waited += delta;
+        truck.moving = false;
+        return false;
+      }
+      if (!inTheWay) waited = 0;
+      truck.moving = true;
+      truck.root.position.copy(to);
+      truck.wheels.forEach(({ object, radius }) => {
+        object.rotation.x += (reverse ? -step : step) / Math.max(radius, 0.01);
+      });
+      return false;
+    };
+  };
+  const face = (truck, direction) => (delta) => turnTowards(truck, Math.atan2(direction().x, direction().z), delta);
+  const lift = (truck, height) => (delta) => {
+    const target = mastPose(height(), truck.limits).lift;
+    const step = Math.sign(target - truck.lift) * Math.min(Math.abs(target - truck.lift), LIFT_SPEED * delta);
+    applyMast(truck, truck.lift + step);
+    return Math.abs(target - truck.lift) < 0.01;
+  };
+  const once = (action) => () => { action(); return true; };
+  /* Approach points depend on where the truck is when it gets there. */
+  const lazy = (make) => { let step = null; return (delta) => { step = step || make(); return step(delta); }; };
+
+  /* ---- the two trucks and their parking bays ---------------------------- */
+  /* Where each truck was left, per warehouse layout: survives the scene being
+     rebuilt and a page reload on this device. */
+  const parkedKey = `loc3dTrucks:${model.warehouseId}:${forkliftLayoutRevision}`;
+  const rememberedTrucks = () => {
+    try { return JSON.parse(localStorage.getItem(parkedKey)) || []; } catch { return []; }
+  };
+  const rememberTrucks = () => {
+    try {
+      localStorage.setItem(parkedKey, JSON.stringify(trucks.map((truck) => ({
+        x: truck.root.position.x, z: truck.root.position.z, yaw: truck.root.rotation.y,
+      }))));
+    } catch { /* storage unavailable: trucks start in their bays next time */ }
+  };
+  setUpTrucks = () => {
+    const base = {
+      x: Math.min(bounds.max.x + 3.5, center.x + halfWarehouseWidth - 2),
+      z: THREE.MathUtils.clamp(center.z, center.z - halfWarehouseDepth + 3, center.z + halfWarehouseDepth - 3),
+    };
+    const bays = parkingBays(base, 2);
+    trucks = [
+      { root: forkliftRoot, carriage: forkliftCarriageForks, inner: forkliftMastInner, wheels: forkliftWheels },
+      { root: forkliftCloneRoot, carriage: forkliftCloneCarriageForks, inner: forkliftCloneMastInner, wheels: forkliftCloneWheels },
+    ].filter((truck) => truck.root && truck.carriage && truck.inner);
+    const remembered = rememberedTrucks();
+    trucks.forEach((truck, index) => {
+      truck.home = new THREE.Vector3(bays[index].x, warehouseFloorY + 0.012, bays[index].z);
+      truck.homeYaw = -Math.PI / 2; // nose towards the racks
+      truck.root.position.copy(truck.home);
+      truck.root.rotation.y = truck.homeYaw;
+      truck.root.updateMatrixWorld(true);
+      const top = (object) => new THREE.Box3().setFromObject(object);
+      const carriage = top(truck.carriage);
+      const inner = top(truck.inner);
+      const outer = top(truck.root.getObjectByName('ForkliftMastOuter') || truck.inner);
+      const floor = truck.root.position.y;
+      truck.limits = mastLimits({
+        carriageTop: carriage.max.y - floor, innerBottom: inner.min.y - floor,
+        innerTop: inner.max.y - floor, outerTop: outer.max.y - floor,
+      });
+      truck.forkRest = carriage.min.y - floor + 0.06; // top of the tines
+      truck.carriageBaseY = truck.carriage.position.y;
+      truck.innerBase = truck === trucks[0] ? forkliftMastInnerBasePosition.clone() : truck.inner.position.clone();
+      truck.lift = 0;
+      truck.load = null;
+      truck.steps = [];
+      truck.moving = false;
+      truck.patience = index === 0 ? 1.5 : 5;
+      applyMast(truck, 0);
+      const left = remembered[index];
+      if (left && [left.x, left.z, left.yaw].every(Number.isFinite)) {
+        truck.root.position.set(left.x, truck.home.y, left.z);
+        truck.root.rotation.y = left.yaw;
+      }
+    });
+  };
+
+  /* A cached truck model can finish loading before this point is reached; the
+     call made from the loader was then a no-op, so set the trucks up now. */
+  if (forkliftCloneRoot) setUpTrucks();
+
+  const stepsFor = (truck, job, latest) => {
+    const from = spotFor(job.from, job.from.box || job.box, latest);
+    const to = spotFor(job.to, job.box, latest);
+    if (!from || !to) { job.picked = true; return []; }
+    const carried = makeLoad(from);
+    /* Far enough forward that the load clears the mast. */
+    const reach = Math.max(FORK_CARRY_REACH, FORK_HEEL + from.pallet.depth / 2);
+    const onFloor = (p) => floorPoint(new THREE.Vector3(p.x, 0, p.z));
+    const standAt = (spot) => {
+      const at = standingPoints(spot.bottom, spot.face, reach, truck.root.position);
+      return {
+        normal: new THREE.Vector3(at.normal.x, 0, at.normal.z),
+        near: onFloor(at.near),
+        before: onFloor(at.before),
+      };
+    };
+    /* Fork height that puts the tines in the pallet's pockets at that spot. */
+    const forkHeight = (spot) => () => spot.bottom.y - truck.root.position.y - truck.forkRest + FORK_POCKET;
+    let pick = null;
+    let drop = null;
+    return [
+      once(() => { if (job.from.kind === 'door') openDoor(job.from.gateNo); scene.add(carried); carried.position.copy(from.bottom); carried.quaternion.copy(from.quaternion); pick = standAt(from); hideBox(job.id); }),
+      lazy(() => drive(truck, pick.before)),
+      face(truck, () => pick.normal.clone().negate()),
+      lift(truck, forkHeight(from)),
+      lazy(() => drive(truck, pick.near, { direct: true })),
+      once(() => {
+        truck.root.add(carried);
+        truck.load = carried;
+        carried.rotation.set(0, 0, 0);
+        carried.position.set(0, truck.forkRest + truck.lift - FORK_POCKET, reach);
+        job.picked = true;
+      }),
+      lazy(() => { const up = truck.lift + 0.12; return lift(truck, () => up); }),
+      lazy(() => drive(truck, pick.before, { reverse: true, direct: true })),
+      lift(truck, () => 0),
+      once(() => { drop = standAt(to); }),
+      lazy(() => drive(truck, drop.before)),
+      face(truck, () => drop.normal.clone().negate()),
+      lift(truck, () => forkHeight(to)() + 0.12),
+      lazy(() => drive(truck, drop.near, { direct: true })),
+      lift(truck, forkHeight(to)),
+      once(() => {
+        truck.root.remove(carried);
+        truck.load = null;
+        job.done = true;
+        if (job.to.kind === 'door') { openDoor(job.to.gateNo); return; }
+        scene.add(carried);
+        carried.position.copy(to.bottom);
+        carried.quaternion.copy(to.quaternion);
+      }),
+      lazy(() => drive(truck, drop.before, { reverse: true, direct: true })),
+      lift(truck, () => 0),
+      /* Stay here, but not on top of the other truck. */
+      lazy(() => {
+        const others = trucks.filter((other) => other !== truck).map((other) => other.root.position);
+        const spot = clearSpot(drop.before, drop.normal, others);
+        return spot === drop.before ? once(() => {}) : drive(truck, onFloor(spot));
+      }),
+    ];
+  };
+  let autopilot = null;
+  const playJobs = (jobs, latest) => new Promise((resolve) => {
+    autopilot = { queue: [...jobs], all: jobs, latest, resolve };
+  });
+  const finishAutopilot = () => {
+    const done = autopilot;
+    autopilot = null;
+    done?.resolve();
+  };
+  autopilotTick = (delta) => {
+    if (!autopilot) return;
+    const busy = () => trucks.some((truck) => truck.steps.length);
+    trucks.forEach((truck) => {
+      if (!truck.steps.length) {
+        let next = autopilot.queue.findIndex((job) => canStart(job, autopilot.all.filter((j) => !j.done)));
+        /* two boxes swapping places: nothing is startable and nobody is working */
+        if (next < 0 && autopilot.queue.length && !busy()) next = 0;
+        if (next >= 0) {
+          const [job] = autopilot.queue.splice(next, 1);
+          truck.steps = stepsFor(truck, job, autopilot.latest);
+        } else {
+          truck.moving = false; // parked wherever its last job ended
+        }
+      }
+      if (truck.steps.length && truck.steps[0](delta)) truck.steps.shift();
+    });
+    if (!autopilot.queue.length && !busy()) {
+      rememberTrucks();
+      finishAutopilot();
+    }
+  };
+
+  const mountedSignature = sceneSignature(model);
+  /* Anything that differs from what is on screen — a box moved, added, removed
+     or resized, a rack or door changed — means the scene has to be rebuilt.
+     Returns false for that; the caller rebuilds, keeping the camera. */
+  let checking = false;
+  const refreshFromDatabase = async () => {
+    if (disposed || autopilot || checking) return true; /* the rebuild afterwards reads the latest */
+    checking = true;
+    try {
+      const response = await fetch(`/api/warehouse-3d?warehouseId=${encodeURIComponent(model.warehouseId)}`, {
+        headers: requestHeaders(), cache: 'no-store',
+      });
+      if (!response.ok) return true;
+      const latest = await response.json();
+      showGateActivity(latest.doors);
+      if (sceneSignature(latest) === mountedSignature) return true;
+      const jobs = trucks.length ? planJobs(model, latest) : null;
+      if (jobs?.length && !autopilot) await playJobs(jobs, latest);
+      return false;
+    } catch { return true; } finally { checking = false; }
+  };
   return {
     assets,
-    refreshInventory: refreshInventoryInPlace,
+    refreshInventory: refreshFromDatabase,
+    isPlaying: () => Boolean(autopilot),
+    trucks: () => trucks.map((truck) => ({
+      position: truck.root.position.toArray(), yaw: truck.root.rotation.y, lift: truck.lift,
+      maxLift: truck.limits.max, busy: truck.steps.length > 0,
+    })),
+    openGates: () => dockDoors.filter((door) => door.open).map((door) => Number(door.door.gateNo)),
     getView() { return {position: camera.position.clone(), target: controls.target.clone(), warehouseId: model.warehouseId}; },
     setView(view) {
       if (!view || view.warehouseId !== model.warehouseId) return;
@@ -4744,7 +4830,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       controls.target.copy(view.target);
       controls.update();
     },
-    isBusy() { return Boolean(forkliftMotion || (forkliftSelected && forkliftLoadAssembly) || forkliftPutawayPhase); },
+    isBusy() { return Boolean(autopilot || forkliftMotion || (forkliftSelected && forkliftLoadAssembly) || forkliftPutawayPhase); },
     setLanguage() {
       updateFirstPersonCopy();
       firstPersonOverlay.appendChild(mobileWalkControls);
@@ -4752,6 +4838,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     },
     dispose() {
       disposed = true;
+      finishAutopilot();
       window.removeEventListener('loc3d-forklift-state', onRemoteForkliftState);
       window.removeEventListener('loc3d-shared-settings', onSharedViewSettings);
       forkliftPendingBroadcast = null;
@@ -4805,7 +4892,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       modalPointerObserver.disconnect();
       if (fallbackFullscreen) setFallbackFullscreen(false);
       syncFullscreenPortals();
-      rackActionButton.remove();
       warehouseTitle.remove();
       stage.removeEventListener('selectstart', preventStageTextSelection);
       stage.removeEventListener('contextmenu', preventStageTextSelection);

@@ -1,9 +1,9 @@
 import { Router, type Request, type Response } from 'express';
 import { boxSize, fitsSlot, tooBigMessage } from '../lib/boxFit.js';
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { getDb } from '../db/client.js';
-import { boxes, boxTypes, racks, slots, warehouses, warehouse3dSettings } from '../db/schema.js';
+import { boxes, boxTypes, racks, slots, warehouses, warehouse3dSettings, events, gateWebhookStatus } from '../db/schema.js';
 import { requireAuth, requirePermission } from '../middleware/auth.js';
 import { asyncHandler, httpError } from '../middleware/error.js';
 import { writeAuditLog } from '../services/audit.js';
@@ -193,6 +193,27 @@ warehouse3dRouter.put(
   }),
 );
 
+/** Longest the 3D view ever holds a door open; older movements are irrelevant. */
+const GATE_ACTIVITY_WINDOW_MS = 60_000;
+
+/** How long ago something last passed each gate: a recorded movement or a tag
+ *  seen by its reader. An age, so a browser's clock does not matter. */
+async function gateActivityAges(db: ReturnType<typeof getDb>, gateNumbers: number[]) {
+  const ages = new Map<number, number>();
+  if (!gateNumbers.length) return ages;
+  const now = Date.now();
+  const note = (gate: number, at: Date | null) => {
+    if (!at || !gateNumbers.includes(gate)) return;
+    const age = Math.max(0, now - at.getTime());
+    if (age <= GATE_ACTIVITY_WINDOW_MS && age < (ages.get(gate) ?? Infinity)) ages.set(gate, age);
+  };
+  const recent = await db.select().from(events).where(gte(events.ts, new Date(now - GATE_ACTIVITY_WINDOW_MS)));
+  for (const row of recent) note(Number((row.data as Record<string, unknown>).gate), row.ts);
+  const readers = await db.select().from(gateWebhookStatus).where(inArray(gateWebhookStatus.gateNo, gateNumbers));
+  for (const row of readers) note(row.gateNo, row.lastTagSeenAt);
+  return ages;
+}
+
 warehouse3dRouter.get(
   '/',
   asyncHandler(async (req, res) => {
@@ -273,6 +294,7 @@ warehouse3dRouter.get(
       const rawType = String(gateTypes[String(gateNo)] ?? 'both');
       return { gateNo, type: ['in', 'out', 'both'].includes(rawType) ? rawType : 'both', index };
     });
+    const activity = await gateActivityAges(db, configuredGateNumbers);
 
     const slotsByRack = new Map<string, typeof slots.$inferSelect[]>();
     for (const slot of slotRows) {
@@ -301,7 +323,7 @@ warehouse3dRouter.get(
         ? (warehouse.data as Record<string, unknown>).forkliftPositions ?? {}
         : {},
     forkliftController: forkliftControllerStatus(warehouseId, clientIdFrom(req), String(req.query.forkliftId ?? 'forklift-1')),
-      doors,
+      doors: doors.map((door) => ({ ...door, activityAgeMs: activity.get(door.gateNo) ?? null })),
       racks: rackRows.map((rack) => rackJson(rack, slotsByRack.get(rack.id) ?? [], boxCountBySlot)),
       boxes: boxRows.map((box) => {
         // A box type is the operator-managed product master and therefore the
