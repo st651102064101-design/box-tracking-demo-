@@ -78,6 +78,11 @@ const mergeLprHistory = (browserHistory: unknown, persistedHistory: unknown): un
 
 /* ─── DB → S ───────────────────────────────────────────────────────────────*/
 export async function composeState(db: DB): Promise<Record<string, unknown>> {
+  const state = await composeSnapshot(db);
+  return { ...state, baseTags: Object.keys(state.boxes as Record<string, unknown>) };
+}
+
+async function composeSnapshot(db: DB): Promise<Record<string, unknown>> {
   const [
     boxRows,
     custRows,
@@ -359,6 +364,7 @@ export async function replaceState(
              role by editing one number in the payload. Roles change only
              through PUT /api/roles/assign*, which checks permission.manage. */
           roleId: employees.roleId,
+          userId: employees.userId,
         })
         .from(employees)).map((r) => [r.id, r]),
     );
@@ -697,7 +703,9 @@ export async function replaceState(
              silently dropped on the very next unrelated state save. Same
              reasoning for the PIN/login columns, captured into pinById above
              since they never round-trip through `data` at all (see composeState). */
-          userId: toInt(e.userId) ?? bootstrapUserId,
+          /* An existing row keeps its stored link — a client must not be able to
+             re-point or drop which account a record belongs to. */
+          userId: pin ? pin.userId : (toInt(e.userId) ?? bootstrapUserId),
           /* roleId is deliberately omitted: role assignment has its own API and
              must never be overwritten by a stale whole-state snapshot. */
           data: e,

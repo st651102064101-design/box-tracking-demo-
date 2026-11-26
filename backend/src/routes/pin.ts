@@ -8,6 +8,7 @@ import { asyncHandler, httpError } from '../middleware/error.js';
 import { requireAuth, requirePermission } from '../middleware/auth.js';
 import { effectivePermissions } from '../lib/effectivePermissions.js';
 import { writeAuditLog } from '../services/audit.js';
+import { selfEmployeeIds } from '../services/selfRules.js';
 import { bump } from '../lib/bus.js';
 
 /**
@@ -165,7 +166,7 @@ employeePinRouter.put(
  *  Both end current sessions immediately. */
 async function changeAccount(req: Parameters<typeof requireAuth>[0], active: boolean | undefined) {
   const id = String(req.params.id);
-  if (active === false && req.user!.employeeId === id) {
+  if (active === false && (await selfEmployeeIds(req.user!)).includes(id)) {
     throw httpError(409, 'ระงับบัญชีที่กำลังใช้งานอยู่ไม่ได้', 'cannot_suspend_self');
   }
   const db = getDb();

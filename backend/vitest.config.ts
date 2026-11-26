@@ -7,7 +7,10 @@ export default defineConfig({
     include: ['tests/**/*.test.ts'],
     env: {
       NODE_ENV: 'test',
-      USE_PGLITE: 'true',
+      /* RACE_DB=postgres://… runs against a real, disposable Postgres so that
+         concurrent requests really overlap (PGlite serves one at a time). */
+      USE_PGLITE: process.env.RACE_DB ? 'false' : 'true',
+      ...(process.env.RACE_DB ? { DATABASE_URL: process.env.RACE_DB } : {}),
       PGLITE_DIR: ':memory:',
       JWT_SECRET: 'test-secret',
       JWT_EXPIRES_IN: '1h',

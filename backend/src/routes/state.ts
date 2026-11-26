@@ -1,13 +1,16 @@
 import { Router } from 'express';
 import { getDb } from '../db/client.js';
-import { employees } from '../db/schema.js';
+import { employees, customers } from '../db/schema.js';
 import { composeState, replaceState } from '../services/state.js';
 import { stateSchema } from '../validators/schemas.js';
 import { asyncHandler, httpError } from '../middleware/error.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { effectivePermissions } from '../lib/effectivePermissions.js';
 import { guardStatePayload } from '../services/stateGuard.js';
-import { refuseCrossWarehouseShipments } from '../services/gateOwnership.js';
+import { protectOwnRecords, selfEmployeeIds } from '../services/selfRules.js';
+import { keepNewerMovements, refuseInvalidMovements } from '../services/gateOwnership.js';
+import { withStockLock } from '../lib/stockLock.js';
+import { isNotNull } from 'drizzle-orm';
 import { bump } from '../lib/bus.js';
 import { activeSuperAdminHolders, totalHolders } from '../lib/superAdminGuard.js';
 
@@ -69,53 +72,66 @@ stateRouter.put(
        every snapshot carries every table, so an outright rejection would stop
        an operator from saving the one box they are allowed to edit.
        See services/stateGuard.ts for the group→permission map. */
-    const { permissions } = await effectivePermissions(req.user);
-    const stored = await composeState(db);
-    const { payload: allowed, rejected } = guardStatePayload(
-      payload,
-      stored as unknown as Record<string, unknown>,
-      permissions,
-    );
+    /* Compare-then-replace must not interleave with a scanner. */
+    const rejected = await withStockLock(async () => {
+      const { permissions } = await effectivePermissions(req.user);
+      const stored = await composeState(db);
+      const { payload: allowed, rejected } = guardStatePayload(
+        payload,
+        stored as unknown as Record<string, unknown>,
+        permissions,
+      );
 
-    /* Last-Super-Admin protection for the two things this endpoint (not
-       /api/roles) can do to an employee: delete the row outright (its id just
-       isn't in the payload — this table is upserted+pruned, see
-       services/state.ts) or flip their employment status away from 'active'.
-       Checked against `allowed` — what guardStatePayload actually kept after
-       permission filtering — because that is what replaceState is about to
-       persist; checking the raw `payload` could false-positive on a change
-       that was going to be reverted anyway. Role reassignment itself can't
-       happen here at all (roleId is a stripped/ignored field, always carried
-       over from the stored row — see replaceState), so this is purely about
-       the row disappearing or its status field turning the role unusable. */
-    const holdersBefore = await activeSuperAdminHolders(db);
-    if (holdersBefore.employeeIds.length > 0) {
-      const incomingEmployees =
-        ('employees' in (allowed as unknown as Record<string, unknown>)
-          ? allowed.employees
-          : (stored as { employees?: unknown }).employees) as
-          | Record<string, Record<string, unknown>>
-          | undefined;
-      const employeeSurvivors = holdersBefore.employeeIds.filter((id) => {
-        const incoming = incomingEmployees?.[id];
-        if (!incoming) return false; // would be deleted
-        const status = (incoming.status as string | undefined) ?? 'active';
-        return status === 'active';
-      });
-      const remaining = employeeSurvivors.length + holdersBefore.userIds.length;
-      if (remaining <= 0) {
-        throw httpError(
-          409,
-          'ระบบต้องมี Super Admin ที่ใช้งานอยู่ไม่น้อยกว่า 1 คน',
-          'last_super_admin',
-        );
+      /* Last-Super-Admin protection for the two things this endpoint (not
+         /api/roles) can do to an employee: delete the row outright (its id just
+         isn't in the payload — this table is upserted+pruned, see
+         services/state.ts) or flip their employment status away from 'active'.
+         Checked against `allowed` — what guardStatePayload actually kept after
+         permission filtering — because that is what replaceState is about to
+         persist; checking the raw `payload` could false-positive on a change
+         that was going to be reverted anyway. Role reassignment itself can't
+         happen here at all (roleId is a stripped/ignored field, always carried
+         over from the stored row — see replaceState), so this is purely about
+         the row disappearing or its status field turning the role unusable. */
+      const holdersBefore = await activeSuperAdminHolders(db);
+      if (holdersBefore.employeeIds.length > 0) {
+        const incomingEmployees =
+          ('employees' in (allowed as unknown as Record<string, unknown>)
+            ? allowed.employees
+            : (stored as { employees?: unknown }).employees) as
+            | Record<string, Record<string, unknown>>
+            | undefined;
+        const employeeSurvivors = holdersBefore.employeeIds.filter((id) => {
+          const incoming = incomingEmployees?.[id];
+          if (!incoming) return false; // would be deleted
+          const status = (incoming.status as string | undefined) ?? 'active';
+          return status === 'active';
+        });
+        const remaining = employeeSurvivors.length + holdersBefore.userIds.length;
+        if (remaining <= 0) {
+          throw httpError(
+            409,
+            'ระบบต้องมี Super Admin ที่ใช้งานอยู่ไม่น้อยกว่า 1 คน',
+            'last_super_admin',
+          );
+        }
       }
-    }
 
-    const checked = refuseCrossWarehouseShipments(allowed, stored as unknown as Record<string, unknown>);
-    rejected.push(...checked.rejected);
+      const current = stored as unknown as Record<string, unknown>;
+      /* Only an admin may deliberately overwrite newer data (backup restore). */
+      const fresh = keepNewerMovements({ ...allowed, restore: allowed.restore && req.user?.role === 'admin' }, current);
+      rejected.push(...fresh.rejected);
 
-    await replaceState(db, checked.payload, req.user);
+      const deleted = await db.select({ id: customers.id }).from(customers).where(isNotNull(customers.deletedAt));
+      const checked = refuseInvalidMovements(fresh.payload, current, new Set(deleted.map((c) => c.id)));
+      rejected.push(...checked.rejected);
+
+      const own = protectOwnRecords(checked.payload, stored as unknown as Record<string, unknown>, await selfEmployeeIds(req.user!));
+      rejected.push(...own.rejected);
+
+      await replaceState(db, own.payload, req.user);
+      return rejected;
+    });
     /* Tell every open stream. The writer's own id rides along so its browser
        can skip re-fetching the snapshot it just uploaded. */
     const version = bump(req.get('X-Client-Id'));

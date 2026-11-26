@@ -167,6 +167,7 @@ describe('POST /api/cycle-counts/:id/mark-missing-lost', () => {
   it('marks every still-missing box lost, with history and an audit trail', async () => {
     const session = (await open('WH-005', 'A')).body;
     expect(session.expected).toEqual([]); // nothing on that shelf
+    await request(ctx.app).post(`/api/cycle-counts/${session.id}/close`).set(auth(ctx.token)).send({});
     const empty = await request(ctx.app)
       .post(`/api/cycle-counts/${session.id}/mark-missing-lost`)
       .set(auth(ctx.token))
@@ -188,6 +189,7 @@ describe('POST /api/cycle-counts/:id/mark-missing-lost', () => {
 
     const session = (await open('WH-009', 'Q')).body;
     expect(session.expected).toEqual(['CC-01']);
+    await request(ctx.app).post(`/api/cycle-counts/${session.id}/close`).set(auth(ctx.token)).send({});
 
     const res = await request(ctx.app)
       .post(`/api/cycle-counts/${session.id}/mark-missing-lost`)

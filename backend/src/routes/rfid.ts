@@ -507,7 +507,8 @@ async function autoProcessTag(
     const box = (await db.select().from(boxes).where(eq(boxes.tag, tag)).limit(1))[0];
     if (!box) return { processed: false, reason: 'box_not_found' };
     if (direction === 'in') {
-      if (box.status === 'warehouse') return { processed: false, reason: 'already_in_warehouse' };
+      /* Held and damaged boxes are in stock too; passing the reader changes nothing. */
+      if (['warehouse', 'hold', 'damage'].includes(box.status)) return { processed: false, reason: 'already_in_warehouse' };
       await gateIn(db, { tags: [tag], gate, recorder: 'FX9600 Auto', device: readerId });
     } else {
       if (box.status !== 'warehouse') return { processed: false, reason: 'not_shippable' };

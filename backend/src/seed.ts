@@ -5,7 +5,7 @@
  *
  * Run with: `npm run db:seed`
  */
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { applySchema, getDb, closeDb } from './db/client.js';
 import { users, employees, config, sequences, roles } from './db/schema.js';
 import { seedRoles } from './db/seedRoles.js';
@@ -66,6 +66,14 @@ async function main() {
       roleId: superAdmin?.id ?? null,
       data: { id: 'EMP-001', name: adminUser.name, role: 'ผู้ดูแลระบบ', access: 'admin', status: 'active' },
     }).onConflictDoNothing({ target: employees.id });
+    /* Databases where the first employee lost its account link: restore it, so the
+       bootstrap admin is recognised as that person. Only an EMP-001 that has no
+       login of its own, and only if nothing else is linked to this account. */
+    const linked = await db.select({ id: employees.id }).from(employees).where(eq(employees.userId, adminUser.id));
+    if (!linked.length) {
+      await db.update(employees).set({ userId: adminUser.id })
+        .where(and(eq(employees.id, 'EMP-001'), isNull(employees.userId), isNull(employees.username)));
+    }
   }
 
   console.log('[seed] done ✓');

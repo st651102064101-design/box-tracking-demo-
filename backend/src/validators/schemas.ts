@@ -59,6 +59,10 @@ export const stateSchema = z.object({
   locations: locationRecord.optional().default({}),
   inventory: record.optional().default({}),
   auditLog: z.array(z.any()).optional().default([]),
+  /** Box tags the page knew when it made this snapshot — see keepNewerMovements. */
+  baseTags: z.array(z.string()).optional(),
+  /** Restoring a backup on purpose: newer data is meant to be replaced. */
+  restore: z.boolean().optional(),
 });
 export type StatePayload = z.infer<typeof stateSchema>;
 

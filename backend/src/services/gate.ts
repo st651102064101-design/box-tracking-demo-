@@ -6,9 +6,11 @@
  * Box lifecycle (mirrors the original app):
  *   pending → (label) → out → warehouse → out → …   (cycles++ on each return)
  */
-import { eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import type { DB } from '../db/client.js';
-import { boxes, customers, config, gates, events, doRecords, employees } from '../db/schema.js';
+import { boxes, customers, config, gates, events, doRecords, employees, warehouses, gatePendingReads } from '../db/schema.js';
+import { gateTypeOf } from '../lib/gateType.js';
+import { withStockLock } from '../lib/stockLock.js';
 import { httpError } from '../middleware/error.js';
 import { resolveBoxesByCodes } from './rfid.js';
 
@@ -64,6 +66,20 @@ function currentWhOf(row: typeof boxes.$inferSelect): string {
     if ((h.dir === 'in' || h.dir === 'in-new') && typeof h.wh === 'string' && h.wh) return h.wh;
   }
   return '';
+}
+
+async function requireGateAllows(db: DB, gate: number, wh: string, way: 'in' | 'out'): Promise<void> {
+  const [row] = await db.select().from(warehouses).where(eq(warehouses.id, wh));
+  const type = gateTypeOf(row, gate);
+  if (type !== 'both' && type !== way) {
+    throw httpError(409, `ประตู ${gate} เป็นประตู${type === 'in' ? 'ขาเข้า' : 'ขาออก'} ใช้${way === 'in' ? 'รับเข้า' : 'จ่ายออก'}ไม่ได้`, 'gate_wrong_direction');
+  }
+}
+
+/** A box that has now moved is no longer waiting in the reader's queue. */
+async function clearPending(db: DB, gate: number, tags: string[]): Promise<void> {
+  if (!tags.length) return;
+  await db.delete(gatePendingReads).where(and(eq(gatePendingReads.gateNo, gate), inArray(gatePendingReads.tag, tags)));
 }
 
 /** Who performed a scan, as recorded on every box's history and event row. */
@@ -125,7 +141,11 @@ export interface GateOutInput {
   platform?: string;
 }
 
-export async function gateOut(db: DB, input: GateOutInput) {
+export function gateOut(db: DB, input: GateOutInput) {
+  return withStockLock(() => shipOut(db, input));
+}
+
+async function shipOut(db: DB, input: GateOutInput) {
   const { tags, customer, gate } = input;
   await requireWarehouseOfGate(db, gate);
   const operator = await resolveOperator(db, input.employeeId, input.recorder);
@@ -139,7 +159,8 @@ export async function gateOut(db: DB, input: GateOutInput) {
   const vehicleType = input.vehicleType ?? '';
 
   const [cust] = await db.select().from(customers).where(eq(customers.id, customer));
-  if (!cust) throw httpError(404, 'ไม่พบลูกค้า', 'customer_not_found');
+  if (!cust || cust.deletedAt) throw httpError(404, 'ไม่พบลูกค้า', 'customer_not_found');
+  await requireGateAllows(db, gate, await requireWarehouseOfGate(db, gate), 'out');
   const [cfg] = await db.select().from(config);
   const { resolved, missing } = await resolveBoxesByCodes(db, tags);
   if (missing.length) throw httpError(404, `ไม่พบกล่อง: ${missing.join(', ')}`, 'box_not_found');
@@ -170,6 +191,11 @@ export async function gateOut(db: DB, input: GateOutInput) {
     throw httpError(409, `จ่ายออกไม่ได้: ${detail}`, 'box_not_shippable');
   }
 
+  const [existingDo] = await db.select().from(doRecords).where(eq(doRecords.id, doNo));
+  const owner = (existingDo?.data as Record<string, unknown> | undefined)?.customer;
+  if (owner && owner !== customer) {
+    throw httpError(409, `เลขที่ DO ${doNo} เป็นของลูกค้ารายอื่น`, 'do_in_use');
+  }
   const wh = await requireWarehouseOfGate(db, gate);
   // A box actually sitting in warehouse-A's inventory can't ship from
   // warehouse-B's gate — the same "this device belongs to one warehouse" rule
@@ -281,6 +307,8 @@ export async function gateOut(db: DB, input: GateOutInput) {
       .onConflictDoUpdate({ target: doRecords.id, set: { data: { customer, po, returnDays } } });
   });
 
+  await clearPending(db, gate, shipped);
+
   return { ok: true, doNo, shipped, dueAt: dueTs, count: shipped.length };
 }
 
@@ -309,9 +337,14 @@ export interface GateInInput {
   location?: { zone?: string; rack?: string; shelf?: string; slot?: string };
 }
 
-export async function gateIn(db: DB, input: GateInInput) {
+export function gateIn(db: DB, input: GateInInput) {
+  return withStockLock(() => receiveIn(db, input));
+}
+
+async function receiveIn(db: DB, input: GateInInput) {
   const { tags, gate } = input;
   const wh = await requireWarehouseOfGate(db, gate);
+  await requireGateAllows(db, gate, wh, 'in');
   const { employeeId, recorder } = await resolveOperator(db, input.employeeId, input.recorder);
   const device = input.device ?? '';
   const platform = input.platform ?? '';
@@ -333,12 +366,25 @@ export async function gateIn(db: DB, input: GateInInput) {
    * mis-scan, or a repeated receipt) must not silently re-stamp lastSeenAt and
    * log a second "received" event as if a shipment had just come off a truck.
    * Mirrors gateOut's NOT_SHIPPABLE guard: reject the whole batch up front,
-   * before any row is touched. Only 'warehouse' is checked — pending/hold/
-   * damage/lost boxes are exactly what receiving is *for*. */
-  const alreadyIn = canonicalTags.map((tag) => found.get(tag)!).filter((row) => row.status === 'warehouse');
+   * before any row is touched. A held or damaged box is refused too: it never
+   * left, and receiving it would quietly make it shippable again. Releasing it
+   * is a deliberate step (POST /api/boxes/:tag/hold). */
+  const IN_STOCK: Record<string, string> = {
+    warehouse: 'อยู่ในคลังอยู่แล้ว',
+    hold: 'ถูกพักการใช้งานอยู่ — ปลด Hold ก่อน',
+    damage: 'สถานะชำรุด — ปลดสถานะก่อน',
+  };
+  const alreadyIn = canonicalTags.map((tag) => found.get(tag)!).filter((row) => row.status in IN_STOCK);
   if (alreadyIn.length) {
-    const detail = alreadyIn.map((row) => `${row.tag} (อยู่ในคลังอยู่แล้ว)`).join(', ');
-    throw httpError(409, `รับเข้าไม่ได้: ${detail}`, 'box_already_in_warehouse');
+    const detail = alreadyIn.map((row) => `${row.tag} (${IN_STOCK[row.status]})`).join(', ');
+    const flagged = alreadyIn.every((row) => row.status !== 'warehouse');
+    throw httpError(409, `รับเข้าไม่ได้: ${detail}`, flagged ? 'box_flagged' : 'box_already_in_warehouse');
+  }
+  /* Conditions may be keyed by the box tag or by whatever code was scanned. */
+  const conditionOf = new Map<string, 'hold' | 'damage'>();
+  for (const [code, row] of resolved) {
+    const flag = conditions[row.tag] ?? conditions[code];
+    if (flag) conditionOf.set(row.tag, flag);
   }
 
   // A box is received wherever it physically shows up: shipping out from
@@ -356,7 +402,7 @@ export async function gateIn(db: DB, input: GateInInput) {
       // 'damage' instead of 'warehouse' — same statuses the box list already
       // filters by (see legacy.html's filtBoxStatus) — so it can't ship back
       // out (gateOut's NOT_SHIPPABLE map) until someone clears the flag.
-      const condition = conditions[tag];
+      const condition = conditionOf.get(tag);
       const status = condition ?? 'warehouse';
       b.status = status;
       b.cycles = (Number(b.cycles) || 0) + (wasOut ? 1 : 0);
@@ -395,7 +441,11 @@ export async function gateIn(db: DB, input: GateInInput) {
       b.driver = driver;
       b.vehicleType = vehicleType;
       // Who is returning it — captured before the trip fields are cleared.
-      const returned = wasOut ? { customer: row.customer ?? '', do: row.doNo ?? '' } : { customer: '', do: '' };
+      // A box coming back from 'lost' was last with a customer too.
+      const cameBack = wasOut || row.status === 'lost';
+      const returned = cameBack ? { customer: row.customer ?? '', do: row.doNo ?? '' } : { customer: '', do: '' };
+      b.lostAt = null;
+      b.lostReason = null;
       // Every inbound path in the legacy web UI clears these on return (see
       // legacy.html ~5552/5559/7296/4899) — a box back in the warehouse must
       // stop reporting the customer/DO/due-date from its last trip out, or
@@ -477,6 +527,8 @@ export async function gateIn(db: DB, input: GateInInput) {
     }
   });
 
+
+  await clearPending(db, gate, received);
 
   return { ok: true, received, unknown, count: received.length };
 }

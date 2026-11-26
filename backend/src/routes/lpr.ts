@@ -1,3 +1,4 @@
+import { withStockLock } from '../lib/stockLock.js';
 import { Router } from 'express';
 import { z } from 'zod';
 import { env } from '../env.js';
@@ -180,14 +181,14 @@ lprRouter.post('/', asyncHandler(async (req, res) => {
   // records. Keep the text-only evidence on the affected boxes only.
   try {
     const db = getDb();
-    if (matchedRfid && decision.rfidTags?.length) {
+    if (matchedRfid && decision.rfidTags?.length) await withStockLock(async () => {
       // Re-read: a shipment above has just appended to these boxes' history.
-      const { resolved } = await resolveBoxesByCodes(db, decision.rfidTags);
+      const { resolved } = await resolveBoxesByCodes(db, decision.rfidTags!);
       for (const row of resolved.values()) {
         const history = Array.isArray(row.history) ? [...row.history, lprEvent] : [lprEvent];
         await db.update(boxes).set({ history, data: { ...(row.data as Record<string, unknown>), history }, updatedAt: ts }).where(eq(boxes.tag, row.tag));
       }
-    }
+    });
   } catch (error) {
     // Camera admission must still return its decision if box-history
     // persistence is temporarily unavailable; the error remains in logs.

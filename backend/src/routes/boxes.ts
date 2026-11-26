@@ -7,6 +7,7 @@ import { asyncHandler, httpError } from '../middleware/error.js';
 import { requireAuth, requirePermission } from '../middleware/auth.js';
 import { rfidAssociateSchema } from '../validators/schemas.js';
 import { associateTag, detachTag, resolveBoxByCode } from '../services/rfid.js';
+import { withStockLock } from '../lib/stockLock.js';
 import { writeAuditLog } from '../services/audit.js';
 import { boxGeometryValues } from '../services/warehouseGeometry.js';
 import { bump } from '../lib/bus.js';
@@ -177,7 +178,7 @@ const createBoxSchema = z.object({
 boxesRouter.post(
   '/',
   canCreate,
-  asyncHandler(async (req, res) => {
+  asyncHandler((req, res) => withStockLock(async () => {
     const input = createBoxSchema.parse(req.body);
     const db = getDb();
     const tag = input.tag.toUpperCase();
@@ -186,7 +187,7 @@ boxesRouter.post(
     if (existing.length) throw httpError(409, `มีกล่องรหัส ${tag} อยู่แล้ว`, 'tag_taken');
 
     const [bt] = await db.select().from(boxTypes).where(eq(boxTypes.id, input.type));
-    if (!bt) throw httpError(400, 'ไม่พบประเภทกล่องนี้ในระบบ', 'unknown_box_type');
+    if (!bt || bt.deletedAt) throw httpError(400, 'ไม่พบประเภทกล่องนี้ในระบบ', 'unknown_box_type');
     const value = bt.value == null ? null : Number(bt.value);
 
     const now = new Date();
@@ -253,7 +254,7 @@ boxesRouter.post(
     });
     bump(req.get('X-Client-Id'), 'warehouse3d');
     res.json(data);
-  }),
+  })),
 );
 
 /**
@@ -266,7 +267,7 @@ boxesRouter.post(
 boxesRouter.post(
   '/:tag/label',
   canUpdate,
-  asyncHandler(async (req, res) => {
+  asyncHandler((req, res) => withStockLock(async () => {
     const db = getDb();
     const [box] = await db.select().from(boxes).where(eq(boxes.tag, req.params.tag));
     if (!box) throw httpError(404, 'ไม่พบกล่อง', 'box_not_found');
@@ -288,7 +289,7 @@ boxesRouter.post(
       .where(eq(boxes.tag, req.params.tag));
     bump(req.get('X-Client-Id'), 'warehouse3d');
     res.json(data);
-  }),
+  })),
 );
 
 const putawaySchema = z.object({
@@ -314,7 +315,7 @@ const putawaySchema = z.object({
 boxesRouter.post(
   '/:tag/putaway',
   canUpdate,
-  asyncHandler(async (req, res) => {
+  asyncHandler((req, res) => withStockLock(async () => {
     const input = putawaySchema.parse(req.body);
     const db = getDb();
     const data = await db.transaction(async (tx) => {
@@ -437,7 +438,7 @@ boxesRouter.post(
     });
     bump(req.get('X-Client-Id'), 'warehouse3d');
     res.json(data);
-  }),
+  })),
 );
 
 /**
@@ -518,7 +519,7 @@ const holdSchema = z.object({
 boxesRouter.post(
   '/:tag/hold',
   canUpdate,
-  asyncHandler(async (req, res) => {
+  asyncHandler((req, res) => withStockLock(async () => {
     const input = holdSchema.parse(req.body);
     const db = getDb();
     const [box] = await db.select().from(boxes).where(eq(boxes.tag, req.params.tag));
@@ -556,7 +557,7 @@ boxesRouter.post(
     });
     bump(req.get('X-Client-Id'), 'warehouse3d');
     res.json(data);
-  }),
+  })),
 );
 
 export default boxesRouter;

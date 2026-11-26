@@ -7,6 +7,7 @@ import { requireAuth, requirePermission } from '../middleware/auth.js';
 import { cycleCountOpenSchema, cycleCountScanSchema } from '../validators/schemas.js';
 import { resolveBoxesByCodes } from '../services/rfid.js';
 import { writeAuditLog } from '../services/audit.js';
+import { withStockLock } from '../lib/stockLock.js';
 import { bump } from '../lib/bus.js';
 
 /**
@@ -284,10 +285,20 @@ cycleCountsRouter.post(
   asyncHandler(async (req, res) => {
     const db = getDb();
     const row = await loadOr404(req.params.id);
+    if (row.status !== 'closed' || !row.closedAt) {
+      throw httpError(409, 'ต้องปิดรอบตรวจนับก่อนจึงตีของหายเป็นสูญหายได้', 'cycle_count_open');
+    }
+    const closed = row.closedAt;
     const result = present(row);
     if (!result.missing.length) return res.json({ updated: 0, tags: [] });
 
-    const rows = await db.select().from(boxes).where(inArray(boxes.tag, result.missing));
+    await withStockLock(async () => {
+    /* Only boxes still standing where they were counted: one that has moved
+       since (shipped, returned, already lost) has been seen, not lost. */
+    const candidates = await db.select().from(boxes).where(inArray(boxes.tag, result.missing));
+    const rows = candidates.filter((box) => ['warehouse', 'hold', 'damage'].includes(box.status)
+      && !(Array.isArray(box.history) ? (box.history as { ts?: string }[]) : [])
+        .some((h) => h.ts && Date.parse(h.ts) > closed.getTime()));
     const ts = new Date();
     for (const box of rows) {
       const prevHistory = Array.isArray(box.history) ? (box.history as unknown[]) : [];
@@ -322,6 +333,7 @@ cycleCountsRouter.post(
 
     bump(req.get('X-Client-Id'));
     res.json({ updated: rows.length, tags: rows.map((r) => r.tag) });
+    });
   }),
 );
 

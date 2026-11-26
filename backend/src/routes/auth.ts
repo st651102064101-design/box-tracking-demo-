@@ -14,6 +14,8 @@ import {
   linkEmployeeSchema,
 } from '../validators/schemas.js';
 import { asyncHandler, httpError } from '../middleware/error.js';
+import { isWorking } from '../lib/session.js';
+import { isOwnUserAccount, selfEmployeeIds } from '../services/selfRules.js';
 import { requireAuth, requirePermission, requireRole } from '../middleware/auth.js';
 
 export const authRouter = Router();
@@ -85,6 +87,7 @@ authRouter.post(
     }
     if (emp?.passwordHash && (await verifyPassword(password, emp.passwordHash))) {
       if (!emp.accountActive) throw httpError(403, 'บัญชีนี้ถูกระงับการใช้งาน', 'account_suspended');
+      if (!isWorking(emp.data)) throw httpError(403, 'พนักงานคนนี้ไม่ได้อยู่ในสถานะปฏิบัติงาน', 'employee_not_working');
       const access = (emp.data as Record<string, unknown> | null)?.access;
       const role = ROLE_BY_ACCESS[typeof access === 'string' ? access : 'operator'] ?? 'staff';
       const user = { id: emp.id, username: emp.username, name: emp.name, role, employeeId: emp.id };
@@ -189,6 +192,7 @@ authRouter.post(
     }
     if (emp?.passwordHash && (await verifyPassword(input.password, emp.passwordHash))) {
       if (!emp.accountActive) throw httpError(403, 'บัญชีนี้ถูกระงับการใช้งาน', 'account_suspended');
+      if (!isWorking(emp.data)) throw httpError(403, 'พนักงานคนนี้ไม่ได้อยู่ในสถานะปฏิบัติงาน', 'employee_not_working');
       // employees.role is a job TITLE ("หัวหน้างาน") — the actual permission
       // level (operator/supervisor/admin/viewer) only lives in the legacy
       // `data` jsonb blob under `access`, since it never got its own column.
@@ -235,6 +239,7 @@ authRouter.get(
       user: { ...req.user, firstSetupRequired: !!account?.mustChangePassword },
       role,
       permissions: role.permissions,
+      selfEmployeeIds: await selfEmployeeIds(req.user!),
     });
   }),
 );
@@ -263,6 +268,7 @@ authRouter.patch(
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) throw httpError(400, 'รหัสผู้ใช้ไม่ถูกต้อง', 'invalid_id');
     const input = updateRoleSchema.parse(req.body);
+    if (isOwnUserAccount(req.user!, id)) throw httpError(403, 'เปลี่ยนสิทธิ์ของบัญชีตัวเองไม่ได้', 'self_role');
     const db = getDb();
 
     const row = await db.transaction(async (tx) => {

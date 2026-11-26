@@ -29,6 +29,7 @@ import {
   sanitizePermissions,
 } from '../lib/permissions.js';
 import { invalidateRoleCache, effectivePermissions } from '../lib/effectivePermissions.js';
+import { isOwnUserAccount, selfEmployeeIds } from '../services/selfRules.js';
 import { activeSuperAdminHolders, totalHolders } from '../lib/superAdminGuard.js';
 import { writeAuditLog } from '../services/audit.js';
 
@@ -275,6 +276,10 @@ rolesRouter.put(
     if (typeof body.description === 'string') patch.description = body.description.trim();
     if (body.active !== undefined) patch.active = Boolean(body.active);
 
+    if (patch.active === false && (await effectivePermissions(req.user)).roleId === roleId) {
+      return forbidden(res, 'ปิดใช้งานบทบาทของตัวเองไม่ได้');
+    }
+
     await db.update(roles).set(patch).where(eq(roles.id, roleId));
 
     if (body.permissions !== undefined) {
@@ -285,8 +290,10 @@ rolesRouter.put(
       /* An admin must not be able to lock the last door behind themselves:
          if this is their own role, they may not drop role.manage from it. */
       const self = await effectivePermissions(req.user);
-      if (self.roleId === roleId && !permissions.includes('role.manage')) {
-        return forbidden(res, 'ถอนสิทธิ์ "จัดการ Role" ออกจากบทบาทของตัวเองไม่ได้');
+      const lost = ['role.manage', 'permission.manage']
+        .filter((p) => self.permissions.includes(p) && !permissions.includes(p));
+      if (self.roleId === roleId && lost.length) {
+        return forbidden(res, 'ถอนสิทธิ์จัดการบทบาทออกจากบทบาทของตัวเองไม่ได้');
       }
       await db.delete(rolePermissions).where(eq(rolePermissions.roleId, roleId));
       if (permissions.length) {
@@ -399,6 +406,10 @@ rolesRouter.put(
       role = r;
     }
 
+    if (emp.roleId !== roleId && (await selfEmployeeIds(req.user!)).includes(employeeId)) {
+      return forbidden(res, 'เปลี่ยนบทบาทของตัวเองไม่ได้ — ให้ผู้ดูแลคนอื่นทำ');
+    }
+
     /* Same last-Super-Admin guard as /assign/:userId: whoever is the final
        holder of the keys may not hand them away, including to themselves —
        whether that's a move to another role or an explicit clear. Counts only
@@ -465,6 +476,10 @@ rolesRouter.put(
     const [role] = await db.select().from(roles).where(eq(roles.id, roleId));
     if (!role) {
       return res.status(400).json({ error: 'bad_request', message: 'ไม่พบบทบาทที่เลือก' });
+    }
+
+    if (user.roleId !== roleId && isOwnUserAccount(req.user!, userId)) {
+      return forbidden(res, 'เปลี่ยนบทบาทของบัญชีตัวเองไม่ได้ — ให้ผู้ดูแลคนอื่นทำ');
     }
 
     /* The last Super Admin may not demote themselves — that is the one change
