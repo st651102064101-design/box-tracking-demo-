@@ -6,7 +6,6 @@
 Every time the user is ready, rebuild all services:
 - **Frontend** - `docker-compose build frontend --no-cache && docker-compose up -d frontend`
 - **Backend** - `docker-compose build backend --no-cache && docker-compose up -d backend`
-- **PDA Web** - `docker-compose build pda --no-cache && docker-compose up -d pda`
 - **PDA Flutter App** - `flutter build apk --release` or `flutter build ios --release`
 
 ## 2. Workflow for PDA Flutter Changes

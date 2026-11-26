@@ -21,7 +21,7 @@ if [ ! -f backend/.env ]; then
   cat > backend/.env <<EOF
 PORT=4000
 NODE_ENV=development
-CORS_ORIGIN=http://localhost:3000,http://localhost:5100
+CORS_ORIGIN=http://localhost:3000
 
 JWT_SECRET=${JWT_SECRET}
 JWT_EXPIRES_IN=12h
