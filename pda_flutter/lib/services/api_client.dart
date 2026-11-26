@@ -140,6 +140,9 @@ class ApiClient {
     int? gateNo,
     bool? hasIntegratedRfid,
     bool? usesZebraSdk,
+    String? employeeId,
+    String? employeeName,
+    int? heartbeatSeconds,
   }) async {
     await _send(() => http.post(
           _u('/api/devices/heartbeat'),
@@ -155,6 +158,10 @@ class ApiClient {
             if (hasIntegratedRfid != null)
               'hasIntegratedRfid': hasIntegratedRfid,
             if (usesZebraSdk != null) 'usesZebraSdk': usesZebraSdk,
+            // Left out when nobody is signed in, which clears the name.
+            if (employeeId != null) 'employeeId': employeeId,
+            if (employeeName != null) 'employeeName': employeeName,
+            if (heartbeatSeconds != null) 'heartbeatSeconds': heartbeatSeconds,
           }),
         ));
   }

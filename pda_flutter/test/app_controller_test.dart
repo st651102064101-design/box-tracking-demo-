@@ -43,6 +43,9 @@ class FakeApi extends ApiClient {
     int? gateNo,
     bool? hasIntegratedRfid,
     bool? usesZebraSdk,
+    String? employeeId,
+    String? employeeName,
+    int? heartbeatSeconds,
   }) async {
     if (throwOnState != null) throw throwOnState!;
     heartbeats.add({
@@ -53,6 +56,9 @@ class FakeApi extends ApiClient {
       'gateNo': gateNo,
       'hasIntegratedRfid': hasIntegratedRfid,
       'usesZebraSdk': usesZebraSdk,
+      'employeeId': employeeId,
+      'employeeName': employeeName,
+      'heartbeatSeconds': heartbeatSeconds,
     });
   }
 
@@ -1249,6 +1255,31 @@ void main() {
           api.heartbeats.any((h) => h['ipAddress'] == '192.168.1.52'), isTrue);
       expect(api.heartbeats.first['warehouseId'], 'WH-1');
       expect(api.heartbeats.first['gateNo'], 2);
+      c.dispose();
+    });
+
+    test('heartbeats name the signed-in employee, at once on sign-in and out',
+        () async {
+      final api = FakeApi();
+      final c = await freshDevice(api);
+      c.prefs.deviceConfigured = true;
+      api.token = 'device-token';
+      Future<void> settle() => Future<void>.delayed(Duration.zero);
+
+      api.heartbeats.clear();
+      c.identifyAs(Employee.fromJson(
+          {'id': 'EMP-001', 'name': 'Somchai', 'status': 'active'}));
+      await settle();
+      expect(api.heartbeats.last['employeeId'], 'EMP-001');
+      expect(api.heartbeats.last['employeeName'], 'Somchai');
+      // Reported often enough for the dashboard to follow in near real time.
+      expect(api.heartbeats.last['heartbeatSeconds'], 5);
+
+      api.heartbeats.clear();
+      c.lock();
+      await settle();
+      expect(api.heartbeats, isNotEmpty);
+      expect(api.heartbeats.last['employeeId'], isNull);
       c.dispose();
     });
 

@@ -173,7 +173,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
         if (_usesZebraSdk) {
           _syncBarcodeScannerForScreen();
         }
-        // A backgrounded isolate stops the 25s timer. Without a ping on
+        // A backgrounded isolate stops the heartbeat timer. Without a ping on
         // the way back, the dashboard keeps the handheld offline until the
         // next tick, which may be long after the operator is already working.
         // If the chip is still offline, retry auth+state immediately —
@@ -643,13 +643,15 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
       HandheldProfile.capabilityFor(prefs.deviceModel)?.presenceName ??
       'PDA Scanner';
 
+  static const _heartbeatSeconds = 5;
+
   /// A presence heartbeat is intentionally independent from a scan: an idle
   /// TC52 is still connected and must remain visible to the dashboard.
   void _startDeviceHeartbeat() {
     _deviceHeartbeatTimer?.cancel();
     _reportDevicePresence();
     _deviceHeartbeatTimer = Timer.periodic(
-      const Duration(seconds: 25),
+      const Duration(seconds: _heartbeatSeconds),
       (_) => _reportDevicePresence(),
     );
   }
@@ -670,7 +672,10 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
         gateNo: int.tryParse(gate),
         hasIntegratedRfid: hasIntegratedRfid,
         usesZebraSdk: usesZebraSdk,
-      );
+        employeeId: emp?.id,
+        employeeName: emp?.name,
+        heartbeatSeconds: _heartbeatSeconds,
+              );
       _markLiveFromPresence();
       final ip = _cachedLanIp ?? await readLanIp();
       if (ip != null && ip != _cachedLanIp) {
@@ -683,7 +688,10 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
           gateNo: int.tryParse(gate),
           hasIntegratedRfid: hasIntegratedRfid,
           usesZebraSdk: usesZebraSdk,
-        );
+          employeeId: emp?.id,
+          employeeName: emp?.name,
+          heartbeatSeconds: _heartbeatSeconds,
+                );
       }
     } catch (_) {
       // Presence must never interrupt a scan workflow; the next 25-second
@@ -1186,6 +1194,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     _resetPost();
     screen = Screen.home;
     notifyListeners();
+    unawaited(_reportDevicePresence());
     _connectReader();
     return null;
   }
@@ -1225,6 +1234,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     screen = Screen.login;
     _syncBarcodeScannerForScreen();
     notifyListeners();
+    unawaited(_reportDevicePresence());
   }
 
   // ═══════════════════════ device provisioning ═════════════════════════════
