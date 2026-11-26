@@ -18,3 +18,10 @@ describe('gate tab permissions', () => {
     expect([t.gateout, t.gatein]).toEqual(['gate.out', 'gate.in']);
   });
 });
+
+describe('setup tab', () => {
+  it('is hidden from accounts the tab guard would turn away', () => {
+    expect(html).not.toContain("allowed=tab==='setup'||");
+    expect(table('navRules').setup).toBe('setting.view');
+  });
+});

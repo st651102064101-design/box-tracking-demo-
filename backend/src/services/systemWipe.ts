@@ -43,6 +43,10 @@ import {
   events,
   auditLog,
   lineLinkInvites,
+  rfidAntennaGateMappings,
+  rfidReaders,
+  rfidGateAutoSessions,
+  fx9600Readers,
   lineNotificationDeliveries,
   config,
   sequences,
@@ -137,6 +141,11 @@ export async function wipeSystem(db: DB): Promise<WipeResult> {
     await tx.delete(warehouses);
     await tx.delete(gates);
     await tx.delete(gateWebhookStatus);
+    // Reader bindings and staged sessions point at gates that no longer exist.
+    await tx.delete(rfidAntennaGateMappings);
+    await tx.delete(rfidReaders);
+    await tx.delete(rfidGateAutoSessions);
+    await tx.delete(fx9600Readers);
     await tx.delete(gatePendingReads);
     await tx.delete(gatePrefs);
     await tx.delete(uiPrefs);

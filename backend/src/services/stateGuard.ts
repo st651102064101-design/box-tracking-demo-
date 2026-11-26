@@ -158,6 +158,8 @@ export interface RejectedGroup {
   label: string;
   /** Which permissions would have been needed. */
   required: string[];
+  /** Set when the refusal is not about permissions. */
+  message?: string;
 }
 
 export interface GuardResult {

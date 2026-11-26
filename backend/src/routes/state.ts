@@ -7,6 +7,7 @@ import { asyncHandler, httpError } from '../middleware/error.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { effectivePermissions } from '../lib/effectivePermissions.js';
 import { guardStatePayload } from '../services/stateGuard.js';
+import { refuseCrossWarehouseShipments } from '../services/gateOwnership.js';
 import { bump } from '../lib/bus.js';
 import { activeSuperAdminHolders, totalHolders } from '../lib/superAdminGuard.js';
 
@@ -111,7 +112,10 @@ stateRouter.put(
       }
     }
 
-    await replaceState(db, allowed, req.user);
+    const checked = refuseCrossWarehouseShipments(allowed, stored as unknown as Record<string, unknown>);
+    rejected.push(...checked.rejected);
+
+    await replaceState(db, checked.payload, req.user);
     /* Tell every open stream. The writer's own id rides along so its browser
        can skip re-fetching the snapshot it just uploaded. */
     const version = bump(req.get('X-Client-Id'));

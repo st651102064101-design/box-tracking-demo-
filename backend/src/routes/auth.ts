@@ -14,7 +14,7 @@ import {
   linkEmployeeSchema,
 } from '../validators/schemas.js';
 import { asyncHandler, httpError } from '../middleware/error.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requireAuth, requirePermission, requireRole } from '../middleware/auth.js';
 
 export const authRouter = Router();
 
@@ -127,10 +127,13 @@ authRouter.post('/first-setup', requireAuth, asyncHandler(async (req, res) => {
   res.json({ token, user: publicUser(updated) });
 }));
 
-/** POST /api/auth/register — create a user account. Role is never client-supplied:
- *  every self-registration starts as 'staff'; an admin promotes via PATCH /users/:id/role. */
+/** POST /api/auth/register — create a user account. Admin only. Role is never client-supplied:
+ *  every new account starts as 'staff'; an admin promotes via PATCH /users/:id/role. */
 authRouter.post(
   '/register',
+  requireAuth,
+  /* Creating accounts is an administrator's job — this used to be open signup. */
+  requirePermission('role.manage'),
   asyncHandler(async (req, res) => {
     const input = registerSchema.parse(req.body);
     const db = getDb();

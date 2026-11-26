@@ -25,10 +25,11 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: boxtrace
-      POSTGRES_PASSWORD: boxtrace
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run scripts/setup-env.sh first}
       POSTGRES_DB: boxtrace
     ports:
-      - "5432:5432"
+      # this machine only; the backend reaches the database over the compose network
+      - "127.0.0.1:5432:5432"
     volumes:
       - db-data:/var/lib/postgresql/data
     healthcheck:
@@ -51,16 +52,16 @@ services:
       NODE_ENV: production
       PORT: "4000"
       USE_PGLITE: "false"
-      DATABASE_URL: postgres://boxtrace:boxtrace@db:5432/boxtrace
+      DATABASE_URL: postgres://boxtrace:${POSTGRES_PASSWORD:?run scripts/setup-env.sh first}@db:5432/boxtrace
       # :3001 is deliberately absent — frontend-thai talks to the backend
       # server-side over BACKEND_URL, so no browser origin of its own is needed
       CORS_ORIGIN: http://localhost:3000,http://localhost:5100
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      JWT_SECRET: ${JWT_SECRET:?run scripts/setup-env.sh first}
       JWT_EXPIRES_IN: 2h
       SEED_ADMIN_USERNAME: admin
-      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-admin123}
-      FX9600_WEBHOOK_SECRET: ${FX9600_WEBHOOK_SECRET:-change-me-in-production}
-      LPR_WEBHOOK_SECRET: ${LPR_WEBHOOK_SECRET:-BoxTrace-LPR-2026}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:?run scripts/setup-env.sh first}
+      FX9600_WEBHOOK_SECRET: ${FX9600_WEBHOOK_SECRET:?run scripts/setup-env.sh first}
+      LPR_WEBHOOK_SECRET: ${LPR_WEBHOOK_SECRET:?run scripts/setup-env.sh first}
     ports:
       - "0.0.0.0:4000:4000"
     develop:
