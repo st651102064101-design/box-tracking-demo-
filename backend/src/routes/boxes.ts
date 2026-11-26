@@ -8,6 +8,7 @@ import { requireAuth, requirePermission } from '../middleware/auth.js';
 import { rfidAssociateSchema } from '../validators/schemas.js';
 import { associateTag, detachTag, resolveBoxByCode } from '../services/rfid.js';
 import { withStockLock } from '../lib/stockLock.js';
+import { boxSize, fitsSlot, tooBigMessage } from '../lib/boxFit.js';
 import { writeAuditLog } from '../services/audit.js';
 import { boxGeometryValues } from '../services/warehouseGeometry.js';
 import { bump } from '../lib/bus.js';
@@ -32,6 +33,9 @@ const recordOf = (value: unknown): Record<string, unknown> =>
 const isReportedFull = (value: unknown) => text(recordOf(value).reportedFullAt) !== '';
 
 type NormalizedSlot = {
+  widthCm: number;
+  heightCm: number;
+  depthCm: number;
   id: string;
   shelfCode: string;
   slotCode: string;
@@ -112,7 +116,16 @@ boxesRouter.get(
       occupied.set(locationKey, (occupied.get(locationKey) ?? 0) + 1);
     });
 
-    const free = locRows.find((loc) => !isReportedFull(loc.data) && (occupied.get(key(loc)) ?? 0) < SLOT_CAPACITY);
+    /* With ?tag= the suggestion also has to be a slot that box fits. */
+    const tag = typeof req.query.tag === 'string' ? req.query.tag.trim() : '';
+    const [wanted] = tag ? await db.select().from(boxes).where(eq(boxes.tag, tag)) : [];
+    const sizes = new Map((wanted ? await db.select().from(slots) : []).map((s) => [s.id, s]));
+    const fits = (code: string) => {
+      const slot = sizes.get(code);
+      return !wanted || !slot || fitsSlot(boxSize(wanted), slot);
+    };
+
+    const free = locRows.find((loc) => !isReportedFull(loc.data) && fits(loc.code) && (occupied.get(key(loc)) ?? 0) < SLOT_CAPACITY);
     if (!free) return res.json({ suggestion: null, reason: 'all_occupied' });
     res.json({
       suggestion: {
@@ -346,6 +359,9 @@ boxesRouter.post(
             slotCode: slots.slotCode,
             data: slots.data,
             warehouseId: racks.warehouseId,
+            widthCm: slots.widthCm,
+            heightCm: slots.heightCm,
+            depthCm: slots.depthCm,
             zone: racks.zone,
             rackCode: racks.code,
           })
@@ -373,6 +389,9 @@ boxesRouter.post(
       }
 
       if (targetSlot) {
+        if (!fitsSlot(boxSize(box), targetSlot)) {
+          throw httpError(409, tooBigMessage(box.tag, boxSize(box), targetSlot), 'box_too_big');
+        }
         // Serialise concurrent placements into this physical slot. Without a
         // row lock, two clients can both observe the last free pallet position
         // and overfill it before either transaction commits.

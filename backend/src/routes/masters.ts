@@ -6,6 +6,9 @@ import { boxTypeSchema, customerSchema, locationSchema } from '../validators/sch
 import { asyncHandler, httpError } from '../middleware/error.js';
 import { requireAuth, requirePermission } from '../middleware/auth.js';
 import { bump } from '../lib/bus.js';
+import { largestLimit } from '../lib/boxFit.js';
+import { allSlots, requireTypeFits, resizeBoxesOfType } from '../services/boxFit.js';
+import { parseBoxTypeDimensionsCm } from '../services/warehouseGeometry.js';
 
 /**
  * Representative master-data CRUD (box types + customers). These demonstrate the
@@ -87,6 +90,14 @@ mastersRouter.get(
   }),
 );
 
+/** The largest box any slot takes — shown next to the size fields. */
+mastersRouter.get(
+  '/box-types/size-limit',
+  asyncHandler(async (_req, res) => {
+    res.json(largestLimit(await allSlots(getDb())));
+  }),
+);
+
 mastersRouter.post(
   '/box-types',
   canManageMaster,
@@ -97,6 +108,7 @@ mastersRouter.post(
     if (existing.length && !existing[0].deletedAt) {
       throw httpError(409, 'มีรหัสประเภทนี้แล้ว', 'duplicate');
     }
+    await requireTypeFits(db, input.dim);
     if (existing.length) {
       /* Same id previously soft-deleted — revive it rather than refusing a code
          an admin has every right to reuse, or silently shadowing the deleted
@@ -134,6 +146,9 @@ mastersRouter.put(
   asyncHandler(async (req, res) => {
     const input = boxTypeSchema.parse({ ...req.body, id: req.params.id });
     const db = getDb();
+    const [before] = await db.select().from(boxTypes).where(eq(boxTypes.id, req.params.id));
+    const resized = Boolean(before) && (before.dim ?? null) !== (input.dim ?? null);
+    if (resized) await requireTypeFits(db, input.dim);
     const updated = await db
       .update(boxTypes)
       .set({
@@ -147,6 +162,8 @@ mastersRouter.put(
       .where(and(eq(boxTypes.id, req.params.id), isNull(boxTypes.deletedAt)))
       .returning();
     if (!updated.length) throw httpError(404, 'ไม่พบประเภทกล่อง', 'not_found');
+    const size = resized ? parseBoxTypeDimensionsCm(input.dim) : null;
+    if (size) await resizeBoxesOfType(db, req.params.id, size);
     bump(req.get('X-Client-Id'));
     res.json(input);
   }),

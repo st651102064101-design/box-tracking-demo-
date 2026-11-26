@@ -1,4 +1,5 @@
 import { Router, type Request, type Response } from 'express';
+import { boxSize, fitsSlot, tooBigMessage } from '../lib/boxFit.js';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { getDb } from '../db/client.js';
@@ -486,6 +487,12 @@ warehouse3dRouter.put(
       data: { ...(before.data as Record<string, unknown>), ...input },
       updatedAt: new Date(),
     };
+    const shrinking = next.widthCm < before.widthCm || next.heightCm < before.heightCm || next.depthCm < before.depthCm;
+    if (shrinking) {
+      const inside = await db.select().from(boxes).where(eq(boxes.slotId, before.id));
+      const big = inside.find((box) => !fitsSlot(boxSize(box), next));
+      if (big) throw httpError(409, tooBigMessage(big.tag, boxSize(big), next), 'box_too_big');
+    }
     const [updated] = await db.update(slots).set(next).where(eq(slots.id, before.id)).returning();
     await writeAuditLog(db, {
       action: 'UPDATE_SLOT_GEOMETRY',

@@ -1370,6 +1370,20 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
     if (box.status === 'hold') return new THREE.Color(0x8f67d8);
     return canonicalBoxColor.clone();
   };
+  /* A slot holds two boxes side by side with 15 cm to spare above (the server
+     enforces the same limit). A box that is too big is drawn no larger than its
+     place, so it never pierces the rack, and keeps the warning colour. */
+  const fitToSlot = (width, height, depth, slotEntry) => {
+    const max = { width: slotEntry.scale.x / 2, height: slotEntry.scale.y - 0.15, depth: slotEntry.scale.z };
+    const oversized = width > max.width + 1e-6 || height > max.height + 1e-6 || depth > max.depth + 1e-6;
+    return {
+      oversized,
+      width: Math.min(width, max.width),
+      height: Math.min(height, max.height),
+      depth: Math.min(depth, max.depth),
+    };
+  };
+  const oversizedIds = new Set();
   const canonicalMaterialType = (box) => {
     const raw = `${box.materialType || ''} ${box.boxTypeName || ''}`.toLowerCase();
     if (/เหล็ก|โลหะ|steel|metal/.test(raw)) return 'metal_box';
@@ -1387,9 +1401,13 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
   const boxEntries = (model.boxes || []).flatMap((box) => {
     const slotEntry = slotById.get(box.slotId);
     if (!slotEntry) return [];
-    const width = positive(box.dimensionsCm?.width, 60) * CM_TO_M;
-    const height = positive(box.dimensionsCm?.height, 40) * CM_TO_M;
-    const depth = positive(box.dimensionsCm?.depth, 40) * CM_TO_M;
+    const { width, height, depth, oversized } = fitToSlot(
+      positive(box.dimensionsCm?.width, 60) * CM_TO_M,
+      positive(box.dimensionsCm?.height, 40) * CM_TO_M,
+      positive(box.dimensionsCm?.depth, 40) * CM_TO_M,
+      slotEntry,
+    );
+    if (oversized) oversizedIds.add(box.id);
     const boxesInSlot = boxesBySlot.get(String(box.slotId)) || [box];
     const boxIndex = Math.max(0, boxesInSlot.indexOf(box));
     // A slot carries two pallet positions. Spread every stored box across the
@@ -1411,7 +1429,6 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       slotBottomCm + 16 + height / CM_TO_M / 2,
       slotEntry.slot.localPositionCm?.z,
     );
-    const oversized = width > slotEntry.scale.x || height > slotEntry.scale.y || depth > slotEntry.scale.z;
     return [{
       box,
       slotEntry,
@@ -1421,6 +1438,14 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
       color: boxStatusColor(box, oversized),
     }];
   });
+  const hudNode = stage.querySelector('.loc3d-hud');
+  if (hudNode && oversizedIds.size) {
+    const legend = document.createElement('span');
+    legend.className = 'loc3d-oversize';
+    legend.textContent = `สีชมพู = ใหญ่เกินช่อง ${oversizedIds.size} กล่อง`;
+    legend.title = `แก้ขนาดที่ประเภทกล่อง: ${[...oversizedIds].slice(0, 8).join(', ')}`;
+    hudNode.appendChild(legend);
+  }
   const boxMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.69, metalness: 0.04 });
   const boxMesh = boxEntries.length ? new THREE.InstancedMesh(UNIT_BOX, boxMaterial, boxEntries.length) : null;
   if (boxMesh) {
@@ -1450,9 +1475,12 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
           return;
         }
         const slotEntry = slotById.get(next.slotId);
-        const width = positive(next.dimensionsCm?.width, 60) * CM_TO_M;
-        const height = positive(next.dimensionsCm?.height, 40) * CM_TO_M;
-        const depth = positive(next.dimensionsCm?.depth, 40) * CM_TO_M;
+        const { width, height, depth, oversized } = fitToSlot(
+          positive(next.dimensionsCm?.width, 60) * CM_TO_M,
+          positive(next.dimensionsCm?.height, 40) * CM_TO_M,
+          positive(next.dimensionsCm?.depth, 40) * CM_TO_M,
+          slotEntry,
+        );
         const lateral = next.slotSide === 'right' ? 1 : -1;
         const lateralOffsetCm = lateral * Math.max(0, slotEntry.scale.x - width) * 0.5 / CM_TO_M;
         const slotBottomCm = num(slotEntry.slot.localPositionCm?.y) - positive(slotEntry.slot.dimensionsCm?.height, 70) / 2;
@@ -1461,7 +1489,7 @@ async function createScene(canvas, model, onSelect, onBoxSelect, onWarehouseNavi
         entry.position = worldPoint(slotEntry.rack, num(slotEntry.slot.localPositionCm?.x) + lateralOffsetCm, slotBottomCm + 16 + height / CM_TO_M / 2, slotEntry.slot.localPositionCm?.z);
         entry.quaternion = slotEntry.quaternion;
         entry.scale.set(width, height, depth);
-        entry.color = boxStatusColor(next, width > slotEntry.scale.x || height > slotEntry.scale.y || depth > slotEntry.scale.z);
+        entry.color = boxStatusColor(next, oversized);
         boxMesh.setMatrixAt(index, matrixAt(entry.position, entry.quaternion, entry.scale));
         boxMesh.setColorAt(index, entry.color);
       });

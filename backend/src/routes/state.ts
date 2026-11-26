@@ -10,6 +10,7 @@ import { guardStatePayload } from '../services/stateGuard.js';
 import { protectOwnRecords, selfEmployeeIds } from '../services/selfRules.js';
 import { keepNewerMovements, refuseInvalidMovements } from '../services/gateOwnership.js';
 import { withStockLock } from '../lib/stockLock.js';
+import { refuseOversize } from '../services/boxFit.js';
 import { isNotNull } from 'drizzle-orm';
 import { bump } from '../lib/bus.js';
 import { activeSuperAdminHolders, totalHolders } from '../lib/superAdminGuard.js';
@@ -126,7 +127,10 @@ stateRouter.put(
       const checked = refuseInvalidMovements(fresh.payload, current, new Set(deleted.map((c) => c.id)));
       rejected.push(...checked.rejected);
 
-      const own = protectOwnRecords(checked.payload, stored as unknown as Record<string, unknown>, await selfEmployeeIds(req.user!));
+      const sized = await refuseOversize(db, checked.payload, current);
+      rejected.push(...sized.rejected);
+
+      const own = protectOwnRecords(sized.payload, stored as unknown as Record<string, unknown>, await selfEmployeeIds(req.user!));
       rejected.push(...own.rejected);
 
       await replaceState(db, own.payload, req.user);

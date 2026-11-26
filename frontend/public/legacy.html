@@ -3332,6 +3332,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
             <input id="btDimH" type="number" min="0" placeholder="สูง" style="min-width:0;">
           </div>
           <input id="btDim" type="hidden">
+          <p class="muted small" id="btDimLimit" style="margin:6px 0 0;"></p>
         </div>
       </div>
       <p class="muted small" style="margin:10px 0 0;">รหัสประเภทเป็นรหัสประจำรายการ ระบบจึงล็อกไว้เพื่อไม่ให้ข้อมูลกล่องและประวัติเดิมสับสน</p>
@@ -16408,6 +16409,7 @@ function renderSetup(){
   setupBulkTable('boxBody','box-cb','cbAllBox','bulkBox','bulkBoxCnt');
   $('#pagerBox').innerHTML=pagerBarHtml('box',pgBox);
 
+  refreshBoxSizeLimit();
   // box type table
   var sbt=val('schBtype').toLowerCase();
   var btsFiltered=sbt?bts.filter(function(t){
@@ -16416,7 +16418,7 @@ function renderSetup(){
   var btsSorted=sortTable(btsFiltered,uiSort.btype,'name');
   var pgBtype=pagerSlice('btype',btsSorted);
   $('#btypeBody').innerHTML=pgBtype.rows.length?pgBtype.rows.map(function(t){var used=Object.values(S.boxes).filter(function(b){return b.type===t.id;}).length;
-    return '<tr data-tag="'+esc(t.id)+'" class="row-click" onclick="openBtypeCube(\''+esc(t.id)+'\')"><td class="cb-td" onclick="event.stopPropagation()"><input type="checkbox" class="row-cb btype-cb" data-tag="'+esc(t.id)+'"'+(used?' disabled title="มีกล่องใช้ประเภทนี้อยู่ ลบไม่ได้"':'')+'></td><td class="mono"><b>'+esc(t.id)+'</b></td><td>'+esc(t.name)+'</td><td>'+esc(t.unit||'-')+'</td><td class="r mono">'+(t.value==null?'-':money(t.value))+'</td><td>'+esc(t.dim||'-')+'</td>'
+    return '<tr data-tag="'+esc(t.id)+'" class="row-click" onclick="openBtypeCube(\''+esc(t.id)+'\')"><td class="cb-td" onclick="event.stopPropagation()"><input type="checkbox" class="row-cb btype-cb" data-tag="'+esc(t.id)+'"'+(used?' disabled title="มีกล่องใช้ประเภทนี้อยู่ ลบไม่ได้"':'')+'></td><td class="mono"><b>'+esc(t.id)+'</b></td><td>'+esc(t.name)+'</td><td>'+esc(t.unit||'-')+'</td><td class="r mono">'+(t.value==null?'-':money(t.value))+'</td><td>'+esc(t.dim||'-')+(boxDimTooBig(t.dim)?' <span class="pill bad" title="ใหญ่กว่าช่องแร็ค แก้ขนาดให้ถูกต้อง (หน่วย ซม.)">เกินช่อง</span>':'')+'</td>'
       +'<td class="r mono">'+used+'</td><td class="c muted">›</td></tr>';
   }).join(''):emptyRow(8,'ยังไม่มีประเภทกล่อง');
   /* นับจากรายการที่กรองแล้ว (btsFiltered) ไม่ใช่ bts ดิบทั้งหมด — เดิมนับ bts.length
@@ -16589,6 +16591,24 @@ function renderSetup(){
    กันตอนพิมพ์ค้นหาช่องใดช่องหนึ่ง ตารางอื่นที่ผู้ใช้ตั้งใจเลื่อนดูหน้า 3 ค้างไว้จะกระเด้งกลับ
    หน้า 1 ไปด้วยทั้งที่ไม่เกี่ยวกัน */
 function renderSetupResetBox(){pagerReset('box');renderSetup();}
+/* ขนาดกล่องใหญ่สุดที่ช่องแร็ครับได้ — เซิร์ฟเวอร์เป็นผู้คำนวณและบังคับ (ค่าเริ่มต้น = ช่องมาตรฐาน) */
+var boxSizeLimit={width:135,depth:110,height:125},boxSizeLimitAt=0;
+function showBoxSizeLimit(){
+  var el=$('#btDimLimit');if(el)el.textContent='หน่วยเป็น ซม. · ช่องแร็ครับได้ไม่เกิน '+boxSizeLimit.width+' × '+boxSizeLimit.depth+' × '+boxSizeLimit.height;
+}
+function refreshBoxSizeLimit(){
+  showBoxSizeLimit();
+  if(Date.now()-boxSizeLimitAt<30000)return;boxSizeLimitAt=Date.now();
+  apiFetch('/api/masters/box-types/size-limit',{headers:authHeaders()}).then(function(r){return r.ok?r.json():null;}).then(function(d){
+    if(!d||!d.width)return;var changed=JSON.stringify(d)!==JSON.stringify(boxSizeLimit);boxSizeLimit=d;showBoxSizeLimit();
+    if(changed)renderSetup();
+  }).catch(function(){});
+}
+/* เรียงตามฟอร์ม: กว้าง × ยาว(ลึก) × สูง */
+function boxDimTooBig(dim){
+  var p=String(dim||'').replace(/[×X*]/g,'x').split('x').map(Number);
+  return p.length===3&&p.every(function(n){return n>0;})&&(p[0]>boxSizeLimit.width||p[1]>boxSizeLimit.depth||p[2]>boxSizeLimit.height);
+}
 function renderSetupResetBtype(){pagerReset('btype');renderSetup();}
 function renderSetupResetWh(){pagerReset('wh');renderSetup();}
 function renderSetupResetCust(){pagerReset('cust');renderSetup();}
@@ -17282,9 +17302,9 @@ function seedDemo(){
    ['CUST-03','ห้างค้าปลีกกรุงเทพ','รามอินทรา','02-555-6666',30]]
     .forEach(function(a){S.customers[a[0]]={id:a[0],name:a[1],addr:a[2],contact:a[3],returnDate:ddmmyyyy(new Date(Date.now()+a[4]*86400000))};});
   // 3 box types
-  var types=[['BT-CRT','ลังพลาสติก 60L',450,'600x400x320','CRT'],
-             ['BT-TOTE','กล่องโทเทอ 30L',320,'400x300x280','TOTE'],
-             ['BT-PLT','พาเลทบ็อกซ์',1850,'1100x1100x760','PLT']];
+  var types=[['BT-CRT','ลังพลาสติก 60L',450,'60x40x32','CRT'],
+             ['BT-TOTE','กล่องโทเทอ 30L',320,'40x30x28','TOTE'],
+             ['BT-PLT','พาเลทบ็อกซ์',1850,'110x110x76','PLT']];
   types.forEach(function(t){S.boxtypes[t[0]]={id:t[0],name:t[1],unit:'ใบ',value:t[2],dim:t[3]};});
 
   var plates=['82-1234 กทม','70-5678 สป','55-9012 ปท','กง-4444 นบ','63-7890 ชบ'];
@@ -23800,7 +23820,7 @@ document.addEventListener('visibilitychange',()=>{
 .loc3d-first-person-help kbd{margin:0 4px}.loc3d-first-person-help kbd+ kbd{margin-left:5px}
 .loc3d-unit-grid svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .loc3d-sound{position:absolute;right:14px;bottom:170px;z-index:4;width:42px;height:42px;display:grid;place-items:center;border:1px solid rgba(255,255,255,.2);border-radius:11px;background:rgba(9,11,13,.86);color:#a8f931;box-shadow:0 7px 20px rgba(0,0,0,.35);cursor:pointer;backdrop-filter:blur(10px)}.loc3d-sound:hover{border-color:var(--accent);transform:translateY(-1px)}.loc3d-sound svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.loc3d-sound.muted{color:#f4f7fa}.loc3d-sound.muted .loc3d-sound-wave{display:none}.loc3d-sound.muted:after{content:"";position:absolute;width:24px;height:2px;background:#ff6670;transform:rotate(-45deg)}
-.loc3d-hud,.loc3d-hud span{pointer-events:auto}.loc3d-hud span{cursor:help}
+.loc3d-hud span.loc3d-oversize{color:#ff8fe6;border-color:#ff3bd4}.loc3d-hud,.loc3d-hud span{pointer-events:auto}.loc3d-hud span{cursor:help}
 /* HUD explanations are lightweight in-scene toasts, not native title alerts.
    They stack down from the upper-left so several hovered metrics remain readable. */
 .loc3d-hover-toast-zone{position:absolute;top:78px;left:14px;z-index:6;display:flex;flex-direction:column;align-items:flex-start;gap:8px;width:min(390px,calc(100% - 28px));pointer-events:none}.loc3d-hover-toast-zone .toast{width:100%;min-width:0;max-width:none;padding:11px 14px;border-radius:12px;font-size:13px;line-height:1.35;pointer-events:none}.loc3d-hover-toast-zone .toast .sub{font-size:12px;line-height:1.35;white-space:normal}.loc3d-hover-toast-zone .toast.out{pointer-events:none}

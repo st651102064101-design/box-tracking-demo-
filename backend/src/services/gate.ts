@@ -11,6 +11,8 @@ import type { DB } from '../db/client.js';
 import { boxes, customers, config, gates, events, doRecords, employees, warehouses, gatePendingReads } from '../db/schema.js';
 import { gateTypeOf } from '../lib/gateType.js';
 import { withStockLock } from '../lib/stockLock.js';
+import { boxSize, fitsSlot, tooBigMessage } from '../lib/boxFit.js';
+import { findSlot } from './boxFit.js';
 import { httpError } from '../middleware/error.js';
 import { resolveBoxesByCodes } from './rfid.js';
 
@@ -385,6 +387,14 @@ async function receiveIn(db: DB, input: GateInInput) {
   for (const [code, row] of resolved) {
     const flag = conditions[row.tag] ?? conditions[code];
     if (flag) conditionOf.set(row.tag, flag);
+  }
+
+  /* A named shelf has to take every box that is going onto it. */
+  const shelf = input.location ? await findSlot(db, wh, input.location) : undefined;
+  if (shelf) {
+    const big = canonicalTags.map((tag) => found.get(tag)!)
+      .find((row) => !conditionOf.has(row.tag) && !fitsSlot(boxSize(row), shelf));
+    if (big) throw httpError(409, tooBigMessage(big.tag, boxSize(big), shelf), 'box_too_big');
   }
 
   // A box is received wherever it physically shows up: shipping out from
