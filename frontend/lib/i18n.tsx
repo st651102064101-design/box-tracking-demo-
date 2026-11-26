@@ -5,8 +5,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 export type Locale = 'th' | 'en';
 
 const th = {
-  'language.th': 'ไทย',
-  'language.en': 'English',
+  'language.th': 'TH',
+  'language.en': 'EN',
   'language.switch': 'เปลี่ยนภาษา',
   'app.loading': 'กำลังโหลด…',
   'app.frameTitle': 'Smart Tracking',
