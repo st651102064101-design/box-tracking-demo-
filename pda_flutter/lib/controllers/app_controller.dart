@@ -1023,7 +1023,28 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   // ═══════════════════════ nav ═════════════════════════════════════════════
+  bool get receiveShipOnly => prefs.receiveShipOnly;
+
+  void setReceiveShipOnly(bool value) {
+    prefs.receiveShipOnly = value;
+    notifyListeners();
+  }
+
+  /// Screens the receive-and-ship system does not offer.
+  static const _extraScreens = {
+    Screen.moreHub,
+    Screen.track,
+    Screen.cycleCount,
+    Screen.holdRelease,
+    Screen.locationInquiry,
+    Screen.transfer,
+    Screen.rfidLocate,
+    Screen.rfidInput,
+    Screen.boxRegister,
+  };
+
   void go(Screen s) {
+    if (receiveShipOnly && _extraScreens.contains(s)) return;
     if (!hasIntegratedRfid &&
         (s == Screen.rfidLocate ||
             s == Screen.rfidInput ||
@@ -1574,6 +1595,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// slot on Home's primary 6-button menu — RFID tag binding, brand-new box
   /// intake, and the text-search box lookup (Track).
   void goMoreHub() {
+    if (receiveShipOnly) return;
     screen = Screen.moreHub;
     _syncBarcodeScannerForScreen();
     notifyListeners();

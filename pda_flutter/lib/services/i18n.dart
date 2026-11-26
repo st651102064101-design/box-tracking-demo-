@@ -43,6 +43,13 @@ class LocaleController extends ChangeNotifier {
     'ยังไม่ได้เลือกคลัง/ประตู': 'No warehouse/gate picked yet',
     'ตั้งค่าการเชื่อมต่อ': 'Connection settings',
     'ยังไม่มีพนักงานในระบบ': 'No employees on file yet',
+    'ระบบที่ใช้งาน': 'System',
+    'รับ-ส่ง': 'Receive & ship',
+    'รับเข้า และ จ่ายออก': 'Gate in and gate out',
+    'ครบทุกฟีเจอร์': 'All features',
+    'ทุกเมนู': 'Every menu',
+    'บัญชีนี้เป็นสิทธิ์ผู้ชม — บันทึกเข้า/ออกไม่ได้':
+        'View-only account — cannot record gate in/out',
     'รอเชื่อมต่อกับระบบหลักก่อน': 'Waiting to connect to the main system',
     'ยังไม่พบข้อมูลจากระบบหลัก SmartTrace — แตะปุ่มด้านล่างเพื่อตั้งค่าการเชื่อมต่อ':
         'No data from the SmartTrace main system yet — tap below to set up the connection',

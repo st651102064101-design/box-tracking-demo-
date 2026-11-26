@@ -14,6 +14,7 @@ import '../services/theme_controller.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/pin_pad.dart';
+import '../widgets/system_picker.dart';
 
 /// In-shift settings: what the operator can see and do without leaving their
 /// session. Anything that changes what this terminal *is* — its address, its
@@ -49,6 +50,10 @@ class SettingsScreen extends StatelessWidget {
             child: ListView(
               padding: EdgeInsets.fromLTRB(16, 16, 16, bottom + 16),
               children: [
+                Caption(loc.t('ระบบที่ใช้งาน')),
+                const SizedBox(height: 10),
+                const SystemPicker(),
+                const SizedBox(height: 14),
                 Panel(
                   padding: const EdgeInsets.all(16),
                   radius: 18,

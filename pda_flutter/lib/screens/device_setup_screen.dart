@@ -9,6 +9,7 @@ import '../services/scan_speed_detector.dart';
 import '../services/theme_controller.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../widgets/system_picker.dart';
 
 /// Connecting a terminal to the main system — done once, by whoever hands the
 /// device out. The operator only points at the server (scan a connect QR or
@@ -153,6 +154,10 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
                   onPick: c.setDeviceModel,
                   loc: loc,
                 ),
+                const SizedBox(height: 18),
+                _StepLabel(loc.t('ระบบที่ใช้งาน')),
+                const SizedBox(height: 11),
+                const SystemPicker(),
                 const SizedBox(height: 18),
                 _StepLabel(loc.t('2 · การเชื่อมต่อระบบหลัก')),
                 const SizedBox(height: 11),

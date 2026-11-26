@@ -248,9 +248,87 @@ List<Widget> _postPickerBody(AppController c, LocaleController loc) {
   ];
 }
 
+/// The receive-and-ship system: two buttons a gloved thumb cannot miss. A
+/// one-way gate shows only its own direction, as on the full home.
+List<Widget> _receiveShipBody(AppController c, LocaleController loc) {
+  return [
+    if (!c.canScan)
+      _Note(loc.t('บัญชีนี้เป็นสิทธิ์ผู้ชม — บันทึกเข้า/ออกไม่ได้')),
+    if (c.canScan && c.currentGateType != 'out') ...[
+      _BigJob(
+        icon: Icons.south_rounded,
+        title: loc.t('รับเข้า'),
+        color: C.menuGreen,
+        bg: C.menuGreenBg,
+        onTap: c.goScanIn,
+      ),
+      const SizedBox(height: 14),
+    ],
+    if (c.canScan && c.currentGateType != 'in')
+      _BigJob(
+        icon: Icons.north_rounded,
+        title: loc.t('จ่ายออก'),
+        color: C.menuBlue,
+        bg: C.menuBlueBg,
+        onTap: c.goScanOut,
+      ),
+    if (c.outbox.isNotEmpty) ...[
+      const SizedBox(height: 14),
+      _OutboxBanner(count: c.outbox.length, onSync: c.toggleOnline),
+    ],
+  ];
+}
+
+class _BigJob extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final Color color;
+  final Color bg;
+  final VoidCallback onTap;
+  const _BigJob({
+    required this.icon,
+    required this.title,
+    required this.color,
+    required this.bg,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: bg,
+      borderRadius: BorderRadius.circular(26),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(26),
+        onTap: onTap,
+        child: Container(
+          height: 170,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(26),
+            border: Border.all(color: color, width: 2),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 56, color: color),
+              const SizedBox(height: 6),
+              Text(title,
+                  style: TextStyle(
+                      fontSize: 30,
+                      fontWeight: FontWeight.w900,
+                      color: color)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// คลัง/ประตูยืนยันแล้ว — สถิติ + "งานหลัก" ตามปกติ
 List<Widget> _confirmedBody(BuildContext context, AppController c) {
   final loc = context.watch<LocaleController>();
+  if (c.receiveShipOnly) return _receiveShipBody(c, loc);
   return [
     Row(
       children: [

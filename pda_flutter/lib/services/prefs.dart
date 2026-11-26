@@ -200,6 +200,10 @@ class Prefs {
   /// it up front means a future model with different reader hardware doesn't
   /// need every already-deployed terminal re-provisioned to tell them apart.
   /// Empty means "not chosen yet."
+  /// Which system this terminal runs: only receiving and shipping, or all.
+  bool get receiveShipOnly => _p.getBool('smarttrace_receive_ship_only') ?? false;
+  set receiveShipOnly(bool v) => _p.setBool('smarttrace_receive_ship_only', v);
+
   String get deviceModel => _p.getString(_kDeviceModel) ?? '';
   set deviceModel(String v) => _p.setString(_kDeviceModel, v);
 
