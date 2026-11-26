@@ -11,6 +11,8 @@ export interface JwtPayload {
    *  `sub` is that employee's id either way, this just disambiguates which
    *  table it points at for anything that needs to tell the two apart. */
   employeeId?: string;
+  /** employees.session_version at sign-in (employee tokens only). */
+  sv?: number;
 }
 
 export function signToken(payload: JwtPayload): string {

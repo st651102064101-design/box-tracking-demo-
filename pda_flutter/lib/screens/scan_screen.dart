@@ -667,7 +667,7 @@ class _ScanScreenState extends State<ScanScreen>
                 decoration: pdaInput(loc.t('เช่น รถตู้ / รถพ่วง'), radius: 12)),
           ],
           const SizedBox(height: 8),
-          Text(loc.t('เลขที่ DO/PO จะสร้างอัตโนมัติเมื่อยืนยันส่งออก'),
+          Text(loc.t('เลขที่ DO จะสร้างอัตโนมัติเมื่อยืนยันส่งออก'),
               style: TextStyle(fontSize: 11.5, color: C.muted)),
         ],
       ),

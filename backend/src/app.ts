@@ -21,9 +21,6 @@ import { rolesRouter } from './routes/roles.js';
 import { brandingRouter } from './routes/branding.js';
 import { systemRouter } from './routes/system.js';
 import { lprRouter } from './routes/lpr.js';
-import { notificationsRouter } from './routes/notifications.js';
-import { lineWebhookRouter } from './routes/lineWebhook.js';
-import { lineLinkRouter } from './routes/lineLink.js';
 import { devicesRouter } from './routes/devices.js';
 import { warehouse3dRouter } from './routes/warehouse3d.js';
 import { fx9600Router } from './routes/fx9600.js';
@@ -103,9 +100,6 @@ export function createApp() {
   // Keep raw parsing scoped to the physical-reader webhook. Management APIs
   // under /api/rfid/fx9600 still need normal JSON request parsing.
   app.use('/api/rfid/fx9600/:gate/webhook', express.raw({ type: '*/*', limit: '10mb' }));
-  // Signature verification must see LINE's exact bytes. This must be mounted
-  // before express.json(); once JSON parsing runs the original byte stream is gone.
-  app.use('/api/line/webhook', express.raw({ type: '*/*', limit: '1mb' }));
   app.use(express.json({ limit: '10mb' }));
   /* The SSE URL carries the auth token as a query parameter, because
      EventSource cannot send headers. Access logs are the one place that
@@ -144,9 +138,6 @@ export function createApp() {
   app.use('/api/reports', reportsRouter);
   app.use('/api/devices', devicesRouter);
   app.use('/api/warehouse-3d', warehouse3dRouter);
-  app.use('/api/notify-customer', notificationsRouter);
-  app.use('/api/line/webhook', lineWebhookRouter);
-  app.use('/api/line/link', lineLinkRouter);
   app.use('/api/stream', streamRouter);
   app.use('/api/gate-prefs', gatePrefsRouter);
   app.use('/api/ui-prefs', uiPrefsRouter);

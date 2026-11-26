@@ -31,6 +31,10 @@ flutter:
   # font offline, so the app's typography would change depending on signal.
   # Bundling costs ~2MB of APK and makes the font unconditional.
   fonts:
+    # Thai glyphs (Inter has none); used through fontFamilyFallback in theme.dart.
+    - family: Noto Sans Thai
+      fonts:
+        - asset: assets/fonts/NotoSansThai.ttf
     - family: Inter
       fonts:
         - asset: assets/fonts/Inter-Regular.ttf

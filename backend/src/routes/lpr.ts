@@ -4,7 +4,7 @@ import { env } from '../env.js';
 import { asyncHandler, httpError } from '../middleware/error.js';
 import { requireAuth } from '../middleware/auth.js';
 import { getDb } from '../db/client.js';
-import { auditLog, boxes, gatePendingReads, gates, rfidGateAutoSessions, warehouses } from '../db/schema.js';
+import { auditLog, boxes, gatePendingReads, gates, rfidGateAutoSessions, vehicles, warehouses } from '../db/schema.js';
 import { resolveBoxesByCodes } from '../services/rfid.js';
 import { and, eq } from 'drizzle-orm';
 import { bump, publishLprDetection } from '../lib/bus.js';
@@ -44,17 +44,11 @@ type LprDecision = {
   rfidTags?: string[];
 };
 
-// MOCK ONLY: in production replace this map with a short-lived DB/Redis query,
-// e.g. SELECT from rfid_gate_reads where gate_id + expected_plate match and
-// read_at is within ±30 seconds. The RFID workflow should write that expected
-// plate when a shipment/vehicle session is staged.
-const expectedRfidReads = new Map<string, { plateNumber: string; epc: string; seenAt: number }>([
-  ['GATE-1', { plateNumber: '1กข1234', epc: 'BOX-001', seenAt: Date.now() }],
-]);
 const recentRfidReads = new Map<string, { tags: string[]; seenAt: number }>();
 const processedEvents = new Map<string, LprDecision>();
 const RFID_MATCH_WINDOW_MS = 30_000;
 const MIN_AUTO_OPEN_CONFIDENCE = 0.85;
+const normalizePlate = (value: unknown) => String(value ?? '').toUpperCase().replace(/\s+/g, '');
 
 /** Called by the FX9600 receiver for every decoded read. In production this
  * short-lived cache should be backed by Redis/DB and joined to the staged
@@ -86,27 +80,41 @@ lprRouter.post('/', asyncHandler(async (req, res) => {
   const duplicate = processedEvents.get(payload.eventId);
   if (duplicate) return res.status(200).json({ ...duplicate, duplicate: true });
 
-  // Real-world correlation: the LPR read may open the barrier only when an
-  // RFID event at the same gate expects the same vehicle within a small time
-  // window. This prevents a high-confidence but unrelated plate from opening.
-  const expected = expectedRfidReads.get(gateKey);
+  /* The barrier opens only when BOTH signals check out: the FX9600 saw at
+     least one registered box at this gate within the time window, AND the
+     camera's plate is one the WMS can tie to this passage. A read of some
+     unknown tag proves nothing about the vehicle in front of the barrier. */
   const recent = recentRfidReads.get(gateKey);
   const recentRfid = recent && Math.abs(Date.parse(payload.timestamp) - recent.seenAt) <= RFID_MATCH_WINDOW_MS ? recent : undefined;
-  const stagedPlateMatches = Boolean(
-    expected
-      && expected.plateNumber.toUpperCase().replace(/\s+/g, '') === payload.plateNumber
-      && Math.abs(Date.parse(payload.timestamp) - expected.seenAt) <= RFID_MATCH_WINDOW_MS,
-  );
-  // A live FX9600 observation proves the vehicle is physically at this gate;
-  // the staged plate/session is what should be joined here in production.
-  const matchedRfid = Boolean(recentRfid || stagedPlateMatches);
+  const seenBoxes = recentRfid?.tags.length
+    ? Array.from((await resolveBoxesByCodes(db, recentRfid.tags)).resolved.values())
+    : [];
+  const session = (await db.select().from(rfidGateAutoSessions).where(eq(rfidGateAutoSessions.gateNo, gateNo)).limit(1))[0];
+  const liveSession = session && session.expiresAt.getTime() > Date.now() ? session : undefined;
+  /* Plate authority, strictest first: a plate staged for this gate must match
+     exactly; a staged session without one lets the camera supply it; with no
+     session the plate must already be on a detected box or in the vehicle list. */
+  const plateAccepted = async () => {
+    if (liveSession) return !liveSession.plate || normalizePlate(liveSession.plate) === payload.plateNumber;
+    if (seenBoxes.some((row) => normalizePlate((row.data as Record<string, unknown>).plate) === payload.plateNumber)) return true;
+    const known = await db.select().from(vehicles);
+    return known.some((row) => normalizePlate((row.data as Record<string, unknown>).plate) === payload.plateNumber);
+  };
+  const refusal = !recentRfid
+    ? 'no_matching_recent_rfid'
+    : !seenBoxes.length
+      ? 'no_registered_rfid'
+      : !(await plateAccepted())
+        ? (liveSession ? 'plate_mismatch' : 'plate_not_recognized')
+        : undefined;
+  const matchedRfid = !refusal;
   let mayOpen = matchedRfid && payload.confidence >= MIN_AUTO_OPEN_CONFIDENCE;
+  let shipFailed = false;
   const autoShippedTags: string[] = [];
   /* Outbound RFID mode stages the customer first; LPR supplies the plate.
      When both signals arrive within the correlation window, complete the
      shipment here so the barrier controller can act without a second click. */
   if (mayOpen && payload.direction !== 'inbound' && recentRfid?.tags?.length) {
-    const session = (await db.select().from(rfidGateAutoSessions).where(eq(rfidGateAutoSessions.gateNo, gateNo)).limit(1))[0];
     const gateRow = (await db.select().from(gates).where(eq(gates.gateNo, gateNo)).limit(1))[0];
     const warehouse = gateRow?.warehouseId
       ? (await db.select().from(warehouses).where(eq(warehouses.id, gateRow.warehouseId)).limit(1))[0]
@@ -118,14 +126,22 @@ lprRouter.post('/', asyncHandler(async (req, res) => {
       ? ((warehouse.data as Record<string, unknown>).gateBidirectionalModes as Record<string, unknown> | undefined) : undefined;
     const requiresScreenConfirmation = gateDirection === 'both'
       && String(bidirectionalModes?.[String(gateNo)] ?? 'screen') === 'screen';
-    if (!requiresScreenConfirmation && session?.direction === 'out' && session.customer && session.expiresAt.getTime() > Date.now()) {
+    if (!requiresScreenConfirmation && liveSession?.direction === 'out' && liveSession.customer) {
       await db.update(rfidGateAutoSessions).set({ plate: payload.plateNumber, updatedAt: new Date(), updatedBy: payload.cameraId }).where(eq(rfidGateAutoSessions.gateNo, gateNo));
+      /* A dedicated OUT gate lets the FX9600 ship these boxes before the camera
+         reports. Those are done already — only ship what is still here. */
+      const done = new Set(seenBoxes
+        .filter((row) => row.status === 'out' && row.customer === liveSession.customer && row.outGate === gateNo)
+        .map((row) => row.tag));
+      const remaining = seenBoxes.filter((row) => !done.has(row.tag)).map((row) => row.tag);
+      const unregistered = recentRfid.tags.length > seenBoxes.length;
       try {
-        const shipped = await gateOut(db, { tags: recentRfid.tags, gate: gateNo, customer: session.customer, doNo: session.doNo ?? undefined, po: session.po ?? undefined, plate: payload.plateNumber, recorder: session.recorder ?? 'LPR + FX9600', device: payload.cameraId });
+        const shipped = !remaining.length && !unregistered ? { shipped: Array.from(done) } : await gateOut(db, { tags: done.size ? remaining : recentRfid.tags, gate: gateNo, customer: liveSession.customer, doNo: liveSession.doNo ?? undefined, po: liveSession.po ?? undefined, plate: payload.plateNumber, recorder: liveSession.recorder ?? 'LPR + FX9600', device: payload.cameraId });
         autoShippedTags.push(...shipped.shipped);
         for (const tag of autoShippedTags) await db.delete(gatePendingReads).where(and(eq(gatePendingReads.gateNo, gateNo), eq(gatePendingReads.tag, tag)));
       } catch (error) {
         mayOpen = false;
+        shipFailed = true;
         console.error('[lpr-auto-out] unable to ship correlated RFID tags', error);
       }
     }
@@ -137,8 +153,8 @@ lprRouter.post('/', asyncHandler(async (req, res) => {
     gateId: gateNo,
     plateNumber: payload.plateNumber,
     matchedRfid,
-    reason: !matchedRfid ? 'no_matching_recent_rfid' : 'plate_and_rfid_matched',
-    rfidTags: autoShippedTags.length ? autoShippedTags : (recentRfid?.tags ?? (stagedPlateMatches && expected ? [expected.epc] : [])),
+    reason: refusal ?? (shipFailed ? 'auto_ship_failed' : mayOpen ? 'plate_and_rfid_matched' : 'low_confidence'),
+    rfidTags: autoShippedTags.length ? autoShippedTags : (recentRfid?.tags ?? []),
   };
 
   processedEvents.set(payload.eventId, decision);
@@ -164,7 +180,8 @@ lprRouter.post('/', asyncHandler(async (req, res) => {
   // records. Keep the text-only evidence on the affected boxes only.
   try {
     const db = getDb();
-    if (decision.rfidTags?.length) {
+    if (matchedRfid && decision.rfidTags?.length) {
+      // Re-read: a shipment above has just appended to these boxes' history.
       const { resolved } = await resolveBoxesByCodes(db, decision.rfidTags);
       for (const row of resolved.values()) {
         const history = Array.isArray(row.history) ? [...row.history, lprEvent] : [lprEvent];

@@ -1,11 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ApiError, login, forgotPassword, resetPassword, setToken, getBranding, type SystemBranding } from '@/lib/api';
+import { ApiError, login, setToken, getBranding, type SystemBranding } from '@/lib/api';
 import { LanguageToggle, useI18n, type TranslationKey } from '@/lib/i18n';
 
-type Mode = 'login' | 'forgot-request' | 'forgot-reset';
-type FieldName = 'username' | 'password' | 'otp' | 'newPassword';
+type FieldName = 'username' | 'password';
 
 // Key for remembering who last signed in on this device, so the login screen
 // can skip straight to "just type your password" instead of making them
@@ -21,13 +20,10 @@ export default function LoginPage() {
     subtitle: '',
     logoData: null,
   });
-  const [mode, setMode] = useState<Mode>('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [otp, setOtp] = useState('');
-  const [newPassword, setNewPassword] = useState('');
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState<{ key: TranslationKey; params?: Record<string, string> } | null>(null);
+  const [notice, setNotice] = useState<{ key: TranslationKey } | null>(null);
   const [busy, setBusy] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<FieldName, string>>>({});
   const [touched, setTouched] = useState<Partial<Record<FieldName, boolean>>>({});
@@ -58,36 +54,22 @@ export default function LoginPage() {
     getBranding().then(setBranding).catch(() => undefined);
   }, []);
 
-  function switchMode(next: Mode) {
-    setMode(next);
-    setError('');
-    setNotice(null);
-    setFieldErrors({});
-    setTouched({});
-  }
-
   function fieldMessage(name: FieldName, value: string) {
     const clean = value.trim();
     if (name === 'username' && !clean) return t('login.validation.usernameRequired');
     if (name === 'password' && !value) return t('login.validation.passwordRequired');
-    if (name === 'otp' && !/^\d{6}$/.test(clean)) return t('login.validation.otpLength');
-    if (name === 'newPassword' && value.length < 10) return t('password.validation.minLength');
-    if (name === 'newPassword' && !/[a-z]/.test(value)) return t('password.validation.lowercase');
-    if (name === 'newPassword' && !/[A-Z]/.test(value)) return t('password.validation.uppercase');
-    if (name === 'newPassword' && !/\d/.test(value)) return t('password.validation.number');
-    if (name === 'newPassword' && !/[^A-Za-z0-9]/.test(value)) return t('password.validation.special');
     return '';
   }
 
   useEffect(() => {
-    const values: Record<FieldName, string> = { username, password, otp, newPassword };
+    const values: Record<FieldName, string> = { username, password };
     setFieldErrors((current) => Object.fromEntries(
       Object.keys(current).map((name) => {
         const field = name as FieldName;
         return [field, fieldMessage(field, values[field]) || undefined];
       }),
     ));
-  }, [locale, t, username, password, otp, newPassword]);
+  }, [locale, t, username, password]);
 
   function updateField(name: FieldName, value: string, setter: (value: string) => void) {
     setter(value);
@@ -104,12 +86,7 @@ export default function LoginPage() {
   }
 
   function validateCurrentMode() {
-    const active: Array<[FieldName, string]> =
-      mode === 'login'
-        ? [['username', username], ['password', password]]
-        : mode === 'forgot-request'
-          ? [['username', username]]
-          : [['otp', otp], ['newPassword', newPassword]];
+    const active: Array<[FieldName, string]> = [['username', username], ['password', password]];
     const next: Partial<Record<FieldName, string>> = {};
     active.forEach(([name, value]) => {
       const message = fieldMessage(name, value);
@@ -138,7 +115,7 @@ export default function LoginPage() {
     setError('');
   }
 
-  const showQuickLogin = mode === 'login' && !!quickUser && !useOtherAccount;
+  const showQuickLogin = !!quickUser && !useOtherAccount;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -147,31 +124,11 @@ export default function LoginPage() {
     setNotice(null);
     setBusy(true);
     try {
-      if (mode === 'login') {
-        const trimmed = username.trim();
-        const res = await login(trimmed, password);
-        setToken(res.token);
-        window.localStorage.setItem(LAST_USER_KEY, trimmed);
-        window.location.replace(res.user.firstSetupRequired ? '/onboarding' : '/');
-        return;
-      }
-      if (mode === 'forgot-request') {
-        const res = await forgotPassword(username.trim());
-        setNotice(
-          res.sentTo
-            ? { key: 'login.otp.sent', params: { destination: res.sentTo } }
-            : { key: 'login.otp.generic' },
-        );
-        setMode('forgot-reset');
-        setBusy(false);
-        return;
-      }
-      if (mode === 'forgot-reset') {
-        const res = await resetPassword(username.trim(), otp.trim(), newPassword);
-        setToken(res.token);
-        window.location.replace('/');
-        return;
-      }
+      const trimmed = username.trim();
+      const res = await login(trimmed, password);
+      setToken(res.token);
+      window.localStorage.setItem(LAST_USER_KEY, trimmed);
+      window.location.replace(res.user.firstSetupRequired ? '/onboarding' : '/');
     } catch (err) {
       if (err instanceof ApiError && Object.keys(err.errors).length) {
         setFieldErrors((current) => ({ ...current, ...err.errors }));
@@ -181,10 +138,6 @@ export default function LoginPage() {
       setBusy(false);
     }
   }
-
-  const title = mode === 'login' ? t('login.title.signIn') : mode === 'forgot-request' ? t('login.title.forgot') : t('login.title.reset');
-  const submitLabel =
-    mode === 'login' ? t('login.submit.signIn') : mode === 'forgot-request' ? t('login.submit.sendOtp') : t('login.submit.reset');
 
   return (
     <main className="relative flex min-h-screen items-center justify-center bg-[#f5f5f7] px-4">
@@ -205,7 +158,7 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <h2 className="mb-4 text-xl font-bold tracking-tight text-ink">{title}</h2>
+        <h2 className="mb-4 text-xl font-bold tracking-tight text-ink">{t('login.title.signIn')}</h2>
 
         {/* Quick login — this device already knows who signed in last (or the
             app sent us here with ?u=), so skip straight to "confirm with your
@@ -232,7 +185,7 @@ export default function LoginPage() {
         )}
 
         <form onSubmit={submit} className="space-y-3">
-          {mode !== 'forgot-reset' && !showQuickLogin && (
+          {!showQuickLogin && (
             <Field
               id="username"
               label={t('login.username.label')}
@@ -246,7 +199,7 @@ export default function LoginPage() {
             />
           )}
 
-          {mode === 'login' && useOtherAccount && quickUser && (
+          {useOtherAccount && quickUser && (
             <button
               type="button"
               onClick={useQuickAgain}
@@ -256,52 +209,20 @@ export default function LoginPage() {
             </button>
           )}
 
-          {mode === 'forgot-reset' && (
-            <>
-              <p className="rounded-lg bg-black/[0.03] px-3 py-2 text-xs text-ink-2/70">
-                {t('login.account')} <span className="font-semibold text-ink">{username}</span>
-              </p>
-              <Field
-                id="otp"
-                label={t('login.otp.label')}
-                value={otp}
-                onChange={(v) => updateField('otp', v.replace(/\D/g, '').slice(0, 6), setOtp)}
-                onBlur={() => blurField('otp', otp)}
-                error={fieldErrors.otp}
-                placeholder="000000"
-                maxLength={6}
-                autoFocus
-              />
-              <Field
-                id="new-password"
-                label={t('login.password.newLabel')}
-                value={newPassword}
-                onChange={(value) => updateField('newPassword', value, setNewPassword)}
-                onBlur={() => blurField('newPassword', newPassword)}
-                error={fieldErrors.newPassword}
-                type="password"
-                placeholder={t('login.password.newPlaceholder')}
-                autoComplete="new-password"
-              />
-            </>
-          )}
+          <Field
+            id="password"
+            label={t('login.password.label')}
+            value={password}
+            onChange={(value) => updateField('password', value, setPassword)}
+            onBlur={() => blurField('password', password)}
+            error={fieldErrors.password}
+            type="password"
+            placeholder="••••••"
+            autoFocus={showQuickLogin}
+            autoComplete="current-password"
+          />
 
-          {mode === 'login' && (
-            <Field
-              id="password"
-              label={t('login.password.label')}
-              value={password}
-              onChange={(value) => updateField('password', value, setPassword)}
-              onBlur={() => blurField('password', password)}
-              error={fieldErrors.password}
-              type="password"
-              placeholder="••••••"
-              autoFocus={showQuickLogin}
-              autoComplete="current-password"
-            />
-          )}
-
-          {notice && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">{t(notice.key, notice.params)}</p>}
+          {notice && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">{t(notice.key)}</p>}
           {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
 
           <button
@@ -309,29 +230,9 @@ export default function LoginPage() {
             disabled={busy}
             className="w-full rounded-xl bg-ink py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
           >
-            {busy ? t('common.processing') : submitLabel}
+            {busy ? t('common.processing') : t('login.submit.signIn')}
           </button>
         </form>
-
-        {mode === 'login' && (
-          <button
-            type="button"
-            onClick={() => switchMode('forgot-request')}
-            className="mt-3 w-full text-center text-sm text-ink-2/70 hover:text-ink"
-          >
-            {t('login.forgotQuestion')}
-          </button>
-        )}
-
-        {(mode === 'forgot-request' || mode === 'forgot-reset') && (
-          <button
-            type="button"
-            onClick={() => switchMode('login')}
-            className="mt-3 w-full text-center text-sm text-ink-2/70 hover:text-ink"
-          >
-            {t('login.back')}
-          </button>
-        )}
 
         {process.env.NODE_ENV !== 'production' && (
           <p className="mt-6 text-center text-xs text-ink-2/50">
@@ -352,7 +253,6 @@ function Field({
   placeholder,
   autoFocus,
   autoComplete,
-  maxLength,
   error,
   onBlur,
 }: {
@@ -364,7 +264,6 @@ function Field({
   placeholder?: string;
   autoFocus?: boolean;
   autoComplete?: string;
-  maxLength?: number;
   error?: string;
   onBlur?: () => void;
 }) {
@@ -381,7 +280,6 @@ function Field({
         placeholder={placeholder}
         autoFocus={autoFocus}
         autoComplete={autoComplete}
-        maxLength={maxLength}
         onBlur={onBlur}
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? errorId : undefined}

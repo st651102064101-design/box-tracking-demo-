@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { verifyToken, type JwtPayload } from '../lib/jwt.js';
 import { effectivePermissions } from '../lib/effectivePermissions.js';
+import { sessionStillValid } from '../lib/session.js';
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -21,12 +22,18 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
   if (scheme !== 'Bearer' || !token) {
     return res.status(401).json({ error: 'unauthorized', message: 'ต้องเข้าสู่ระบบก่อน' });
   }
+  const expired = () => res.status(401).json({ error: 'invalid_token', message: 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่' });
+  let user: JwtPayload;
   try {
-    req.user = verifyToken(token);
-    next();
+    user = verifyToken(token);
   } catch {
-    return res.status(401).json({ error: 'invalid_token', message: 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่' });
+    return expired();
   }
+  sessionStillValid(user).then((valid) => {
+    if (!valid) return expired();
+    req.user = user;
+    next();
+  }, next);
 }
 
 /** Requires `req.user.role` to be one of `roles`. Must run after `requireAuth`.

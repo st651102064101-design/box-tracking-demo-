@@ -59,25 +59,6 @@ describe('health + auth', () => {
     expect(res.status).toBe(400);
   });
 
-  /* This test env has no SMTP configured. That is a property of the system, not of
-     any account, so it is reported to every caller alike, whether or not the
-     username exists (an answer that differed would reveal which usernames exist;
-     the per-account behaviour is covered in forgot-password.test.ts). */
-  it('forgot-password reports missing SMTP the same way for known and unknown usernames', async () => {
-    const unknown = await request(ctx.app).post('/api/auth/forgot-password').send({ username: 'no-such-user' });
-    const known = await request(ctx.app).post('/api/auth/forgot-password').send({ username: 'staff1' });
-    expect(unknown.status).toBe(503);
-    expect(known.status).toBe(503);
-    expect(known.body).toEqual(unknown.body);
-  });
-
-  it('reset-password rejects a wrong OTP', async () => {
-    const res = await request(ctx.app)
-      .post('/api/auth/reset-password')
-      .send({ username: 'staff1', otp: '000000', password: 'newpass1' });
-    expect(res.status).toBe(400);
-  });
-
   it('blocks protected routes without a token', async () => {
     const res = await request(ctx.app).get('/api/state');
     expect(res.status).toBe(401);

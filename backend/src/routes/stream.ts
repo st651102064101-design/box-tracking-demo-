@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { verifyToken } from '../lib/jwt.js';
+import { sessionStillValid } from '../lib/session.js';
 import {
   subscribe,
   subscribeReaderStatus,
@@ -43,13 +44,13 @@ function tokenFrom(req: { headers: Record<string, unknown>; query: Record<string
   return typeof q === 'string' ? q : '';
 }
 
-streamRouter.get('/', (req, res) => {
+streamRouter.get('/', async (req, res) => {
   const token = tokenFrom(req as never);
   if (!token) {
     return res.status(401).json({ error: 'unauthorized', message: 'ต้องเข้าสู่ระบบก่อน' });
   }
   try {
-    verifyToken(token);
+    if (!(await sessionStillValid(verifyToken(token)))) throw new Error('revoked');
   } catch {
     return res.status(401).json({ error: 'invalid_token', message: 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่' });
   }

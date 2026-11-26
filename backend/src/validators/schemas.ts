@@ -18,16 +18,6 @@ export const registerSchema = z.object({
   // via the admin-only PATCH /api/auth/users/:id/role endpoint.
 });
 
-export const forgotPasswordRequestSchema = z.object({
-  username: z.string().min(1, 'กรุณากรอกชื่อผู้ใช้'),
-});
-
-export const resetPasswordSchema = z.object({
-  username: z.string().min(1, 'กรุณากรอกชื่อผู้ใช้'),
-  otp: z.string().regex(/^\d{6}$/, 'OTP ต้องเป็นตัวเลข 6 หลัก'),
-  password: z.string().min(6, 'รหัสผ่านอย่างน้อย 6 ตัวอักษร'),
-});
-
 export const linkEmployeeSchema = z.object({
   userId: z.number().int().positive().nullable(),
 });

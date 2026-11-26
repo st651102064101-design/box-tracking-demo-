@@ -25,6 +25,18 @@ class LocaleController extends ChangeNotifier {
   String t(String th) => lang == 'en' ? (_dict[th] ?? th) : th;
 
   static const Map<String, String> _dict = {
+    'การเชื่อมต่อระบบหลัก':
+        'Main system connection',
+    'ขาดการเชื่อมต่อกับระบบหลัก':
+        'Lost connection to the main system',
+    'ระบบจะลองเชื่อมต่อใหม่อัตโนมัติ — ข้อมูลที่ยิงระหว่างนี้จะถูกพักคิวไว้':
+        'Reconnecting automatically — scans made meanwhile are queued',
+    'รับทราบ':
+        'OK',
+    'ตั้งค่าระบบ':
+        'System setup',
+    'กล่องนี้ยังไม่มีแท็ก RFID ผูกไว้ — เครื่องจะไม่มีสัญญาณให้กวาดหา ให้ผู้ดูแลระบบผูกแท็กก่อน':
+        'This box has no RFID tag, so there is no signal to search for. Ask an administrator to bind a tag first.',
     // badge screen
     'ยิงบัตรพนักงานเพื่อเริ่มงาน': 'Scan your badge to start',
     'ยิงบัตร หรือพิมพ์รหัสพนักงาน': 'Scan a badge, or type an employee id',
@@ -225,7 +237,6 @@ class LocaleController extends ChangeNotifier {
     'รหัสไม่ถูกต้อง ลองใหม่': 'Wrong PIN, try again',
     'ออฟไลน์ และยังไม่เคยยืนยันรหัสนี้บนเครื่องนี้ตอนออนไลน์มาก่อน':
         'Offline, and this PIN was never confirmed on this device while online',
-    'ขอรหัส OTP ไม่สำเร็จ': 'Failed to request an OTP',
     'ตั้งรหัส PIN ใหม่สำหรับ': 'Set a new PIN for',
     'ตั้งรหัส PIN สำหรับ': 'Set a PIN for',
     'ตั้งรหัส 4 หลักไว้กันคนอื่นแตะชื่อคุณเข้าใช้งาน':
@@ -236,12 +247,10 @@ class LocaleController extends ChangeNotifier {
     'รหัสไม่ตรงกัน ลองใหม่': 'PINs don\'t match, try again',
     'ตั้งรหัส PIN ไม่สำเร็จ': 'Failed to set PIN',
     'ตั้งรหัส PIN แล้ว': 'PIN set',
-    'ส่งรหัส OTP แล้ว': 'OTP sent',
     'ส่งไปที่อีเมล': 'Sent to email',
     'แล้ว — กรอกรหัส 6 หลักด้านล่าง': '— enter the 6-digit code below',
     'เช็คอีเมลของคุณแล้วกรอกรหัส 6 หลักด้านล่าง':
         'Check your email and enter the 6-digit code below',
-    'กรอกรหัส OTP': 'Enter the OTP',
     'ส่งไปที่': 'Sent to',
     '(มีอายุ 5 นาที)': '(valid for 5 minutes)',
     'รหัส 6 หลักที่ส่งไปทางอีเมล (มีอายุ 5 นาที)':
@@ -348,7 +357,6 @@ class LocaleController extends ChangeNotifier {
     'แจ้งกล่องชำรุด — ทำได้ตอนรับเข้า (Gate In): ติ๊กสถานะ "ชำรุด" ที่การ์ดกล่องนั้นในคิวก่อนยืนยัน':
         'Flagging a box damaged is done at Gate In: tick "Damaged" on that box\'s card in the queue before confirming',
     // pin reset
-    'รหัส OTP ไม่ถูกต้องหรือหมดอายุ': 'OTP is incorrect or has expired',
 
     // scan (gate) screen
     'กลับไปสแกนกล่องเพิ่ม': 'Back to scan more boxes',
@@ -366,8 +374,8 @@ class LocaleController extends ChangeNotifier {
     '— เลือกประเภทรถ —': '— Choose vehicle type —',
     'ระบุประเภทรถ *': 'Specify vehicle type *',
     'เช่น รถตู้ / รถพ่วง': 'e.g. Van / Trailer',
-    'เลขที่ DO/PO จะสร้างอัตโนมัติเมื่อยืนยันส่งออก':
-        'DO/PO number is generated automatically on confirming Gate Out',
+    'เลขที่ DO จะสร้างอัตโนมัติเมื่อยืนยันส่งออก':
+        'The DO number is generated automatically on confirming Gate Out',
     'รถกระบะ': 'Pickup truck',
     'รถบรรทุก 6 ล้อ': '6-wheel truck',
     'รถบรรทุก 10 ล้อ': '10-wheel truck',

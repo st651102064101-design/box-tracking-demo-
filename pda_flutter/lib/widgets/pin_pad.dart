@@ -1,53 +1,31 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import '../theme.dart';
 
 /// Result of a PIN sheet: either a completed code, or the operator chose to
-/// skip (only possible when the sheet was opened with [allowSkip]) or asked
-/// to reset (only possible when the sheet was opened with [showForgot]).
+/// skip (only possible when the sheet was opened with [allowSkip]).
 class PinResult {
   final String? pin;
   final bool skipped;
-  final bool forgot;
-  const PinResult._(this.pin, this.skipped, this.forgot);
-  const PinResult.entered(String pin) : this._(pin, false, false);
-  const PinResult.skipped() : this._(null, true, false);
-  const PinResult.forgot() : this._(null, false, true);
+  const PinResult._(this.pin, this.skipped);
+  const PinResult.entered(String pin) : this._(pin, false);
+  const PinResult.skipped() : this._(null, true);
 }
 
-/// A numeric keypad sheet — [length] digits (4 for a PIN, 6 for an OTP).
+/// A numeric keypad sheet of [length] digits.
 /// [validate] is awaited before the sheet closes, so it can round-trip to the
 /// backend (PIN checks live server-side, never on the device); return an
 /// error message to reject and let the operator try again, or null to accept.
 /// [allowSkip] only makes sense while *setting* a PIN — an employee who
-/// already committed to one can't opt out of entering it later, but they can
-/// tap "ลืมรหัส PIN?" instead when [showForgot] is set.
-/// [onForgot], when given, runs when "ลืมรหัส PIN?" is tapped: the sheet
-/// stays open and shows a busy state for the whole call (instead of popping
-/// immediately and leaving the caller to show its own loading UI over a
-/// blank screen) and only pops once it resolves. Return null on success or
-/// an error message to keep the sheet open and let the operator retry.
-///
-/// [resendCooldown], when given (the OTP sheet only — 4-digit PIN sheets
-/// never pass this), starts a countdown under the dots and replaces it with
-/// a "ส่งรหัสอีกครั้ง" button once it reaches zero. [onResend] is the call
-/// that button makes; return null to restart the countdown from
-/// [resendCooldown] again, or an error message to show inline without
-/// resetting the clock (so a rate-limited resend doesn't quietly eat the
-/// operator's next legitimate attempt).
+/// already committed to one can't opt out of entering it later. A forgotten
+/// PIN is reset by an administrator.
 Future<PinResult?> showPinPad(
   BuildContext context, {
   required String title,
   String? subtitle,
   int length = 4,
   bool allowSkip = false,
-  bool showForgot = false,
   Future<String?> Function(String pin)? validate,
-  Future<String?> Function()? onForgot,
-  Duration? resendCooldown,
-  Future<String?> Function()? onResend,
 }) {
   return showModalBottomSheet<PinResult>(
     context: context,
@@ -59,11 +37,7 @@ Future<PinResult?> showPinPad(
       subtitle: subtitle,
       length: length,
       allowSkip: allowSkip,
-      showForgot: showForgot,
       validate: validate,
-      onForgot: onForgot,
-      resendCooldown: resendCooldown,
-      onResend: onResend,
     ),
   );
 }
@@ -73,21 +47,13 @@ class _PinPadSheet extends StatefulWidget {
   final String? subtitle;
   final int length;
   final bool allowSkip;
-  final bool showForgot;
   final Future<String?> Function(String pin)? validate;
-  final Future<String?> Function()? onForgot;
-  final Duration? resendCooldown;
-  final Future<String?> Function()? onResend;
   const _PinPadSheet({
     required this.title,
     this.subtitle,
     required this.length,
     required this.allowSkip,
-    required this.showForgot,
     this.validate,
-    this.onForgot,
-    this.resendCooldown,
-    this.onResend,
   });
 
   @override
@@ -98,68 +64,8 @@ class _PinPadSheetState extends State<_PinPadSheet> {
   String _digits = '';
   String? _error;
   bool _checking = false;
-  // True while the "ลืมรหัส PIN?" network round-trip is in flight. Kept
-  // separate from _checking so the busy label can say something more
-  // specific than the plain PIN-check spinner.
-  bool _forgotBusy = false;
 
-  // OTP resend countdown — see [showPinPad]'s resendCooldown/onResend.
-  Timer? _resendTimer;
-  int _secondsLeft = 0;
-  bool _resending = false;
-
-  bool get _busy => _checking || _forgotBusy || _resending;
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.resendCooldown != null) _startCooldown();
-  }
-
-  void _startCooldown() {
-    _resendTimer?.cancel();
-    setState(() => _secondsLeft = widget.resendCooldown!.inSeconds);
-    _resendTimer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (!mounted) {
-        t.cancel();
-        return;
-      }
-      if (_secondsLeft <= 1) {
-        t.cancel();
-        setState(() => _secondsLeft = 0);
-        return;
-      }
-      setState(() => _secondsLeft--);
-    });
-  }
-
-  Future<void> _tapResend() async {
-    if (_busy || widget.onResend == null || _secondsLeft > 0) return;
-    setState(() {
-      _error = null;
-      _resending = true;
-    });
-    final err = await widget.onResend!();
-    if (!mounted) return;
-    setState(() => _resending = false);
-    if (err != null) {
-      setState(() => _error = err);
-      return; // rate-limited or failed — clock stays at 0, operator can retry
-    }
-    _startCooldown();
-  }
-
-  @override
-  void dispose() {
-    _resendTimer?.cancel();
-    super.dispose();
-  }
-
-  String _fmtCountdown(int secs) {
-    final m = (secs ~/ 60).toString().padLeft(2, '0');
-    final s = (secs % 60).toString().padLeft(2, '0');
-    return '$m:$s';
-  }
+  bool get _busy => _checking;
 
   void _tap(String d) {
     if (_busy || _digits.length >= widget.length) return;
@@ -192,35 +98,6 @@ class _PinPadSheetState extends State<_PinPadSheet> {
       return;
     }
     Navigator.of(context).pop(PinResult.entered(_digits));
-  }
-
-  /// Tapping "ลืมรหัส PIN?" used to pop this sheet immediately, leaving the
-  /// screen behind it silent and idle for however long the OTP request took
-  /// — from the outside indistinguishable from the sheet just closing for no
-  /// reason. Now the sheet stays open and shows it's doing something (spinner
-  /// + status line) for the whole round trip, and only closes once the next
-  /// step is actually ready to show — one continuous motion instead of
-  /// close-then-blank-wait-then-reopen.
-  Future<void> _tapForgot() async {
-    if (_busy) return;
-    if (widget.onForgot == null) {
-      Navigator.of(context).pop(const PinResult.forgot());
-      return;
-    }
-    setState(() {
-      _error = null;
-      _forgotBusy = true;
-    });
-    final err = await widget.onForgot!();
-    if (!mounted) return;
-    if (err != null) {
-      setState(() {
-        _error = err;
-        _forgotBusy = false;
-      });
-      return;
-    }
-    Navigator.of(context).pop(const PinResult.forgot());
   }
 
   @override
@@ -283,28 +160,11 @@ class _PinPadSheetState extends State<_PinPadSheet> {
                     }),
                   ),
           ),
-          if (_forgotBusy) ...[
-            const SizedBox(height: 10),
-            Text('กำลังส่งรหัส OTP…',
-                style: TextStyle(fontSize: 12.5, color: C.muted)),
-          ],
           if (_error != null) ...[
             const SizedBox(height: 10),
             Text(_error!,
                 style: TextStyle(
                     fontSize: 12.5, color: C.red, fontWeight: FontWeight.w600)),
-          ],
-          if (widget.resendCooldown != null) ...[
-            const SizedBox(height: 10),
-            _secondsLeft > 0
-                ? Text(
-                    'ส่งรหัสอีกครั้งได้ใน ${_fmtCountdown(_secondsLeft)}',
-                    style: TextStyle(fontSize: 12.5, color: C.faint),
-                  )
-                : TextButton(
-                    onPressed: _busy ? null : _tapResend,
-                    child: Text(_resending ? 'กำลังส่ง…' : 'ส่งรหัสอีกครั้ง'),
-                  ),
           ],
           const SizedBox(height: 24),
           IgnorePointer(
@@ -321,13 +181,6 @@ class _PinPadSheetState extends State<_PinPadSheet> {
                   ? null
                   : () => Navigator.of(context).pop(const PinResult.skipped()),
               child: const Text('ข้าม / ไม่ตั้ง PIN'),
-            ),
-          ],
-          if (widget.showForgot) ...[
-            const SizedBox(height: 4),
-            TextButton(
-              onPressed: _busy ? null : _tapForgot,
-              child: const Text('ลืมรหัส PIN?'),
             ),
           ],
         ],

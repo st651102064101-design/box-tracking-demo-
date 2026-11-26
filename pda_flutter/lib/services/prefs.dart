@@ -287,7 +287,7 @@ class Prefs {
 
   /// Record that the server just confirmed [pin] is correct for [employeeId]
   /// (or that it was just set to [pin]) — call right after any successful
-  /// setEmployeePin/verifyEmployeePin/confirmPinReset.
+  /// setEmployeePin/verifyEmployeePin.
   void cachePinHash(String employeeId, String pin) {
     _p.setString('$_kPinHashPrefix$employeeId', _pinHash(employeeId, pin));
   }

@@ -737,3 +737,15 @@ CREATE INDEX IF NOT EXISTS line_notification_deliveries_retry_idx
   ON line_notification_deliveries (status, updated_at);
 CREATE INDEX IF NOT EXISTS line_notification_deliveries_customer_idx
   ON line_notification_deliveries (customer_id, created_at DESC);
+
+-- Gate scans used to append only to data->'history', leaving the history column
+-- behind (wrong "current warehouse", and later writers erased entries). Bring
+-- lagging rows up to date; a no-op once they match.
+UPDATE boxes SET history = data->'history'
+ WHERE jsonb_typeof(data->'history') = 'array'
+   AND jsonb_array_length(data->'history') > jsonb_array_length(history);
+
+-- Employee web accounts can be suspended, and their sessions revoked: a token is
+-- only good while its session version matches.
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS account_active BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS session_version INTEGER NOT NULL DEFAULT 0;
