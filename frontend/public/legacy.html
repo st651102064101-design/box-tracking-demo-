@@ -3570,7 +3570,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
           <input id="cReturnDate" type="hidden">
         </div>
         <div class="field"><label>เบอร์โทรศัพท์</label><input id="cPhone" type="tel" inputmode="tel" placeholder="02-xxx-xxxx" maxlength="15" autocomplete="tel"></div>
-        <div class="field"><label>อีเมล <span class="req">*</span></label><input id="cEmail" type="email" inputmode="email" placeholder="contact@company.com" maxlength="254" autocomplete="email" required></div>
+        <div class="field"><label>อีเมล</label><input id="cEmail" type="email" inputmode="email" placeholder="contact@company.com" maxlength="254" autocomplete="email"></div>
         <div class="field"><label>ที่อยู่/สาขา</label><input id="cAddr" placeholder="คลังนิคมฯ"></div>
         <div class="field"><label>เลขประจำตัวผู้เสียภาษี</label><input id="cTaxId" placeholder="0-0000-00000-00-0"></div>
         <div class="field"><label>ผู้ติดต่อหลัก</label><input id="cContactPerson" placeholder="ชื่อผู้ประสานงาน"></div>
@@ -5099,11 +5099,11 @@ function save(){
 var _rejectToastAt=0;
 var _oversizeToastAt=0;
 function onStateRejected(rejected){
-  var names=rejected.map(function(g){return g.label||g.key;}).join(' · ');
   var now=Date.now();
   if(now-_rejectToastAt>4000){
     _rejectToastAt=now;
-    toast('บันทึกบางส่วนไม่สำเร็จ','ไม่มีสิทธิ์แก้: '+names+' — ระบบดึงข้อมูลเดิมกลับมาแสดงแล้ว','err');
+    var why=rejected.map(function(g){return g.message||('ไม่มีสิทธิ์แก้: '+(g.label||g.key));}).join(' · ');
+    toast('บันทึกบางส่วนไม่สำเร็จ',why+' — ระบบดึงข้อมูลเดิมกลับมาแสดงแล้ว','err');
   }
   /* ดึง state จริงจากเซิร์ฟเวอร์มาทับ เพื่อให้สิ่งที่เห็นตรงกับสิ่งที่ถูกบันทึกจริง */
   if(typeof loadFromServer==='function'){
@@ -5493,6 +5493,18 @@ function supplierOptions(sel){var ss=Object.values(S.customers).filter(isSupplie
 window.supplierOptions=supplierOptions;
 function whName(id){return (S.warehouses[id]||{}).name||id||'-';}
 function gateWh(g){return S.gates[g]||'';}
+/* คลังที่กล่องอยู่ตอนนี้ — location.wh ก่อน ไม่งั้นคลังที่รับเข้าล่าสุด ('' = ไม่ทราบ ไม่บล็อก) */
+function boxWhOf(b){
+  var l=(b&&b.location)||{};if(l.wh)return l.wh;
+  var h=(b&&b.history)||[];
+  for(var i=h.length-1;i>=0;i--)if((h[i].dir==='in'||h[i].dir==='in-new')&&h[i].wh)return h[i].wh;
+  return '';
+}
+/* กล่องที่ส่งออกจากประตูนี้ไม่ได้ เพราะอยู่คนละคลัง (กติกาเดียวกับ API ของ PDA) */
+function wrongWarehouseTags(tags,gate){
+  var wh=gate?gateWh(gate):'';if(!wh)return [];
+  return tags.filter(function(t){var bw=boxWhOf(S.boxes[t]);return bw&&bw!==wh;});
+}
 function allGateNums(){return Object.keys(S.gates).map(Number).sort(function(a,b){return a-b;});}
 function gateOptions(sel){var gs=allGateNums();if(!gs.length)return '<option value="">(ยังไม่มีประตู — เพิ่มที่ตั้งค่า)</option>';
   return '<option value="">— เลือกประตู —</option>'+gs.map(function(g){return '<option value="'+g+'"'+(String(sel)===String(g)?' selected':'')+'>ประตู '+g+' · '+esc(whName(gateWh(g)))+'</option>';}).join('');}
@@ -7084,7 +7096,7 @@ function doDeleteLocScope(wh, z, r, sh) {
 window.doDeleteLocScope = doDeleteLocScope;
 /* single-slot delete straight from the grid — no confirm dialog needed since the
    delete icon is only ever rendered on an empty slot (hidden via CSS on .occ) */
-function delLocSlot(code) {
+function delLocSlot(code) {if(denyWithout('master.manage'))return;
   var occ = locOccupancyMap();
   if (occ[code]) { toast('ลบไม่ได้', code+' ยังมีกล่องอยู่ — ย้ายกล่องออกก่อน', 'err'); return false; }
   auditEntry('DELETE', USER, code, code, Object.assign({}, S.locations[code]), null);
@@ -7607,7 +7619,7 @@ function editLocRow(code) {
 }
 window.editLocRow = editLocRow;
 
-function delLoc(code) {
+function delLoc(code) {if(denyWithout('master.manage'))return;
   /* bulk-delete already skips occupied codes (see below) — single-row delete
      used to have no such guard, so it could delete a location a box is
      currently sitting in and leave that box pointing at nothing. */
@@ -7751,7 +7763,7 @@ window.locSlotClick = locSlotClick;
 
 /* ── bulk select actions for location table (mirrors ลงทะเบียนกล่อง) ── */
 $('#bulkLocClear').addEventListener('click', function(){ clearBulk('loc-cb','bulkLoc','cbAllLoc'); });
-$('#bulkLocDel').addEventListener('click', function(){
+$('#bulkLocDel').addEventListener('click', function(){if(denyWithout('master.manage'))return;
   var codes = getChecked('loc-cb'); if (!codes.length) return;
   confirmA('ลบ '+codes.length+' ตำแหน่งที่เลือก?', 'กล่องที่เคยบันทึกตำแหน่งนี้จะยังคงข้อมูลเดิมไว้', 'ลบ', true).then(function(ok){
     if (!ok) return;
@@ -8307,7 +8319,7 @@ function editBtype(id){var t=S.boxtypes[id];if(!t)return;editingBtype=id;btIdAut
   setv('btDimW',parts[0]||'');setv('btDimL',parts[1]||'');setv('btDimH',parts[2]||'');
   $('#btId').readOnly=true;$('#btnAddBtype').textContent='อัปเดตประเภท';$('#btnAddBtype').style.display='none';
   openCardDrawer('btypeFormCard','แก้ไขประเภทกล่อง '+esc(id),'แก้ไขข้อมูลประเภทกล่องในระบบ');}
-function delBtype(id){var used=Object.values(S.boxes).filter(function(b){return b.type===id;}).length;if(used)return toast('ลบไม่ได้','มีกล่องใช้ประเภทนี้อยู่ '+used+' ใบ','err');
+function delBtype(id){if(denyWithout('master.manage'))return;var used=Object.values(S.boxes).filter(function(b){return b.type===id;}).length;if(used)return toast('ลบไม่ได้','มีกล่องใช้ประเภทนี้อยู่ '+used+' ใบ','err');
   confirmA('ลบประเภท '+id+'?',null,'ลบ',true).then(function(ok){if(!ok)return;var before=Object.assign({},S.boxtypes[id]);delete S.boxtypes[id];auditEntry('DELETE',USER,id,before.name||id,before,null);save();toast('ลบแล้ว',id);renderAll();});}
 window.editBtype=editBtype;window.delBtype=delBtype;
 /* กว้าง/ยาว/สูง แยก 3 ช่อง — ประกอบกลับเป็น "WxLxH" ลง #btDim (hidden) ทุกครั้งที่
@@ -8692,7 +8704,7 @@ function toggleRfidReader(btn){
     .catch(function(e){btn.disabled=false;btn.textContent=enabled?'เปิดใช้งาน FX9600':'ปิดใช้งาน FX9600';toast('เปลี่ยนสถานะไม่สำเร็จ',e.message||'','err');});
 }
 window.toggleRfidReader=toggleRfidReader;
-function delWh(id){
+function delWh(id){if(denyWithout('master.manage'))return;
   var used=Object.values(S.boxes).filter(function(b){return (b.location&&b.location.wh===id)||b.outWh===id;}).length;
   if(used)return toast('ลบไม่ได้','มีกล่องผูกกับคลังนี้ '+used+' ใบ','err');
   var usedEmps=Object.values(S.employees||{}).filter(function(e){return e.wh===id;}).length;
@@ -8723,15 +8735,13 @@ $('#btnAddCust').onclick=async function(){
   if(durableEditId&&S.customers[durableEditId])editingCust=durableEditId;
   if(!validateForm(VALIDATION_SCHEMAS.customer,$('#custFormCard')))return;
   var id=val('cId'),nm=val('cName');if(!id||!nm)return toast('กรอกชื่อลูกค้า / บริษัท',null,'err');
-  /* อีเมลเป็นช่องบังคับ เพราะใช้เป็นช่องทางแจ้งเตือนสำรองเมื่อ LINE ใช้งานไม่ได้ */
   var returnDaysRaw=val('cReturnDays');
   var returnDays=(returnDaysRaw===''||isNaN(Number(returnDaysRaw))||Number(returnDaysRaw)<0)?0:Number(returnDaysRaw);
   var returnDate=ddmmyyyy(new Date(Date.now()+returnDays*86400000));
   var phone=val('cPhone'),email=val('cEmail').trim();
   if(phone&&!isValidThaiPhone(phone))return toast('เบอร์โทรศัพท์ไม่ถูกต้อง','กรอกเบอร์ไทย 9-10 หลัก ขึ้นต้นด้วย 0 เช่น 02-123-4567','err');
   phone=normPhoneDigits(phone);
-  if(!email)return fieldError('cEmail','กรุณากรอกอีเมลสำหรับรับการแจ้งเตือน');
-  if(!isValidEmail(email))return fieldError('cEmail','กรอกอีเมลในรูปแบบ name@company.com');
+  if(email&&!isValidEmail(email))return fieldError('cEmail','กรอกอีเมลในรูปแบบ name@company.com');
   var addr=val('cAddr');
   /* The drawer can be reopened by a realtime refresh while the form is still
      visible; recover the edit context from the button label so an existing
@@ -8870,6 +8880,7 @@ function editCust(id){var c=S.customers[id];if(!c)return;editingCust=id;var cust
    until a reader confirms it) — here it's a delete-verify: nothing is struck
    from the system until the same tag is read back. */
 function openDeleteBoxModal(tag){
+  if(denyWithout('box.delete'))return;
   var b=S.boxes[tag];if(!b)return;
   openModal('<div class="mhead"><h3>ลบกล่อง '+esc(tag)+'</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
     +'<div class="mbody">'
@@ -8911,7 +8922,7 @@ function openDeleteBoxModal(tag){
 }
 window.openDeleteBoxModal=openDeleteBoxModal;
 function delBox(tag){openDeleteBoxModal(tag);}
-function delCust(id){
+function delCust(id){if(denyWithout('partner.delete'))return;
   var used=Object.values(S.boxes).filter(function(b){return b.status==='out'&&b.customer===id;}).length;
   if(used)return toast('ลบไม่ได้','มีกล่องอยู่กับลูกค้านี้ '+used+' ใบ (ยังไม่คืน)','err');
   confirmA('ลบลูกค้า '+id+'?','ประวัติ ประตูเข้า/ออกเดิมที่เคยผูกกับลูกค้านี้จะยังอยู่ครบ ไม่ถูกลบไปด้วย','ลบ',true).then(function(ok){if(!ok)return;var before=Object.assign({},S.customers[id]);delete S.customers[id];auditEntry('DELETE',USER,id,before.name||id,before,null);save();toast('ลบแล้ว',id);renderAll();});}
@@ -9123,7 +9134,7 @@ function editEmp(id){
   empFormPhoto=e.photo||null;$('#ePhotoFile').value='';renderEPhotoPreview(e.name);
   $('#btnAddEmp').textContent='อัปเดตพนักงาน';$('#btnAddEmp').style.display='none';
   renderSetup();}
-function delEmp(id){
+function delEmp(id){if(denyWithout('employee.delete'))return;
   if(!isAdmin())return toast('ไม่มีสิทธิ์','ต้องเป็นผู้ดูแลระบบ (Admin) เท่านั้นจึงจะลบพนักงานได้','err');
   /* Design decision: even an admin may not delete their own logged-in employee
      record — self-deletion has no sane recovery path (locked out, no one left
@@ -13140,6 +13151,7 @@ function scanOut(tag){var raw=(tag||val('scanOut')).trim();tag=resolveTag(raw);i
   if(b.status==='pending'){$('#resultOut').innerHTML='<div class="banner warn">'+esc(tag)+' ยังไม่ติดแท็ก / ยังไม่เคยผ่านประตูเข้าคลัง (สแกนเข้าครั้งแรกก่อน)</div>';clearScanOutInput();return;}
   if(b.status==='hold'){$('#resultOut').innerHTML='<div class="banner warn">'+esc(tag)+' ถูกพักใช้งาน — ปลดพักใช้งาน ก่อนจึงจ่ายออกได้</div>';clearScanOutInput();return;}
   if(b.status==='damage'){$('#resultOut').innerHTML='<div class="banner bad">'+esc(tag)+' สถานะชำรุด — จ่ายออกไม่ได้</div>';clearScanOutInput();return;}
+  if(wrongWarehouseTags([tag],val('outGate')).length){$('#resultOut').innerHTML='<div class="banner bad">'+esc(tag)+' อยู่ '+esc(whName(boxWhOf(b)))+' — จ่ายออกที่ประตู '+esc(val('outGate'))+' ('+esc(whName(gateWh(val('outGate'))))+') ไม่ได้</div>';clearScanOutInput();return;}
   if(pendingOut.indexOf(tag)<0)pendingOut.push(tag);
   clearScanOutInput();renderOutResult();if(!outboundCameraSession)$('#scanOut').focus();
 }
@@ -13516,6 +13528,8 @@ function saveOutbound(){
      แต่ละใบเลือกสภาพของตัวเองได้ (ดู outConditionMap/renderOutResult) ไม่ใช่
      ค่าเดียวทับทั้งคิวเหมือนเดิม */
   var gate=val('outGate');if(!gate)return toast('เลือกประตูขาออก',null,'err');
+  var elsewhere=wrongWarehouseTags(pendingOut,gate);
+  if(elsewhere.length)return toast('ส่งออกไม่ได้ — กล่องอยู่คนละคลังกับประตู',elsewhere.join(', ')+' · เอาออกจากคิวหรือเปลี่ยนประตู','err');
   var recorder=val('outRecorder');if(!recorder)return toast('กรอกชื่อผู้บันทึก',null,'err');
   var doNoInput=$('#doNo');var doNo=val('doNo');
   if(!doNoInput._override){doNo=nextDoNoPreview();}
@@ -14599,16 +14613,6 @@ function renderOverviewOperations(all){
   var trackBtn=$('#ovRetainerTrackBtn');
   if(trackBtn){trackBtn.disabled=!rows.length;trackBtn.setAttribute('aria-disabled',rows.length?'false':'true');trackBtn.title=rows.length?'ติดตามกล่องที่อยู่กับลูกค้า':'ไม่มีลูกค้าที่ตรงตามตัวกรอง';}
 }
-function goEditCustomerEmail(customerId){
-  goSetup('cust');
-  setTimeout(function(){
-    editCust(customerId);
-    /* openCardDrawer โฟกัส input แรกที่ 260ms หลังเปิด drawer — ต้องรอให้จบ
-       ก่อน ไม่เช่นนั้นชื่อบริษัทจะมาแย่ง focus จากช่องอีเมล */
-    setTimeout(function(){var email=$('#cEmail');if(email){email.scrollIntoView({behavior:'smooth',block:'center'});email.focus();}},360);
-  },150);
-}
-window.goEditCustomerEmail=goEditCustomerEmail;
 function openCustEditField(customerId,fieldId){
   editCust(customerId);
   setTimeout(function(){
@@ -15255,6 +15259,12 @@ window.RBAC=RBAC;
 function hasPerm(k){return RBAC.perms.indexOf(k)>=0;}
 function hasAnyPerm(){for(var i=0;i<arguments.length;i++)if(hasPerm(arguments[i]))return true;return false;}
 window.hasPerm=hasPerm;window.hasAnyPerm=hasAnyPerm;
+/** เช็กก่อนลบ: ไม่งั้นหน้าจอขึ้น "ลบแล้ว" ก่อนที่เซิร์ฟเวอร์จะปฏิเสธการบันทึก */
+function denyWithout(k){
+  if(!RBAC.loaded||!RBAC.available||hasPerm(k))return false;
+  toast('ไม่มีสิทธิ์ลบ','บัญชีนี้ลบรายการนี้ไม่ได้','err');return true;
+}
+window.denyWithout=denyWithout;
 
 function rolePermissionCount(r){
   if(!r)return 0;
@@ -15357,7 +15367,7 @@ function applyPermVisibility(){
     return;
   }
   Object.keys(navRules).forEach(function(tab){
-    var perm=navRules[tab],allowed=tab==='setup'||(Array.isArray(perm)?hasAnyPerm.apply(null,perm):hasPerm(perm));
+    var perm=navRules[tab],allowed=Array.isArray(perm)?hasAnyPerm.apply(null,perm):hasPerm(perm);
     $all('#nav button[data-tab="'+tab+'"]').forEach(function(b){
       b.style.display=allowed?'':'none';
     });
@@ -16244,9 +16254,6 @@ function renderSetup(){
   var pgCust=pagerSlice('cust',cs);
   $('#custBody').innerHTML=pgCust.rows.length?pgCust.rows.map(function(c){var held=custHeldCount(c.id);
     var ctcParts=[c.phone||c.contact,c.email].filter(Boolean).map(function(v){return esc(v);});
-    /* ข้อมูลเก่าที่สร้างก่อนบังคับอีเมลยังต้องมองเห็นได้ชัดในตาราง เพื่อให้ตามแก้
-       ได้ครบก่อนใช้แจ้งเตือนอัตโนมัติจริง */
-    if(!c.email)ctcParts.push('<button type="button" class="pill bad" title="คลิกเพื่อเพิ่มอีเมล" onclick="event.stopPropagation();goEditCustomerEmail(\''+esc(c.id)+'\')" style="font-size:11px;white-space:nowrap;cursor:pointer;">ไม่มีอีเมล</button>');
     var ctcTxt=ctcParts.join(' · ');
     /* วันที่คืนจริงมีความหมายก็ต่อเมื่อกำลังยืมอยู่ (held>0) — ยังไม่ยืมเลยไม่มีวันที่
        จริงให้แสดง (เดิมโชว์ c.returnDate ซึ่งเป็นแค่วันที่คำนวณไว้ตอนบันทึก ไม่เกี่ยวกับ
@@ -16433,7 +16440,7 @@ function setupBulkTable(tbodyId,cls,allId,barId,cntId){var tbody=$('#'+tbodyId);
 $('#bulkBoxClear').addEventListener('click',function(){clearBulk('box-cb','bulkBox','cbAllBox');});
 /* ===== box-type (btype) bulk delete ===== */
 $('#bulkBtypeClear').addEventListener('click',function(){clearBulk('btype-cb','bulkBtype','cbAllBtype');});
-$('#bulkBtypeDel').addEventListener('click',function(){
+$('#bulkBtypeDel').addEventListener('click',function(){if(denyWithout('master.manage'))return;
   var ids=getChecked('btype-cb');if(!ids.length)return;
   /* never delete a type that still has boxes using it — mirrors the single-row guard */
   var inUse=ids.filter(function(id){return Object.values(S.boxes).some(function(b){return b.type===id;});});
@@ -16448,7 +16455,7 @@ $('#bulkBtypeDel').addEventListener('click',function(){
 });
 /* ===== warehouse (wh) bulk delete ===== */
 $('#bulkWhClear').addEventListener('click',function(){clearBulk('wh-cb','bulkWh','cbAllWh');});
-$('#bulkWhDel').addEventListener('click',function(){
+$('#bulkWhDel').addEventListener('click',function(){if(denyWithout('master.manage'))return;
   var ids=getChecked('wh-cb');if(!ids.length)return;
   /* never delete a warehouse that still has boxes stored/checked-out there — mirrors the single-row guard */
   var inUse=ids.filter(function(id){return Object.values(S.boxes).some(function(b){return (b.location&&b.location.wh===id)||b.outWh===id;});});
@@ -16463,7 +16470,7 @@ $('#bulkWhDel').addEventListener('click',function(){
 });
 /* ===== customer (cust) bulk delete ===== */
 $('#bulkCustClear').addEventListener('click',function(){clearBulk('cust-cb','bulkCust','cbAllCust');});
-$('#bulkCustDel').addEventListener('click',function(){
+$('#bulkCustDel').addEventListener('click',function(){if(denyWithout('partner.delete'))return;
   var ids=getChecked('cust-cb');if(!ids.length)return;
   /* never delete a customer who still has boxes out (not yet returned) — mirrors the single-row guard */
   var inUse=ids.filter(function(id){return Object.values(S.boxes).some(function(b){return b.status==='out'&&b.customer===id;});});
@@ -16478,7 +16485,7 @@ $('#bulkCustDel').addEventListener('click',function(){
 });
 /* ===== employee (emp) bulk delete — admin-only, same rule as the single-row delEmp() ===== */
 $('#bulkEmpClear').addEventListener('click',function(){clearBulk('emp-cb','bulkEmp','cbAllEmp');});
-$('#bulkEmpDel').addEventListener('click',function(){
+$('#bulkEmpDel').addEventListener('click',function(){if(denyWithout('employee.delete'))return;
   if(!isAdmin())return toast('ไม่มีสิทธิ์','ต้องเป็นผู้ดูแลระบบ (Admin) เท่านั้นจึงจะลบพนักงานได้','err');
   var checked=getChecked('emp-cb');if(!checked.length)return;
   /* same self-deletion guard as the single-row delEmp() — silently drop the
@@ -16547,7 +16554,7 @@ function openBulkDeleteBoxModal(tags){
   renderList();
 }
 window.openBulkDeleteBoxModal=openBulkDeleteBoxModal;
-$('#bulkBoxDel').addEventListener('click',function(){var tags=getChecked('box-cb');if(!tags.length)return;
+$('#bulkBoxDel').addEventListener('click',function(){if(denyWithout('box.delete'))return;var tags=getChecked('box-cb');if(!tags.length)return;
   var inUse=tags.filter(function(t){return S.boxes[t]&&S.boxes[t].status==='out';});
   if(inUse.length)return toast('ลบไม่ได้','มี '+inUse.length+' ใบที่ออกไปแล้ว','err');
   openBulkDeleteBoxModal(tags);});
@@ -17040,7 +17047,7 @@ function settingsCommitWipe(){
     .then(function(r){return r.json().catch(function(){return {};}).then(function(j){if(!r.ok)throw new Error(j.message||'ล้างข้อมูลไม่สำเร็จ');return j;});})
     .then(function(){
       closeModal();
-      toast('ล้างข้อมูลระบบเรียบร้อยแล้ว','เข้าสู่ระบบใหม่ด้วย emp-001 / 123456','ok');
+      toast('ล้างข้อมูลระบบเรียบร้อยแล้ว','เข้าสู่ระบบใหม่ด้วยบัญชีผู้ดูแลระบบเดิม','ok');
       setTimeout(function(){if(typeof smarttraceLogout==='function')smarttraceLogout();},1400);
     })
     .catch(function(e){
