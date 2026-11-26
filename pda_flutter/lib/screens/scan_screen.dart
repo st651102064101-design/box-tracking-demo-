@@ -6,10 +6,10 @@ import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
 import '../services/i18n.dart';
-import '../services/rfid_service.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/scan_capture.dart';
+import '../services/scanner_status.dart';
 
 class ScanScreen extends StatefulWidget {
   const ScanScreen({super.key});
@@ -930,17 +930,14 @@ class _ScanScreenState extends State<ScanScreen>
     // starts hid the one number that matters most exactly when it's moving
     // fastest. The panel now stays up the whole time; only the status line
     // switches to say a sweep is running.
-    final connected =
-        c.rfidStatus.state == RfidState.connected || !c.rfid.supported;
-    final readyText = _rfidReading
-        ? loc.t('กำลังอ่านแท็ก RFID…')
-        : !c.rfid.supported
-            ? loc.t('โหมดจำลอง')
-            : c.rfidStatus.state == RfidState.connected
-                ? loc.t('สแกนเนอร์พร้อม')
-                : c.rfidStatus.state == RfidState.connecting
-                    ? loc.t('กำลังเชื่อมต่อ…')
-                    : loc.t('สแกนเนอร์ไม่พร้อม');
+    final status = scannerStatus(
+      supported: c.rfid.supported,
+      usesRfid: c.hasIntegratedRfid && c.scanInputMode == ScanInputMode.rfid,
+      state: c.rfidStatus.state,
+      reading: _rfidReading,
+    );
+    final connected = status.ready;
+    final readyText = loc.t(status.label);
     // This card repaints on every scan while the trigger's held — a
     // gradient background is a per-frame cost that flat color isn't, and
     // this is the one background in the app redrawing at scan speed rather
