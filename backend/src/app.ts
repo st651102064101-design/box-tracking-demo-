@@ -37,8 +37,7 @@ import { currentVersion, subscriberCount } from './lib/bus.js';
 const PRIVATE_LAN_ORIGIN =
   /^https?:\/\/(localhost|127\.0\.0\.1|10(?:\.\d{1,3}){3}|172\.(?:1[6-9]|2\d|3[01])(?:\.\d{1,3}){2}|192\.168(?:\.\d{1,3}){2})(?::\d+)?$/;
 
-/** Throttles credential-guessing against /login and self-registration spam
- *  against /register — both are public, unauthenticated endpoints. */
+/** Throttles credential-guessing against /login; /register shares it. */
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,

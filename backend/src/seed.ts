@@ -9,7 +9,8 @@ import { eq } from 'drizzle-orm';
 import { applySchema, getDb, closeDb } from './db/client.js';
 import { users, employees, config, sequences, roles } from './db/schema.js';
 import { seedRoles } from './db/seedRoles.js';
-import { hashPassword } from './lib/password.js';
+import { hashPassword, verifyPassword } from './lib/password.js';
+import { weakAdminPassword } from './lib/secrets.js';
 import { env } from './env.js';
 import { SUPER_ADMIN_KEY } from './lib/permissions.js';
 
@@ -30,7 +31,13 @@ async function main() {
   let adminUser = existing[0];
   if (existing.length) {
     console.log(`[seed] admin "${username}" already exists — skipping`);
+    if (await verifyPassword('admin123', adminUser.passwordHash)) {
+      console.warn(`[seed] WARNING: "${username}" still uses the published password — change it now.`);
+    }
   } else {
+    if (env.nodeEnv === 'production' && weakAdminPassword(password)) {
+      throw new Error('SEED_ADMIN_PASSWORD must be at least 10 characters and not a published default.');
+    }
     /* The bootstrap account is Super Admin, not plain admin: it is the only
        account that exists at this point, so it has to be the one that can
        always get back into Role & Permission. */
@@ -44,7 +51,7 @@ async function main() {
       mustChangePassword: true,
     });
     [adminUser] = await db.select().from(users).where(eq(users.username, username));
-    console.log(`[seed] created admin "${username}" (password: "${password}")`);
+    console.log(`[seed] created admin "${username}" — password is SEED_ADMIN_PASSWORD`);
   }
 
   /* The bootstrap users.admin account is also the first employee.  Keeping

@@ -1,16 +1,16 @@
 import 'dotenv/config';
+import { weakSecretReason } from './lib/secrets.js';
 
 const nodeEnv = process.env.NODE_ENV ?? 'development';
-if (nodeEnv === 'production' && !process.env.JWT_SECRET) {
-  throw new Error('JWT_SECRET must be set in production — refusing to start with the dev fallback secret.');
-}
-if (nodeEnv === 'production' && !process.env.FX9600_WEBHOOK_SECRET) {
-  throw new Error(
-    'FX9600_WEBHOOK_SECRET must be set in production — refusing to start with the dev fallback secret.',
-  );
-}
-if (nodeEnv === 'production' && !process.env.LPR_WEBHOOK_SECRET) {
-  throw new Error('LPR_WEBHOOK_SECRET must be set in production — refusing to start with the dev fallback secret.');
+if (nodeEnv === 'production') {
+  const required = [['JWT_SECRET', 32], ['FX9600_WEBHOOK_SECRET', 16], ['LPR_WEBHOOK_SECRET', 16]] as const;
+  const problems = required
+    .map(([name, min]) => [name, weakSecretReason(process.env[name], min)] as const)
+    .filter(([, reason]) => reason)
+    .map(([name, reason]) => `${name} ${reason}`);
+  if (problems.length) {
+    throw new Error(`Refusing to start in production: ${problems.join('; ')}. Run scripts/setup-env.sh (see .env.example).`);
+  }
 }
 
 /** Centralised, typed access to environment configuration. */

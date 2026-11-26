@@ -29,6 +29,7 @@ describe('health + auth', () => {
   it('registers a new user and returns a usable token', async () => {
     const res = await request(ctx.app)
       .post('/api/auth/register')
+      .set(auth(ctx.token))
       .send({ username: 'staff1', password: 'secret1', name: 'พนักงาน 1', email: 'staff1@example.com' });
     expect(res.status).toBe(201);
     const me = await request(ctx.app).get('/api/auth/me').set(auth(res.body.token));
@@ -55,6 +56,7 @@ describe('health + auth', () => {
   it('rejects registration without an email', async () => {
     const res = await request(ctx.app)
       .post('/api/auth/register')
+      .set(auth(ctx.token))
       .send({ username: 'staff2', password: 'secret1', name: 'พนักงาน 2' });
     expect(res.status).toBe(400);
   });

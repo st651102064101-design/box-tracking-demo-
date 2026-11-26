@@ -32,12 +32,12 @@ services:
       USE_PGLITE: "false"
       DATABASE_URL: postgres://boxtrace:boxtrace@db:5432/boxtrace
       CORS_ORIGIN: http://localhost:3002
-      JWT_SECRET: boxtrace-putaway-test-jwt
+      JWT_SECRET: putaway-test-only-jwt-secret-not-for-real-use
       JWT_EXPIRES_IN: 2h
       SEED_ADMIN_USERNAME: admin
-      SEED_ADMIN_PASSWORD: admin123
-      FX9600_WEBHOOK_SECRET: BoxTrace-FX9600-2026
-      LPR_WEBHOOK_SECRET: BoxTrace-LPR-2026
+      SEED_ADMIN_PASSWORD: putaway-test-only-pass
+      FX9600_WEBHOOK_SECRET: putaway-test-only-fx9600
+      LPR_WEBHOOK_SECRET: putaway-test-only-lpr-secret
     ports:
       - "4001:4000"
 
