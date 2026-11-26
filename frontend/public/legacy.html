@@ -3050,10 +3050,10 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
       <button class="sf-btn" data-st="warehouse" title="ผ่านประตูเข้ามาแล้ว อยู่ในคลัง"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span> จัดเก็บในคลังแล้ว<span class="sf-badge" data-badge="warehouse"></span></button>
 
       <button class="sf-btn" data-st="pending" title="ลงทะเบียนแล้ว ยังไม่ผ่านประตูขาเข้า"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3 2"/></svg></span> รอเข้าคลัง<span class="sf-badge" data-badge="pending"></span></button>
-      <button class="sf-btn" data-st="hold"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></span> พักใช้งาน<span class="sf-badge urgent" data-badge="hold"></span></button>
-      <button class="sf-btn" data-st="damage"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> ชำรุด<span class="sf-badge urgent" data-badge="damage"></span></button>
+      <button class="sf-btn" data-st="hold"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></span> พักใช้งาน<span class="sf-badge" data-badge="hold"></span></button>
+      <button class="sf-btn" data-st="damage"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> ชำรุด<span class="sf-badge" data-badge="damage"></span></button>
       <button class="sf-btn" data-st="out"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg></span> ส่งลูกค้า<span class="sf-badge" data-badge="out"></span></button>
-      <button class="sf-btn" data-st="lost"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7"/></svg></span> แจ้งกล่องหาย<span class="sf-badge urgent" data-badge="lost"></span></button>
+      <button class="sf-btn" data-st="lost"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7"/></svg></span> แจ้งกล่องหาย<span class="sf-badge" data-badge="lost"></span></button>
     </div>
     <span class="tag" id="cntInv" style="flex:0 0 auto;">0 รายการ</span>
   </div>
@@ -18013,6 +18013,8 @@ function applyInvStatusBadges(counts) {
     var key = el.getAttribute('data-badge');
     var n = counts[key] || 0;
     el.textContent = nf(n);
+    /* แดงเฉพาะสถานะที่เป็นปัญหา และเมื่อมีรายการจริงเท่านั้น */
+    el.classList.toggle('urgent', n > 0 && (key === 'hold' || key === 'damage' || key === 'lost'));
   });
 }
 function refreshInvStatusBadges() {
