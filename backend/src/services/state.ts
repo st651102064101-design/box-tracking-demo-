@@ -201,6 +201,7 @@ export async function composeState(db: DB): Promise<Record<string, unknown>> {
           hasPin: !!r.pinHash,
           hasLogin: !!r.passwordHash,
           loginUsername: r.username ?? null,
+          accountActive: r.accountActive,
         },
       ]),
     ),
@@ -356,6 +357,10 @@ export async function replaceState(
           pinResetExpiresAt: employees.pinResetExpiresAt,
           username: employees.username,
           passwordHash: employees.passwordHash,
+          passwordResetOtpHash: employees.passwordResetOtpHash,
+          passwordResetExpiresAt: employees.passwordResetExpiresAt,
+          accountActive: employees.accountActive,
+          sessionVersion: employees.sessionVersion,
           /* role_id is captured here for a second reason on top of "the blob
              doesn't carry it": it must never be taken FROM the blob. Anyone
              who can save state could otherwise hand themselves a Super Admin
@@ -786,6 +791,11 @@ export async function replaceState(
           pinResetExpiresAt: pin?.pinResetExpiresAt ?? null,
           username: pin?.username ?? null,
           passwordHash: pin?.passwordHash ?? null,
+          passwordResetOtpHash: pin?.passwordResetOtpHash ?? null,
+          passwordResetExpiresAt: pin?.passwordResetExpiresAt ?? null,
+          // Without these a routine save would lift a suspension and revive revoked sessions.
+          accountActive: pin?.accountActive ?? true,
+          sessionVersion: pin?.sessionVersion ?? 0,
           updatedAt: new Date(),
         };
       }),

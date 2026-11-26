@@ -3047,6 +3047,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
       <button class="sf-btn active" data-st=""><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></span> ทั้งหมด<span class="sf-badge" data-badge=""></span></button>
       <button class="sf-btn" data-st="warehouse" title="ผ่านประตูเข้ามาแล้ว อยู่ในคลัง"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span> จัดเก็บในคลังแล้ว<span class="sf-badge" data-badge="warehouse"></span></button>
 
+      <button class="sf-btn" data-st="pending" title="ลงทะเบียนแล้ว ยังไม่ผ่านประตูขาเข้า"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3 2"/></svg></span> รอเข้าคลัง<span class="sf-badge" data-badge="pending"></span></button>
       <button class="sf-btn" data-st="hold"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></span> พักใช้งาน<span class="sf-badge urgent" data-badge="hold"></span></button>
       <button class="sf-btn" data-st="damage"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 19H3Z"/><path d="M12 9.5v4.2M12 16.8v.1"/></svg></span> ชำรุด<span class="sf-badge urgent" data-badge="damage"></span></button>
       <button class="sf-btn" data-st="out"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg></span> ส่งลูกค้า<span class="sf-badge" data-badge="out"></span></button>
@@ -6355,7 +6356,7 @@ window.openGateOutModeChooser=openGateOutModeChooser;
 window.chooseGateOutEntryMode=chooseGateOutEntryMode;
 var APP_BOOTING=true;
 function switchTab(name){
-  var tabPerms={overview:['dashboard.view'],gateout:['gate.out','transaction.view'],gatein:['gate.in','transaction.view'],inventory:['box.view'],track:['box.view'],setup:['setting.view']};
+  var tabPerms={overview:['dashboard.view'],gateout:['gate.out'],gatein:['gate.in'],inventory:['box.view'],track:['box.view'],setup:['setting.view']};
   if(RBAC.loaded&&RBAC.available&&tabPerms[name]&&!hasAnyPerm.apply(null,tabPerms[name])){toast('ไม่มีสิทธิ์เข้าถึง','บัญชีนี้ไม่มีสิทธิ์เปิดหน้านี้','err');return;}
   /* Scroll to top BEFORE swapping which .tab is visible, and with no smooth
      animation — otherwise the operator sees the old (possibly scrolled-way-
@@ -12590,14 +12591,95 @@ function resolveLocBarcode(raw){
   return {wh:wh,zone:zone,rack:rack,shelf:shelf,slot:slot,_auto:true};
 }
 /* ===== labels ===== */
-function barcodeSvg(text){var bars='';var x=0;var seed=0;for(var i=0;i<text.length;i++)seed+=text.charCodeAt(i)*(i+7);
-  var rng=seed;function nx(){rng=(rng*1103515245+12345)&0x7fffffff;return rng;}
-  for(var j=0;j<48;j++){var w=1+(nx()%3);if(j%2===0){bars+='<rect x="'+x+'" y="0" width="'+w+'" height="46" fill="#111"/>';}x+=w;}
-  return '<svg viewBox="0 0 '+x+' 46" width="100%" height="46" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">'+bars+'</svg>';}
-function labelCardHtml(title,sub,code,extra){return '<div style="border:1px solid #ccc;border-radius:8px;padding:10px 12px;width:230px;display:inline-block;margin:6px;vertical-align:top;font-family:-apple-system,Sarabun,sans-serif;page-break-inside:avoid;">'
-    +'<div style="font-weight:700;font-size:13px;">'+esc(title)+'</div>'+(sub?'<div style="font-size:11px;color:#666;margin-bottom:4px;">'+esc(sub)+'</div>':'')
-    +barcodeSvg(code)+'<div style="font-family:monospace;font-size:12px;text-align:center;letter-spacing:1px;margin-top:2px;">'+esc(code)+'</div>'
-    +(extra?'<div style="font-size:10px;color:#888;margin-top:3px;">'+esc(extra)+'</div>':'')+'</div>';}
+/* render a bin label onto canvas → PNG (big location text + Code128) */
+function locationLabelToPNG(code,sub){
+  var W=1000,H=460,c=document.createElement('canvas');c.width=W;c.height=H;var g=c.getContext('2d');
+  g.fillStyle='#fff';g.fillRect(0,0,W,H);g.fillStyle='#000';g.textBaseline='alphabetic';
+  g.font='700 26px -apple-system,Arial,sans-serif';g.fillText('LOCATION',34,50);
+  if(sub){g.textAlign='right';g.font='700 24px -apple-system,Arial,sans-serif';g.fillText(String(sub),W-120,50);g.textAlign='left';}
+  drawQRToCanvas(g,code,W-96,10,86); // QR code of the location/bin code, top-right corner
+  g.font='800 128px -apple-system,Arial,sans-serif';g.textAlign='center';g.fillText(code,W/2,190);g.textAlign='left';
+  var mods=code128Modules(code),total=0;mods.forEach(function(m){total+=m.w;});
+  var bcW=W-72,scale=bcW/total,x=(W-total*scale)/2,bcY=228,bcH=150;
+  mods.forEach(function(m){if(m.bar)g.fillRect(x,bcY,m.w*scale,bcH);x+=m.w*scale;});
+  g.font='800 40px monospace';g.textAlign='center';g.fillText(code,W/2,bcY+bcH+56);g.textAlign='left';
+  return c.toDataURL('image/png');
+}
+function locationLabelHtml(code,sub){
+  return '<div class="rfid-fin-card">'
+    +'<div class="rfid-fin-tab"><span class="rfid-fin-tab-ic">'+IC('signal')+'</span>Location Barcode</div>'
+    +'<div class="rfid-fin-wrap"><div class="finlabel">'
+      +'<div class="fl-head"><div><div class="fl-brand" style="font-size:20px;">LOCATION</div></div>'
+      +'<div style="display:flex;align-items:center;gap:10px;">'
+        +(sub?'<div class="fl-type">'+esc(sub)+'</div>':'')
+        +'<div style="width:60px;height:60px;flex:0 0 auto;" title="QR code of location">'+qrCodeSVG(code,60)+'</div>'
+      +'</div></div>'
+      +'<div style="text-align:center;font-weight:800;font-size:64px;letter-spacing:.04em;margin:6px 0 2px;color:#000;">'+esc(code)+'</div>'
+      +'<div class="fl-div"></div>'
+      +'<div class="fl-bc">'+code128SVG(code,150)+'</div>'
+      +'<div class="fl-code">'+esc(code)+'</div>'
+    +'</div></div>'
+  +'</div>';
+}
+/* ZPL for a bin label (4x3in) — big location text + Code128 of the bin code */
+function locationZPL(code,sub){
+  var cc=toZplAscii(code)||code;var s=toZplAscii(sub||'');
+  return '^XA^CI28^PW812^LL609'
+    +'^CF0,30^FO30,26^FDLOCATION^FS'
+    +(s?'^CF0,30^FO420,26^FB280,1,0,R^FD'+s+'^FS':'')
+    +'^FO718,14^BQN,2,3^FDQA,'+cc+'^FS'                    // QR of the location/bin code, top-right
+    +'^CF0,120^FO30,70^FB752,1,0,C^FD'+cc+'^FS'
+    +'^BY4,2,170^FO30,230^FB752,1,0,C^BC,,N^FD'+cc+'^FS'
+    +'^CF0,40^FO30,430^FB752,1,0,C^FD'+cc+'^FS'
+    +'^XZ';
+}
+window.locationZPL=locationZPL;
+function printLocationLabels(items){ /* items: [{code, sub}] */
+  items=(items||[]).filter(function(it){return it&&it.code;});
+  if(!items.length)return toast('ไม่มีตำแหน่งให้พิมพ์',null,'err');
+  var cards=items.map(function(it){return locationLabelHtml(it.code,it.sub);}).join('');
+  openModal(
+    '<div class="mhead"><h3>บาร์โค้ดตำแหน่ง ('+items.length+' ป้าย)</h3><button class="x" data-close>'+IC('close')+'</button></div>'
+    +'<div class="mbody" style="background:var(--bg);"><div style="display:flex;flex-wrap:wrap;gap:16px;justify-content:center;padding:6px;">'+cards+'</div></div>'
+    +'<div class="mfoot"><button class="btn gray" data-close>ปิด</button>'
+      +'<button class="btn ghost" id="btnLocZpl">'+IC('download')+' ส่ง ZPL เข้าเครื่องพิมพ์</button>'
+      +'<button class="btn accent" id="btnLocPng">'+IC('download','hoverbob')+' ดาวน์โหลด PNG</button></div>'
+  );
+  var sheet=$('#modalSheet');if(sheet)sheet.style.width='820px';
+  $('#btnLocPng').onclick=function(){items.forEach(function(it,i){setTimeout(function(){
+    var a=document.createElement('a');a.href=locationLabelToPNG(it.code,it.sub);a.download='location-'+it.code+'.png';a.click();
+  },i*200);});};
+  $('#btnLocZpl').onclick=function(){
+    if(typeof printZPLToPrinter!=='function')return toast('ไม่มีฟังก์ชันพิมพ์',null,'err');
+    var all=items.map(function(it){return locationZPL(it.code,it.sub);}).join('');
+    printZPLToPrinter(all).then(function(ok){toast(ok?'ส่ง ZPL แล้ว':'พิมพ์ไม่สำเร็จ',ok?items.length+' ป้าย':'ตรวจสอบเครื่องพิมพ์/LAN',ok?'ok':'warn');});
+  };
+}
+function openLocationLabelTool(){
+  openModal(
+    '<div class="mhead"><h3>สร้างบาร์โค้ดตำแหน่ง (Bin)</h3><button class="x" data-close>'+IC('close')+'</button></div>'
+    +'<div class="mbody">'
+      +'<p class="muted small" style="margin:0 0 14px;">พิมพ์รหัสตำแหน่ง เช่น <b>C-2-3</b> หรือ <b>A-R03-2-05</b> แล้วสร้างป้ายไปแปะที่ชั้นวาง — สแกนยืนยันตำแหน่งจริงได้</p>'
+      +'<div class="grid g2">'
+        +'<div class="field"><label>รหัสตำแหน่ง (Bin Code)</label><input id="locToolCode" placeholder="C-2-3" autocomplete="off"></div>'
+        +'<div class="field"><label>คลัง / หมายเหตุ (ถ้ามี)</label><input id="locToolSub" placeholder="เช่น คลัง 1" autocomplete="off"></div>'
+      +'</div>'
+    +'</div>'
+    +'<div class="mfoot"><button class="btn gray" data-close>ยกเลิก</button>'
+      +'<button class="btn accent" onclick="(function(){var c=val(\'locToolCode\').trim();if(!c)return toast(\'กรอกรหัสตำแหน่ง\',null,\'err\');closeModal();printLocationLabels([{code:c.toUpperCase(),sub:val(\'locToolSub\')}]);})()">สร้างป้าย</button></div>'
+  );
+  setTimeout(function(){var f=$('#locToolCode');if(f)f.focus();},60);
+}
+function exportLocExcel(){
+  var locs=Object.values(S.locations||{}).sort(function(a,b){return a.code<b.code?-1:1;});
+  var headers=['รหัสตำแหน่ง','รหัสคลัง','ชื่อคลัง','โซน','แร็ค','ชั้น','ช่อง','ประเภทแร็ค','หมายเหตุ','มีของ/ว่าง'];
+  var occ=locOccupancyMap();
+  var rows=locs.map(function(l){
+    return [l.code,l.wh||'',l.wh&&S.warehouses[l.wh]?S.warehouses[l.wh].name:'',l.zone||'',l.rack||'',
+      l.shelf||'',l.slot||'',l.type||'',l.note||'',occ[l.code]?'มีของ':'ว่าง'];
+  });
+  downloadXLS('rack-locations-'+dstr()+'.xlsx',headers,rows);
+}
 /* Compact RFID "fin label" layout — 4in x 1.5in, brand row + BOX TYPE + barcode + tag code,
    modeled after Zebra's small folded RFID fin-tag labels (see reference photo) */
 /* ZPL's built-in fonts (^CF0) only render ASCII — Thai glyphs come out garbled — so strip
@@ -16171,7 +16253,7 @@ window.rbacBoot=rbacBoot;
    รวมถึง API ยังตรวจสิทธิ์ของตัวเอง จึงไม่ควรทำให้ปุ่มหลักหายจากแถบเมนู. */
 function applyPermVisibility(){
   if(!RBAC.loaded)return;
-  var navRules={overview:'dashboard.view',gateout:['gate.out','transaction.view'],gatein:['gate.in','transaction.view'],inventory:'box.view',track:'box.view',setup:'setting.view',emp:'employee.view',report:'report.view'};
+  var navRules={overview:'dashboard.view',gateout:'gate.out',gatein:'gate.in',inventory:'box.view',track:'box.view',setup:'setting.view',emp:'employee.view',report:'report.view'};
   /* A frontend/backend version mismatch must leave navigation usable. The
      backend remains the authority for protected API calls. */
   if(!RBAC.available){
@@ -19897,7 +19979,8 @@ var MULTI_SHEET_ENTITY_NAMES = {
   wh: ['คลัง & ประตู', 'คลังและประตู', 'คลัง', 'warehouses'],
   cust: ['ลูกค้า คู่ค้า', 'ลูกค้า/คู่ค้า', 'ลูกค้า', 'customers'],
   emp: ['พนักงาน', 'employees'],
-  box: ['กล่อง (box)', 'กล่อง', 'boxes', 'ลงทะเบียนกล่อง']
+  box: ['กล่อง (box)', 'กล่อง', 'boxes', 'ลงทะเบียนกล่อง'],
+  loc: ['ตำแหน่งแร็ค', 'locations', 'rack locations']
 };
 function normSheetName(s) { return String(s || '').trim().toLowerCase().replace(/[()]/g, '').replace(/\s+/g, ' '); }
 function detectSheetEntityKey(sheetName, head) {
@@ -19911,12 +19994,15 @@ function detectSheetEntityKey(sheetName, head) {
   var normHead = head.map(function(h) { return colMapNormHead(h); });
   var bestKey = null, bestScore = 0;
   Object.keys(window.IMPORT_CONFIGS).forEach(function(key) {
+    if (key === 'loc') return; // too generic to guess from headers — matched by sheet name only
     var cfg = window.IMPORT_CONFIGS[key];
     var score = 0;
+    var complete = true;
     cfg.fields.forEach(function(f) {
       if (f.aliases && f.aliases.some(function(a) { return normHead.indexOf(a) >= 0; })) score++;
+      else if (f.required) complete = false;
     });
-    if (score > bestScore) { bestScore = score; bestKey = key; }
+    if (complete && score > bestScore) { bestScore = score; bestKey = key; }
   });
   return bestScore >= 2 ? bestKey : null;
 }
@@ -20913,11 +20999,11 @@ function openColumnMapModal(opts){
     btype:{
       key:'btype', label:'ประเภทกล่อง', targetKey:'boxtypes', idField:'id', idKind:'seq', idPrefix:'BT-',
       fields:[
-        {key:'id',   label:'รหัสประเภท (เว้นว่างได้ ระบบสร้างให้)', required:false, aliases:['id','รหัส','code']},
+        {key:'id',   label:'รหัสประเภท (เว้นว่างได้ ระบบสร้างให้)', required:false, aliases:['id','รหัส','code','รหัสประเภท']},
         {key:'name', label:'ชื่อประเภท', required:true, aliases:['name','ชื่อ','ชื่อประเภท']},
         {key:'unit', label:'หน่วยนับ', required:true, aliases:['unit','หน่วย','หน่วยนับ']},
-        {key:'value',label:'มูลค่าต่อใบ (บาท)', required:false, aliases:['value','มูลค่า','ราคา']},
-        {key:'dim',  label:'ขนาด (ซม.)', required:false, aliases:['dim','ขนาด','size']}
+        {key:'value',label:'มูลค่าต่อใบ (บาท)', required:false, aliases:['value','มูลค่า','ราคา','มูลค่าต่อใบ']},
+        {key:'dim',  label:'ขนาด (ซม.)', required:false, aliases:['dim','ขนาด','size','ขนาด (ซม.)']}
       ],
       validateRow:function(m){
         var e=[];
@@ -20928,30 +21014,34 @@ function openColumnMapModal(opts){
       },
       buildRecord:function(m,id){
         return {id:id,name:m.name,unit:m.unit,value:(m.value===''?null:Number(m.value)),dim:m.dim||''};
-      }
+      },
+      uniqueName:true,
+      current:function(r){return {name:r.name,unit:r.unit,value:r.value,dim:r.dim};}
     },
 
     wh:{
       key:'wh', label:'คลัง & ประตู', targetKey:'warehouses', idField:'id', idKind:'seq', idPrefix:'WH-',
       fields:[
-        {key:'id',       label:'รหัสคลัง (เว้นว่างได้ ระบบสร้างให้)', required:false, aliases:['id','รหัส','code']},
+        {key:'id',       label:'รหัสคลัง (เว้นว่างได้ ระบบสร้างให้)', required:false, aliases:['id','รหัส','code','รหัสคลัง']},
         {key:'name',     label:'ชื่อคลัง', required:true, aliases:['name','ชื่อ','ชื่อคลัง']},
         {key:'gateFrom', label:'ประตูเริ่ม', required:true, aliases:['gatefrom','ประตูเริ่ม','from']},
         {key:'gateTo',   label:'ประตูสิ้นสุด', required:true, aliases:['gateto','ประตูสิ้นสุด','to']},
         {key:'gateType', label:'ประเภทประตู (both/in/out)', required:false, aliases:['gatetype','ประเภทประตู']},
         {key:'area',     label:'พื้นที่', required:false, aliases:['area','พื้นที่']},
         {key:'status',   label:'สถานะ', required:false, aliases:['status','สถานะ']},
-        {key:'gateTypesJson', label:'ทิศทางแต่ละประตู (JSON)', required:false, aliases:['ทิศทางแต่ละประตู json','gatetypesjson']},
-        {key:'bidirJson', label:'โหมดประตูร่วม (JSON)', required:false, aliases:['โหมดประตูร่วม json','gatebidirectionalmodesjson']},
+        {key:'gateTypesJson', label:'ทิศทางแต่ละประตู (JSON)', required:false, aliases:['ทิศทางแต่ละประตู json','gatetypesjson','ทิศทางแต่ละประตู (json)']},
+        {key:'bidirJson', label:'โหมดประตูร่วม (JSON)', required:false, aliases:['โหมดประตูร่วม json','gatebidirectionalmodesjson','โหมดประตูร่วม (json)']},
         {key:'rfidEnabled', label:'เปิด RFID/LPR', required:false, aliases:['เปิด rfid/lpr','rfidenabled']},
         {key:'lat', label:'ละติจูด', required:false, aliases:['lat','ละติจูด']},
         {key:'lng', label:'ลองจิจูด', required:false, aliases:['lng','ลองจิจูด']}
       ],
-      validateRow:function(m){
+      validateRow:function(m,prev){
         var e=[];
         if(!m.name)e.push('ไม่มีชื่อคลัง');
         var from=Number(m.gateFrom),to=Number(m.gateTo);
-        if(!m.gateFrom||!m.gateTo||isNaN(from)||isNaN(to)||from<1||to<from)e.push('ช่วงประตูไม่ถูกต้อง');
+        /* คลังเดิมที่ยังไม่มีประตู export ออกมาเป็นช่องว่าง — อัปเดตกลับได้ */
+        var noGates=prev&&!(prev.gates||[]).length&&!m.gateFrom&&!m.gateTo;
+        if(!noGates&&(!m.gateFrom||!m.gateTo||isNaN(from)||isNaN(to)||from<1||to<from))e.push('ช่วงประตูไม่ถูกต้อง');
         if(!enumOk(m.gateType,['both','in','out']))e.push(ENUM_ERR.gateType);
         return e;
       },
@@ -20967,14 +21057,36 @@ function openColumnMapModal(opts){
         var enabled=String(m.rfidEnabled||'').trim().toLowerCase();
         return {id:id,name:m.name,gates:gates,gateType:gt,gateTypes:gtMap,gateBidirectionalModes:bidirMap,rfidEnabled:enabled?['1','true','yes','ใช่','เปิด'].indexOf(enabled)>=0:previous.rfidEnabled!==false,area:m.area||previous.area||'',lat:m.lat!==''&&!isNaN(Number(m.lat))?Number(m.lat):(previous.lat==null?null:previous.lat),lng:m.lng!==''&&!isNaN(Number(m.lng))?Number(m.lng):(previous.lng==null?null:previous.lng),status:whStatusMap[String(m.status||'').trim()]||(m.status||previous.status||'active').toLowerCase()};
       },
-      afterCommit:function(){rebuildGates();}
+      afterCommit:function(){rebuildGates();},
+      uniqueName:true,
+      current:function(r){
+        var gs=(r.gates||[]).slice().sort(function(a,b){return a-b;});
+        return {name:r.name,gateFrom:gs[0]||'',gateTo:gs[gs.length-1]||'',gateType:r.gateType||'both',
+          gateTypesJson:JSON.stringify(r.gateTypes||{}),bidirJson:JSON.stringify(r.gateBidirectionalModes||{}),
+          rfidEnabled:r.rfidEnabled===false?'ไม่':'ใช่',area:r.area,lat:r.lat,lng:r.lng,
+          status:r.status==='inactive'?'ปิดใช้งาน':'ใช้งาน'};
+      },
+      props:{gateFrom:['gates','gateTypes','gateBidirectionalModes'],gateTo:['gates','gateTypes','gateBidirectionalModes'],
+        gateType:['gateType','gateTypes'],gateTypesJson:['gateTypes'],bidirJson:['gateBidirectionalModes']},
+      /* ช่องที่ไม่ได้แก้ต้องไม่ถูกคำนวณใหม่: ประเภทรายประตูเดิมคงไว้ เว้นแต่แก้ "ประเภทประตู" */
+      adjust:function(next,prev,changed){
+        if(changed.gateFrom||changed.gateTo||changed.gateType||changed.gateTypesJson){
+          var typed={};try{typed=changed.gateTypesJson?JSON.parse(changed.gateTypesJson):{};}catch(e){}
+          var map={};
+          (next.gates||[]).forEach(function(g){
+            var x=typed[g];
+            map[g]=['in','out','both'].indexOf(x)>=0?x:(changed.gateType?next.gateType:((prev.gateTypes||{})[g]||next.gateType||'both'));
+          });
+          next.gateTypes=map;
+        }
+      }
     },
 
     box:{
       key:'box', label:'ลงทะเบียนกล่อง', targetKey:'boxes', idField:'tag', idKind:'boxtag',
       fields:[
         {key:'tag',      label:'บาร์โค้ด (เว้นว่างได้ ระบบสร้างให้)', required:false, aliases:['tag','barcode','บาร์โค้ด']},
-        {key:'typeId',   label:'รหัสประเภทกล่อง', required:true, aliases:['type','typeid','ประเภท','รหัสประเภท']},
+        {key:'typeId',   label:'รหัสประเภทกล่อง', required:true, aliases:['type','typeid','ประเภท','รหัสประเภท','รหัสประเภทกล่อง']},
         {key:'wh',       label:'รหัส/ชื่อคลัง (เว้นว่างได้ถ้ามีคลังเดียว)', required:false, aliases:['wh','warehouse','คลัง','รหัสคลัง','ชื่อคลัง','คลัง/ตำแหน่ง']},
         {key:'supplier', label:'รหัสซัพพลายเออร์', required:false, aliases:['supplier','ซัพพลายเออร์','รหัสซัพพลายเออร์']},
         {key:'lot',      label:'ล็อต/ชุด', required:false, aliases:['lot','batch','ล็อต/ชุด']},
@@ -21026,14 +21138,27 @@ function openColumnMapModal(opts){
           location:{wh:whId||locPrev.wh||'',zone:locPrev.zone||'',rack:locPrev.rack||'',shelf:locPrev.shelf||'',slot:locPrev.slot||'',gate:locPrev.gate||null,ts:seen},
           lastSeenAt:seen,labeled:previous.labeled!==false,
           history:Array.isArray(previous.history)&&previous.history.length?previous.history:[{dir:'reg',ts:regTsI,recorder:USER,note:'นำเข้าจากไฟล์ Excel/CSV'}]};
+      },
+      current:function(r){
+        var label={warehouse:'พร้อมส่งออก',hold:'พักใช้งาน',damage:'ชำรุด',out:'ออกไปแล้ว',lost:'สูญหาย',pending:'รอเข้าคลัง'};
+        return {typeId:r.type,wh:(r.location||{}).wh,supplier:r.supplier,lot:r.lot,expiry:r.expiry,value:r.value||0,
+          status:label[r.status]||r.status,customer:r.customer,'do':r['do'],po:r.po,cycles:r.cycles||0,
+          lastSeenAt:r.lastSeenAt?fmtTs(r.lastSeenAt):''};
+      },
+      props:{typeId:['type'],wh:['location']},
+      adjust:function(next,prev,changed){
+        /* ย้ายคลัง = ตำแหน่งชั้นวางของคลังเดิมใช้ไม่ได้แล้ว */
+        if(changed.wh&&next.location&&next.location.wh!==(prev.location||{}).wh){
+          next.location={wh:next.location.wh,zone:'',rack:'',shelf:'',slot:'',gate:null,ts:next.location.ts};
+        }
       }
     },
 
     cust:{
       key:'cust', label:'ลูกค้า/คู่ค้า', targetKey:'customers', idField:'id', idKind:'seq', idPrefix:'CUST-',
       fields:[
-        {key:'id',            label:'รหัสลูกค้า (เว้นว่างได้ ระบบสร้างให้)', required:false, aliases:['id','รหัส','code']},
-        {key:'name',          label:'ชื่อลูกค้า/บริษัท', required:true, aliases:['name','ชื่อ','ชื่อบริษัท']},
+        {key:'id',            label:'รหัสลูกค้า (เว้นว่างได้ ระบบสร้างให้)', required:false, aliases:['id','รหัส','code','รหัสลูกค้า']},
+        {key:'name',          label:'ชื่อลูกค้า/บริษัท', required:true, aliases:['name','ชื่อ','ชื่อบริษัท','ชื่อลูกค้า / บริษัท']},
         {key:'kind',          label:'ประเภทคู่ค้า (customer/supplier/both)', required:false, aliases:['kind','ประเภท','ประเภทคู่ค้า']},
         /* แยกเป็นสองคอลัมน์ (จำนวนวัน vs วันที่จริง) — เดิมรวมกันเป็นคอลัมน์เดียวโดย
            alias 'returndays'/'กำหนดคืนภายใน (วัน)' ทับอยู่กับ 'returndate' ตัวเดียวกัน
@@ -21041,18 +21166,21 @@ function openColumnMapModal(opts){
            ที่ตีความเป็น Excel date serial แทน กลายเป็นวันที่ 15/01/1900 ที่ผิดสิ้นเชิง */
         {key:'returnDays',    label:'ยืมได้กี่วัน', required:false, aliases:['returndays','จำนวนวัน','ยืมได้กี่วัน','กำหนดคืนภายใน (วัน)']},
         {key:'returnDate',    label:'กำหนดคืนภายใน (วันที่ — ถ้าไม่กรอกจำนวนวันด้านบน)', required:false, aliases:['returndate','กำหนดคืน','วันที่คืน','กำหนดคืนภายใน (วันที่)']},
-        {key:'phone',         label:'เบอร์โทรศัพท์', required:false, aliases:['phone','เบอร์โทร','โทรศัพท์']},
+        {key:'phone',         label:'เบอร์โทรศัพท์', required:false, aliases:['phone','เบอร์โทร','โทรศัพท์','เบอร์โทรศัพท์']},
         {key:'email',         label:'อีเมล', required:false, aliases:['email','อีเมล']},
-        {key:'addr',          label:'ที่อยู่/สาขา', required:false, aliases:['address','addr','ที่อยู่']},
-        {key:'taxId',         label:'เลขประจำตัวผู้เสียภาษี', required:false, aliases:['taxid','เลขภาษี']},
-        {key:'contactPerson', label:'ผู้ติดต่อหลัก', required:false, aliases:['contact','ผู้ติดต่อ']},
+        {key:'addr',          label:'ที่อยู่/สาขา', required:false, aliases:['address','addr','ที่อยู่','ที่อยู่/สาขา']},
+        {key:'taxId',         label:'เลขประจำตัวผู้เสียภาษี', required:false, aliases:['taxid','เลขภาษี','เลขผู้เสียภาษี']},
+        {key:'contactPerson', label:'ผู้ติดต่อหลัก', required:false, aliases:['contact','ผู้ติดต่อ','ผู้ติดต่อหลัก']},
         {key:'status',        label:'สถานะ (active/inactive/blocked)', required:false, aliases:['status','สถานะ']},
         {key:'creditLimit',   label:'วงเงินมัดจำ/เครดิต', required:false, aliases:['creditlimit','วงเงิน','วงเงินเครดิต']},
         {key:'fineRate',      label:'อัตราค่าปรับ/วัน', required:false, aliases:['finerate','ค่าปรับ','ค่าปรับ/วัน']},
         {key:'lostFine',      label:'ค่าปรับกล่องหาย', required:false, aliases:['lostfine','ค่าปรับกล่องหาย']}
       ],
-      validateRow:function(m){
+      validateRow:function(m,prev){
         var e=[];
+        /* ไฟล์ export ใช้ป้ายภาษาไทย — แปลงกลับเป็นรหัสก่อนเก็บ ค่าที่ไม่รู้จักถือว่าเว้นว่าง */
+        m.kind=enumCode(m.kind,CUST_KIND);
+        m.status=enumCode(m.status,CUST_STATUS);
         /* มีแค่ชื่อลูกค้า/บริษัทเท่านั้นที่บังคับ — ทุกช่องอื่นเป็นข้อมูลเสริม เว้นว่างได้
            แล้ว import ผ่านเลย (เหมือนฟอร์มกรอกมือ) ยังตรวจ "รูปแบบ" ถ้ามีการกรอกมาเท่านั้น
            (เบอร์/อีเมล/วันที่) ไม่ใช่บังคับให้ต้องมี และไม่บังคับค่า enum ของ
@@ -21070,8 +21198,9 @@ function openColumnMapModal(opts){
           if(!normDate)e.push('กำหนดคืน (วันที่) ไม่ถูกต้อง — ใส่วันที่ เช่น 31/12/2026');
           else m.returnDate=normDate;
         }
-        if(m.phone&&!isValidThaiPhone(m.phone))e.push('เบอร์โทรศัพท์ไม่ถูกต้อง');
-        if(m.email&&!isValidEmail(m.email))e.push('อีเมลไม่ถูกต้อง');
+        var was=prev?this.current(prev):{};
+        if(m.phone&&m.phone!==String(was.phone||'')&&!isValidThaiPhone(m.phone))e.push('เบอร์โทรศัพท์ไม่ถูกต้อง');
+        if(m.email&&m.email!==String(was.email||'')&&!isValidEmail(m.email))e.push('อีเมลไม่ถูกต้อง');
         return e;
       },
       buildRecord:function(m,id){
@@ -21083,32 +21212,42 @@ function openColumnMapModal(opts){
           status:(m.status||'active').toLowerCase(),
           creditLimit:Number(m.creditLimit)||0,fineRate:Number(m.fineRate)||0,
           lostFine:Number(m.lostFine)||0,returnDate:returnDate,returnDays:returnDays};
-      }
+      },
+      current:function(r){
+        return {name:r.name,kind:r.kind||'customer',returnDays:r.returnDays,returnDate:r.returnDate,phone:r.phone||r.contact,
+          email:r.email,addr:r.addr,taxId:r.taxId,contactPerson:r.contactPerson,status:r.status||'active',
+          creditLimit:r.creditLimit||0,fineRate:r.fineRate||0,lostFine:r.lostFine||0};
+      },
+      props:{returnDays:['returnDays','returnDate'],returnDate:['returnDays','returnDate']},
+      /* แก้เฉพาะวันที่ = ใช้วันที่นั้น ไม่ใช่จำนวนวันเดิม */
+      prepare:function(m,changed){if(changed.returnDate&&!changed.returnDays)m.returnDays='';}
     },
 
     emp:{
       key:'emp', label:'พนักงาน', targetKey:'employees', idField:'id', idKind:'seq', idPrefix:'EMP-',
       fields:[
-        {key:'id',        label:'รหัสพนักงาน (เว้นว่างได้ ระบบสร้างให้)', required:false, aliases:['id','รหัส','code']},
+        {key:'id',        label:'รหัสพนักงาน (เว้นว่างได้ ระบบสร้างให้)', required:false, aliases:['id','รหัส','code','รหัสพนักงาน']},
         {key:'name',      label:'ชื่อ–นามสกุล', required:true, aliases:['name','ชื่อ','ชื่อ-นามสกุล']},
         {key:'role',      label:'ตำแหน่ง', required:false, aliases:['role','ตำแหน่ง']},
         {key:'dept',      label:'แผนก/หน่วยงาน', required:false, aliases:['dept','แผนก']},
         {key:'wh',        label:'รหัสคลังที่สังกัด', required:false, aliases:['wh','คลัง','รหัสคลังที่สังกัด']},
-        {key:'phone',     label:'เบอร์โทรศัพท์', required:false, aliases:['phone','เบอร์โทร']},
+        {key:'phone',     label:'เบอร์โทรศัพท์', required:false, aliases:['phone','เบอร์โทร','เบอร์โทรศัพท์']},
         {key:'email',     label:'อีเมล', required:false, aliases:['email','อีเมล']},
         {key:'startDate', label:'วันเริ่มงาน', required:false, aliases:['startdate','วันเริ่มงาน']},
-        {key:'scanCode',  label:'รหัสบัตรพนักงาน (เว้นว่างได้)', required:false, aliases:['scancode','รหัสบัตร']},
+        {key:'scanCode',  label:'รหัสบัตรพนักงาน (เว้นว่างได้)', required:false, aliases:['scancode','รหัสบัตร','รหัสบัตรพนักงาน']},
         {key:'access',    label:'สิทธิ์ (operator/supervisor/admin/viewer)', required:false, aliases:['access','สิทธิ์']},
         {key:'status',    label:'สถานะ (active/inactive)', required:false, aliases:['status','สถานะ']}
       ],
-      validateRow:function(m){
+      validateRow:function(m,prev){
         var e=[];
+        var was=prev?this.current(prev):{};
         if(!m.name)e.push('ไม่มีชื่อพนักงาน');
-        if(m.phone&&!isValidThaiPhone(m.phone))e.push('เบอร์โทรศัพท์ไม่ถูกต้อง');
-        if(m.email&&!isValidEmail(m.email))e.push('อีเมลไม่ถูกต้อง');
+        if(m.phone&&m.phone!==String(was.phone||'')&&!isValidThaiPhone(m.phone))e.push('เบอร์โทรศัพท์ไม่ถูกต้อง');
+        if(m.email&&m.email!==String(was.email||'')&&!isValidEmail(m.email))e.push('อีเมลไม่ถูกต้อง');
         /* ไม่เช็คว่าคลังมีอยู่จริงแล้วหรือยัง — ถ้ายังไม่มี buildRecord() จะสร้างให้
            อัตโนมัติตอนยืนยันนำเข้า (เหมือนประเภทกล่องของ "ลงทะเบียนกล่อง" ด้านบน) */
-        if(!enumOk(m.access,['operator','supervisor','admin','viewer']))e.push(ENUM_ERR.access);
+        /* ค่าสิทธิ์เดิมของคนนั้น (เช่น staff) ต้องนำกลับเข้ามาได้โดยไม่ถูกปฏิเสธ */
+        if(m.access!==String(was.access||'')&&!enumOk(m.access,['operator','supervisor','admin','viewer']))e.push(ENUM_ERR.access);
         var empStatusMap={'ปฏิบัติงาน':'active','ลา/พักงาน':'leave','พ้นสภาพ':'inactive'};
         if(m.status&&empStatusMap[m.status])m.status=empStatusMap[m.status];
         if(!enumOk(m.status,['active','leave','inactive']))e.push(ENUM_ERR.empStatus);
@@ -21120,9 +21259,77 @@ function openColumnMapModal(opts){
           phone:m.phone?normPhoneDigits(m.phone):'',email:m.email||'',
           startDate:m.startDate||'',scanCode:(m.scanCode||'').trim()||id,
           access:(m.access||'operator').toLowerCase(),status:(m.status||'active').toLowerCase()};
+      },
+      current:function(r){
+        return {name:r.name,role:r.role,dept:r.dept,wh:r.wh,phone:r.phone,email:r.email,startDate:r.startDate,
+          scanCode:r.scanCode,access:r.access||'operator',status:r.status||'active'};
       }
+    },
+
+    loc:{
+      key:'loc', label:'ตำแหน่งแร็ค', targetKey:'locations', idField:'code', idKind:'loc',
+      fields:[
+        {key:'code',  label:'รหัสตำแหน่ง (เว้นว่างได้ ระบบสร้างให้)', required:false, aliases:['code','รหัส','รหัสตำแหน่ง']},
+        {key:'wh',    label:'รหัสคลัง', required:true, aliases:['wh','คลัง','รหัสคลัง']},
+        {key:'zone',  label:'โซน', required:true, aliases:['zone','โซน']},
+        {key:'rack',  label:'แร็ค', required:false, aliases:['rack','แร็ค']},
+        {key:'shelf', label:'ชั้น', required:false, aliases:['shelf','ชั้น']},
+        {key:'slot',  label:'ช่อง', required:false, aliases:['slot','ช่อง']},
+        {key:'type',  label:'ประเภทแร็ค', required:false, aliases:['type','ประเภทแร็ค']},
+        {key:'note',  label:'หมายเหตุ', required:false, aliases:['note','หมายเหตุ']}
+      ],
+      validateRow:function(m){
+        var e=[];
+        /* ไม่สร้างคลังใหม่ให้อัตโนมัติ — ตำแหน่งต้องอยู่ในคลังที่มีอยู่จริง */
+        var wh=m.wh?window.findWarehouseMatch(m.wh):'';
+        if(!m.wh)e.push('ไม่มีรหัสคลัง');
+        else if(!wh)e.push('ไม่พบคลัง '+m.wh);
+        else m.wh=wh;
+        if(!m.zone)e.push('ไม่มีโซน');
+        return e;
+      },
+      buildRecord:function(m,code){
+        return {code:code,wh:m.wh,zone:m.zone,rack:m.rack||'',shelf:m.shelf||'',
+          slot:m.slot||'',type:m.type||'',note:m.note||''};
+      },
+      current:function(r){return {wh:r.wh,zone:r.zone,rack:r.rack,shelf:r.shelf,slot:r.slot,type:r.type,note:r.note};}
     }
   };
+
+  function enumCode(raw,labels){
+    var q=String(raw||'').trim(),ql=q.toLowerCase();
+    return Object.keys(labels).find(function(k){return k===ql||labels[k].t===q;})||'';
+  }
+  /* ช่องที่ "แก้จริง" = ไม่ว่าง และต่างจากค่าที่ export จะเขียนออกมาตอนนี้ */
+  function changedCells(m,prev,cfg){
+    var was=cfg.current(prev),out={};
+    cfg.fields.forEach(function(f){
+      if(f.key===cfg.idField)return;
+      var v=m[f.key],w=was[f.key]==null?'':String(was[f.key]);
+      if(v===''||v==null||v===w)return;
+      if((f.key==='lat'||f.key==='lng')&&w!==''&&Math.abs(Number(v)-Number(w))<1e-6)return;
+      out[f.key]=v;
+    });
+    return out;
+  }
+  /* อัปเดตเรคอร์ดเดิม: เขียนทับเฉพาะค่าที่ช่องในไฟล์แก้จริง ที่เหลือ (คอลัมน์ที่ไม่ได้
+     จับคู่, ช่องว่าง, ข้อมูลที่ไฟล์ไม่มี เช่น PIN/RFID/ประวัติ) คงเดิมทั้งหมด */
+  function updateRecord(prev,m,id,cfg){
+    var changed=changedCells(m,prev,cfg),keys=Object.keys(changed);
+    if(!keys.length)return prev;
+    var was=cfg.current(prev),full={};
+    cfg.fields.forEach(function(f){
+      var w=was[f.key];
+      full[f.key]=changed[f.key]!==undefined?changed[f.key]:(w==null?'':String(w));
+    });
+    if(cfg.prepare)cfg.prepare(full,changed);
+    var built=cfg.buildRecord(full,id),next=Object.assign({},prev);
+    keys.forEach(function(k){
+      ((cfg.props&&cfg.props[k])||[k]).forEach(function(p){next[p]=built[p];});
+    });
+    if(cfg.adjust)cfg.adjust(next,prev,changed);
+    return next;
+  }
   /* Exposed so other importers (Inventory page's multi-sheet import — see
      handleInvImportFile) can reuse the same per-entity config/validation/
      commit pipeline instead of re-implementing it. */
@@ -21243,11 +21450,25 @@ function openColumnMapModal(opts){
       Object.values(S.employees).forEach(function(x){if(x.scanCode)seenScan[String(x.scanCode).toLowerCase()]=1;});
     }
 
+    var byLower={};
+    existing.forEach(function(k){byLower[k.toLowerCase()]=k;});
+    var names={},gateOwner={};
+    if(cfg.uniqueName){
+      existing.forEach(function(k){var n=String(S[cfg.targetKey][k].name||'').trim().toLowerCase();if(n)names[n]=k;});
+    }
+    if(cfg.key==='wh'){
+      Object.values(S.warehouses).forEach(function(w){
+        if(w.status!=='inactive')(w.gates||[]).forEach(function(g){gateOwner[g]=w.id;});
+      });
+    }
+
     var results=[];
     for(var i=1;i<rows.length;i++){
       var mapped=mapRowValues(rows[i],colMap,cfg);
-      var errors=cfg.validateRow(mapped)||[];
       var explicitId=cfg.idField?mapped[cfg.idField]:'';
+      if(explicitId&&byLower[explicitId.toLowerCase()])explicitId=byLower[explicitId.toLowerCase()];
+      var prev=explicitId?S[cfg.targetKey][explicitId]:undefined;
+      var errors=cfg.validateRow(mapped,prev)||[];
       var dup=false,id=null;
 
       if(explicitId){
@@ -21259,7 +21480,11 @@ function openColumnMapModal(opts){
            ตอนกดยืนยันเท่านั้น) — แต่ถ้าประเภทที่พิมพ์มาตรงกับที่มีอยู่แล้ว (ไม่ว่าจะใส่
            มาเป็นรหัสหรือชื่อ) ใช้รหัสจริงทำ prefix ให้บาร์โค้ดเลย ไม่ต้องรอถึงตอน commit */
         if(cfg.key==='box')id=boxTagGen((window.findBoxTypeMatch&&window.findBoxTypeMatch(mapped.typeId))||mapped.typeId);
-        else id=seqGen();
+        else if(cfg.key==='loc'){
+          id=locBuildCode(mapped.zone,mapped.rack,mapped.shelf,mapped.slot);
+          if(byLower[id.toLowerCase()])id=byLower[id.toLowerCase()];
+          if(claimed[id.toLowerCase()])dup=true;else claimed[id.toLowerCase()]=1;
+        }else id=seqGen();
       }
 
       if(cfg.key==='emp'&&!errors.length&&!dup){
@@ -21270,10 +21495,29 @@ function openColumnMapModal(opts){
         }
       }
 
+      if(cfg.uniqueName&&!errors.length){
+        var nm=String(mapped.name||'').trim().toLowerCase();
+        var renamed=!prev||nm!==String(prev.name||'').trim().toLowerCase();
+        if(nm&&renamed&&names[nm]&&names[nm]!==id)errors.push('ชื่อซ้ำกับ '+names[nm]+' — ใส่รหัสนั้นหากต้องการอัปเดต');
+        else if(nm)names[nm]=id;
+      }
+      if(cfg.key==='wh'&&!errors.length){
+        var changed=prev?changedCells(mapped,prev,cfg):null;
+        if(!prev||changed.gateFrom||changed.gateTo){
+          var wanted=[];
+          for(var g=Number(mapped.gateFrom);g<=Number(mapped.gateTo);g++)wanted.push(g);
+          var clash=wanted.filter(function(g){return gateOwner[g]&&gateOwner[g]!==id;});
+          if(clash.length)errors.push('ประตู '+clash.join(', ')+' เป็นของคลัง '+gateOwner[clash[0]]+' อยู่แล้ว');
+          else wanted.forEach(function(g){gateOwner[g]=id;});
+        }
+      }
+
       results.push({rowNum:i+1,mapped:mapped,errors:errors,dup:dup,id:id});
     }
     return results;
   }
+
+  window.importParseAndValidate=importParseAndValidate;
 
   /* ---- Step 3: preview table + confirm ---- */
   window.openImportPreviewModal=function(rows,colMap,cfg,fname,onDone,progressLabel){
@@ -21300,7 +21544,7 @@ function openColumnMapModal(opts){
      +'<div class="small" style="color:var(--neg);">ข้าม (ข้อมูลไม่ถูกต้อง)</div></div></div>';
 
     if(dupRows.length){
-      h+='<p class="muted small" style="margin-bottom:14px;">พบรหัสซ้ำกับข้อมูลเดิม '+dupRows.length+' รายการ — ระบบจะ<b>อัปเดตข้อมูลเดิมด้วยค่าจากไฟล์นี้</b>โดยอัตโนมัติ</p>';
+      h+='<p class="muted small" style="margin-bottom:14px;">พบรหัสซ้ำกับข้อมูลเดิม '+dupRows.length+' รายการ — ระบบจะ<b>อัปเดตเฉพาะช่องที่แก้ไข</b> ช่องว่างและคอลัมน์ที่ไม่ได้เลือกจะคงค่าเดิม</p>';
     }
 
     h+='<div class="import-preview-wrap"><table class="import-preview-table"><thead><tr><th>#</th>'
@@ -21338,7 +21582,7 @@ function openColumnMapModal(opts){
     var addedIds=[],updatedIds=[];
     rows.forEach(function(x){
       var before=S[cfg.targetKey][x.id];
-      S[cfg.targetKey][x.id]=cfg.buildRecord(x.mapped,x.id);
+      S[cfg.targetKey][x.id]=before?updateRecord(before,x.mapped,x.id,cfg):cfg.buildRecord(x.mapped,x.id);
       (before?updatedIds:addedIds).push(x.id);
     });
     var allIds=addedIds.concat(updatedIds);
@@ -23266,6 +23510,26 @@ document.addEventListener('change',function(e){
     [/^ช(\d+)$/, "S$1"]
   ];
 
+  /* UI strings that previously stayed Thai in English mode. Only fills gaps. */
+  (function(more){Object.keys(more).forEach(function(k){if(!EXACT.hasOwnProperty(k))EXACT[k]=more[k];});})(
+    {"เข้า 7 วัน": "In, 7 days", "ออก 7 วัน": "Out, 7 days", "พฤ": "Thu", "อา": "Sun", "จ": "Mon", "อ": "Tue", "พ": "Wed", "ศ": "Fri", "ส": "Sat", "เดือน": "Month", "ปี": "Year", "ระบุวัน": "Custom dates", "นับเฉพาะกล่องที่มีความเคลื่อนไหวล่าสุดในช่วงนี้ — ทั้งหมด": "Counts only boxes last active in this period — all", "กล่องมีปัญหา (Exception)": "Exception boxes", "ความเคลื่อนไหว": "Movements", "กรองตามวันที่ผ่านประตูเข้า/ออกจริง — ทั้งหมด": "Filter by actual gate in/out date — all", "วันนี้ · ขาเข้า": "Today · inbound", "วันนี้ · ขาออก": "Today · outbound", "กรองตามวันครบกำหนดคืน — ทั้งหมด — พบ 1 ใบ": "Filter by return due date — all — 1 box found", "วันที่ส่งออก": "Shipped on", "ครบกำหนดคืน": "Due back", "สถานะอุปกรณ์": "Device status", "อุปกรณ์ประจำ Gate": "Gate devices", "ยังไม่มี FX9600 ที่ผูกกับ Gate นี้": "No FX9600 bound to this gate yet", "ยังไม่ผูก": "Not bound", "อุปกรณ์ส่วนกลาง": "Shared devices", "ยังไม่พบการเชื่อมต่อ": "No connection seen", "มูลค่าทรัพย์สินที่อยู่นอกคลัง": "Asset value outside warehouses", "บาท": "THB", "→ คงที่ 0 บาท": "→ unchanged 0 THB", "เพิ่มข้อมูล": "Add data", "รีเฟรชข้อมูลล่าสุด": "Refresh data", "ผู้ที่ล็อกอิน / ผู้บันทึกปัจจุบัน — คลิกเพื่อดูบัตรพนักงาน": "Signed-in user / current recorder — click to view the badge", "เปลี่ยนภาษา": "Change language", "ไม่จำกัดช่วงเวลา": "No time limit", "แสดงข้อมูลย้อนหลังตามจำนวนวัน รวมวันนี้": "Show past data by number of days, including today", "แสดงข้อมูลย้อนหลังตามจำนวนเดือน": "Show past data by number of months", "แสดงข้อมูลย้อนหลังตามจำนวนปี": "Show past data by number of years", "กำหนดช่วงวันที่เริ่มต้นและสิ้นสุด": "Set a start and end date", "ดูกล่องในคลัง": "View boxes in warehouse", "ดูกล่องที่อยู่กับลูกค้า": "View boxes with customers", "ดูกล่องชำรุด": "View damaged boxes", "ดูกล่องที่เดินผ่านประตูดังกล่าว": "View boxes that passed this gate", "ดูกล่องที่ผ่านประตูออก": "View boxes that passed Gate Out", "จัดการการผูก FX9600": "Manage FX9600 bindings", "จัดการการเชื่อมต่อ PDA": "Manage PDA connections", "เปรียบเทียบมูลค่ากล่องที่อยู่กับลูกค้าในวันนี้กับวันก่อนหน้า — คงที่ 0 บาท หมายถึงมูลค่าไม่เปลี่ยนแปลง": "Compares today's value held by customers with the previous day — unchanged 0 THB means no change", "มุมมองสต็อกกล่องตามข้อมูลหลัก — รับเข้าด้วยการสแกนบาร์โค้ด ระบบดึงประเภท·หน่วย·พิกัดให้อัตโนมัติ · เลือกหลายใบเพื่อย้ายพิกัด/แจ้งกล่องหายพร้อมกัน · ทุกการเปลี่ยนแปลงบันทึก ประวัติการใช้งาน": "Box stock by master data — receive by barcode scan; type, unit and position fill in automatically · select several to relocate or report lost · every change is logged", "สต็อกกล่องทั้งหมด": "All box stock", "หลายค่าได้ · กด Enter หรือคั่นด้วย ,": "Multiple values · press Enter or separate with ,", "รอเข้าคลัง": "Awaiting inbound", "แยกตามคลัง": "By warehouse", "ทุกคลัง": "All warehouses", "กล่องหาย": "Lost boxes", "ค้นหาบาร์โค้ด / ประเภท / ลูกค้า · หลายค่าได้ (Enter หรือ ,)": "Search barcode / type / customer · multiple values (Enter or ,)", "ค้นหาได้หลายค่า — กด Enter หรือคั่นด้วย , เพื่อเพิ่มรายการ": "Search multiple values — press Enter or , to add", "ผ่านประตูเข้ามาแล้ว อยู่ในคลัง": "Passed Gate In, now in the warehouse", "ลงทะเบียนแล้ว ยังไม่ผ่านประตูขาเข้า": "Registered, not yet through Gate In", "จัดกลุ่มตามประเภทและพิกัด พร้อมแสดงจำนวนรวม": "Group by type and position with totals", "เลือกไฟล์ Excel/CSV เพื่อนำเข้ารายการสต็อก — เลือกไฟล์แล้วจับคู่คอลัมน์เอง ไม่ต้องใช้ชื่อหัวคอลัมน์ตายตัว": "Choose an Excel/CSV stock file — map the columns after choosing; no fixed headers needed", "ส่งออกข้อมูลหลัก พร้อมประวัติการเคลื่อนไหว ป้ายทะเบียน LPR และทะเบียนรถ": "Export master data with movement history, LPR plates and vehicles", "ตั้งค่าระบบ": "System setup", "บทบาทและสิทธิ์": "Roles & permissions", "ไม่มีอีเมล": "No email", "คลิกเพื่อแก้ไขชื่อลูกค้า": "Click to edit customer name", "คลิกเพื่อแก้ไขประเภทลูกค้า": "Click to edit customer type", "คลิกเพื่อแก้ไขสถานะลูกค้า": "Click to edit customer status", "คลิกเพื่อแก้ไขจำนวนวันยืม": "Click to edit loan days", "คลิกเพื่อแก้ไขที่อยู่/สาขา": "Click to edit address/branch", "คลิกเพื่อเพิ่มอีเมล": "Click to add email", "ดูกล่องที่ลูกค้าถืออยู่": "View boxes held by this customer", "จำนวนประตู": "Gates", "พื้นที่": "Area", "พร้อมใช้งาน": "Ready", "บทบาทไม่มีสิทธิ์": "Role has no permissions", "บทบาท": "Role", "การเข้าถึง": "Access", "จัดการบัญชีเว็บ": "Manage web account", "เพิ่มตำแหน่ง / สร้างแร็ก": "Add position / build rack", "คลิกที่ช่องบนผังเพื่อสแกนจัดเก็บ (Putaway) · คลิกแถวในมุมมองตารางเพื่อแก้ไขตำแหน่ง": "Click a slot on the map to scan putaway · click a table row to edit a position", "แก้ไขชื่อแร็ค": "Rename rack", "แก้ไขชั้น": "Rename shelf", "เพิ่มบทบาท": "Add role", "สิทธิ์ทั้งหมดในระบบ — แก้ไขหรือลบไม่ได้": "All permissions — cannot be edited or deleted", "เจ้าหน้าที่คลัง": "Warehouse staff", "สามารถจัดการกล่อง ทำรายการยืม/คืน และดูข้อมูลลูกค้า": "Manage boxes, lend/return, and view customers", "ผู้จัดการคลัง": "Warehouse manager", "ดูแลงานคลังทั้งหมด ทำรายการยืม–คืน และดูรายงาน": "Oversees warehouse work, lending/returns and reports", "ผู้ดูแลระบบ — จัดการข้อมูลหลัก บทบาท และพนักงาน": "Administrator — master data, roles and employees", "ดูข้อมูลได้อย่างเดียว ทำรายการไม่ได้": "Read-only; cannot transact", "ค้นหาบทบาท · คำอธิบาย": "Search role · description", "บทบาทของระบบ แก้ไขหรือลบไม่ได้": "System role — cannot be edited or deleted", "ดูรายชื่อผู้ถือบทบาทนี้": "View people with this role", "หมวดหมู่": "Category", "ทั้งหมด": "All", "ต้องตั้งค่า": "Needs setup", "ยังไม่มีบัญชีเว็บ": "No web account", "ยังไม่มีบทบาท": "No role", "บทบาทปิดใช้งาน": "Role disabled", "ไม่พบบทบาท": "Role not found", "พ้นสภาพ": "Left", "โหลดสิทธิ์ไม่สำเร็จ": "Permissions failed to load"});
+  /* Whole-string patterns with a number or name inside; run before the unit rules. */
+  RE.unshift(
+    [/^แนวโน้มการเคลื่อนไหว (\d+) วันล่าสุด$/, "Movement trend, last $1 days"],
+    [/^เข้า (\d+) วัน$/, "In, $1 days"],
+    [/^ออก (\d+) วัน$/, "Out, $1 days"],
+    [/^เลยมา (\d+) วัน$/, "$1 days overdue"],
+    [/^รายงานรายการค้างคืน.*$/, "Overdue returns report"],
+    [/^กรองตามวันครบกำหนดคืน — ทั้งหมด — พบ (\d+) .*$/, "Filter by return due date — all — $1 found"],
+    [/^แสดง (\S+) จาก (\d+) \S+ · หน้า (\S+)$/, "Showing $1 of $2 · page $3"],
+    [/^(\S+) · empty — คลิกเพื่อสแกนจัดเก็บ \(Putaway\)$/, "$1 · empty — click to scan putaway"],
+    [/^(\S+) · Occupied (\d+) กล่อง — คลิกเพื่อสแกนจัดเก็บ \(Putaway\)$/, "$1 · $2 boxes — click to scan putaway"],
+    [/^จัดการบัญชีเว็บของ (.+)$/, "Manage web account of $1"],
+    [/^Show employees: (.+)$/, function(_, k){ return "Show employees: " + (EXACT[k] || k); }],
+    [/^→ ส่ง: (.+)$/, "→ To: $1"],
+    [/^(\d+) กล่อง$/, "$1 boxes"],
+    [/^(\d+) บทบาท$/, "$1 roles"]
+  );
   var EXACT_KEYS = Object.keys(EXACT).sort(function(a,b){return b.length-a.length;});
   var FRAG_KEYS  = Object.keys(FRAG).sort(function(a,b){return b.length-a.length;});
 

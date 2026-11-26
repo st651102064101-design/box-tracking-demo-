@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
+import '../services/i18n.dart';
 import 'boot_screen.dart';
 import 'login_screen.dart';
 import 'device_setup_screen.dart';
@@ -208,24 +209,25 @@ class _OfflineAlertListenerState extends State<_OfflineAlertListener> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         _dialogOpen = true;
+        final loc = context.read<LocaleController>();
         showDialog<void>(
           context: context,
           builder: (dialogCtx) => AlertDialog(
-            title: const Text('ขาดการเชื่อมต่อกับระบบหลัก'),
+            title: Text(loc.t('ขาดการเชื่อมต่อกับระบบหลัก')),
             content: Text(
               c.connError ??
-                  'ระบบจะลองเชื่อมต่อใหม่อัตโนมัติ — ข้อมูลที่ยิงระหว่างนี้จะถูกพักคิวไว้',
+                  loc.t('ระบบจะลองเชื่อมต่อใหม่อัตโนมัติ — ข้อมูลที่ยิงระหว่างนี้จะถูกพักคิวไว้'),
             ),
             actions: [
               TextButton(
                   onPressed: () => Navigator.of(dialogCtx).pop(),
-                  child: const Text('รับทราบ')),
+                  child: Text(loc.t('รับทราบ'))),
               FilledButton(
                 onPressed: () {
                   Navigator.of(dialogCtx).pop();
                   c.goDeviceSetup();
                 },
-                child: const Text('ตั้งค่าระบบ'),
+                child: Text(loc.t('ตั้งค่าระบบ')),
               ),
             ],
           ),

@@ -359,6 +359,9 @@ export const employees = pgTable('employees', {
   roleId: integer('role_id'),
   data: jsonb('data').notNull().default({}),
   /** bcrypt hash of the employee's PDA PIN — never the raw digits. */
+  accountActive: boolean('account_active').notNull().default(true),
+  /** Bumped to sign the employee out everywhere (see requireAuth). */
+  sessionVersion: integer('session_version').notNull().default(0),
   pinHash: text('pin_hash'),
   /** bcrypt hash of a pending "ลืมรหัส PIN?" email OTP; cleared once used. */
   pinResetOtpHash: text('pin_reset_otp_hash'),

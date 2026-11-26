@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto';
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { eq, sql } from 'drizzle-orm';
@@ -25,7 +26,7 @@ export const authRouter = Router();
 const OTP_TTL_MS = 5 * 60 * 1000;
 
 function genOtp(): string {
-  return String(Math.floor(100000 + Math.random() * 900000)); // 6 digits
+  return String(randomInt(100000, 1000000)); // 6 digits
 }
 
 /* A valid bcrypt hash built once, so the "no such account / nothing pending" paths
@@ -115,10 +116,11 @@ authRouter.post(
       [emp] = await db.select().from(employees).where(sql`lower(${employees.data}->>'email') = lower(${identifier})`);
     }
     if (emp?.passwordHash && (await verifyPassword(password, emp.passwordHash))) {
+      if (!emp.accountActive) throw httpError(403, 'บัญชีนี้ถูกระงับการใช้งาน', 'account_suspended');
       const access = (emp.data as Record<string, unknown> | null)?.access;
       const role = ROLE_BY_ACCESS[typeof access === 'string' ? access : 'operator'] ?? 'staff';
       const user = { id: emp.id, username: emp.username, name: emp.name, role, employeeId: emp.id };
-      const token = signToken({ sub: emp.id, username: emp.username!, name: emp.name ?? emp.username!, role, employeeId: emp.id });
+      const token = signToken({ sub: emp.id, username: emp.username!, name: emp.name ?? emp.username!, role, employeeId: emp.id, sv: emp.sessionVersion });
       return res.json({ token, user, session: { token, user } });
     }
 
@@ -215,6 +217,7 @@ authRouter.post(
         .where(sql`lower(${employees.data}->>'email') = lower(${identifier})`);
     }
     if (emp?.passwordHash && (await verifyPassword(input.password, emp.passwordHash))) {
+      if (!emp.accountActive) throw httpError(403, 'บัญชีนี้ถูกระงับการใช้งาน', 'account_suspended');
       // employees.role is a job TITLE ("หัวหน้างาน") — the actual permission
       // level (operator/supervisor/admin/viewer) only lives in the legacy
       // `data` jsonb blob under `access`, since it never got its own column.
@@ -227,6 +230,7 @@ authRouter.post(
         name: emp.name ?? emp.username!,
         role,
         employeeId: emp.id,
+        sv: emp.sessionVersion,
       });
       return res.json({
         token,
@@ -415,7 +419,10 @@ authRouter.get(
        issued), but the root page and /onboarding both read it from here —
        without it onboarding bounced straight back to "/" and first-time setup
        was never enforced. */
-    const [account] = await getDb().select().from(users).where(eq(users.id, Number(req.user!.sub)));
+    // Employee tokens carry a text id (e.g. "EMP-002") and have no users row.
+    const [account] = req.user!.employeeId
+      ? []
+      : await getDb().select().from(users).where(eq(users.id, Number(req.user!.sub)));
     res.json({
       user: { ...req.user, firstSetupRequired: !!account?.mustChangePassword },
       role,

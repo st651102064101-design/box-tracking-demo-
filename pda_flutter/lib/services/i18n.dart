@@ -25,6 +25,18 @@ class LocaleController extends ChangeNotifier {
   String t(String th) => lang == 'en' ? (_dict[th] ?? th) : th;
 
   static const Map<String, String> _dict = {
+    'การเชื่อมต่อระบบหลัก':
+        'Main system connection',
+    'ขาดการเชื่อมต่อกับระบบหลัก':
+        'Lost connection to the main system',
+    'ระบบจะลองเชื่อมต่อใหม่อัตโนมัติ — ข้อมูลที่ยิงระหว่างนี้จะถูกพักคิวไว้':
+        'Reconnecting automatically — scans made meanwhile are queued',
+    'รับทราบ':
+        'OK',
+    'ตั้งค่าระบบ':
+        'System setup',
+    'กล่องนี้ยังไม่มีแท็ก RFID ผูกไว้ — เครื่องจะไม่มีสัญญาณให้กวาดหา ให้ผู้ดูแลระบบผูกแท็กก่อน':
+        'This box has no RFID tag, so there is no signal to search for. Ask an administrator to bind a tag first.',
     // badge screen
     'ยิงบัตรพนักงานเพื่อเริ่มงาน': 'Scan your badge to start',
     'ยิงบัตร หรือพิมพ์รหัสพนักงาน': 'Scan a badge, or type an employee id',
@@ -366,8 +378,8 @@ class LocaleController extends ChangeNotifier {
     '— เลือกประเภทรถ —': '— Choose vehicle type —',
     'ระบุประเภทรถ *': 'Specify vehicle type *',
     'เช่น รถตู้ / รถพ่วง': 'e.g. Van / Trailer',
-    'เลขที่ DO/PO จะสร้างอัตโนมัติเมื่อยืนยันส่งออก':
-        'DO/PO number is generated automatically on confirming Gate Out',
+    'เลขที่ DO จะสร้างอัตโนมัติเมื่อยืนยันส่งออก':
+        'The DO number is generated automatically on confirming Gate Out',
     'รถกระบะ': 'Pickup truck',
     'รถบรรทุก 6 ล้อ': '6-wheel truck',
     'รถบรรทุก 10 ล้อ': '10-wheel truck',

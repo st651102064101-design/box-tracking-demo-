@@ -422,6 +422,8 @@ rfidRouter.put(
        optional here and is filled when the matching LPR event arrives. */
     if (direction === 'out' && !customer) throw httpError(400, 'Outbound auto session ต้องมีลูกค้า', 'outbound_context_required');
     const ttlSeconds = Math.min(28_800, Math.max(30, Number(req.body?.ttlSeconds) || 1800));
+    const [knownGate] = await getDb().select().from(gates).where(eq(gates.gateNo, gate)).limit(1);
+    if (!knownGate) throw httpError(404, `ไม่พบ Gate ${gate} ในคลัง`, 'gate_not_found');
     const row = {
       gateNo: gate, direction, customer: customer || null, doNo: String(req.body?.doNo ?? '').trim() || null,
       po: String(req.body?.po ?? '').trim() || null, plate: plate || null, driver: String(req.body?.driver ?? '').trim() || null,
@@ -513,6 +515,9 @@ async function autoProcessTag(
       if (!session || session.direction !== 'out' || session.expiresAt.getTime() <= Date.now() || !session.customer) {
         return { processed: false, reason: 'outbound_context_required' };
       }
+      /* A staged plate means "ship only to this vehicle" — leave the box queued
+         until the LPR camera confirms it (or the operator confirms by hand). */
+      if (session.plate) return { processed: false, reason: 'awaiting_plate' };
       await gateOut(db, {
         tags: [tag], gate, customer: session.customer, doNo: session.doNo ?? undefined, po: session.po ?? undefined,
         plate: session.plate ?? undefined, driver: session.driver ?? undefined, vehicleType: session.vehicleType ?? undefined,
@@ -643,6 +648,8 @@ rfidRouter.post(
       /* A heartbeat is still a webhook-log event. Publish it over SSE so an
          already-open Gate log advances without polling or a second HTTP read. */
       publishRfidRead(fallbackGate, [], { antennas: [], decoded: [], unknown: [], repeats: [] });
+      // The reader is alive (recorded above) but sent something we cannot read.
+      if (body.parseError) throw httpError(400, 'อ่านข้อมูลจากเครื่องอ่านไม่ได้ (ต้องเป็น JSON)', 'invalid_reader_payload');
       res.json({ ok: true, received: [], unknown: [], count: 0, routed: {} });
       return;
     }

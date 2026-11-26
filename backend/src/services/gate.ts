@@ -244,6 +244,7 @@ export async function gateOut(db: DB, input: GateOutInput) {
           outAt: new Date(outTs),
           dueAt: new Date(dueTs),
           lastSeenAt: new Date(outTs),
+          history,
           data: b,
           updatedAt: new Date(),
         })
@@ -414,6 +415,8 @@ export async function gateIn(db: DB, input: GateInInput) {
       b.plate = plate;
       b.driver = driver;
       b.vehicleType = vehicleType;
+      // Who is returning it — captured before the trip fields are cleared.
+      const returned = wasOut ? { customer: row.customer ?? '', do: row.doNo ?? '' } : { customer: '', do: '' };
       // Every inbound path in the legacy web UI clears these on return (see
       // legacy.html ~5552/5559/7296/4899) — a box back in the warehouse must
       // stop reporting the customer/DO/due-date from its last trip out, or
@@ -429,6 +432,7 @@ export async function gateIn(db: DB, input: GateInInput) {
       history.push({
         dir: 'in',
         ts: inTs,
+        ...returned,
         gate,
         wh,
         recorder,
@@ -461,6 +465,7 @@ export async function gateIn(db: DB, input: GateInInput) {
           // above. An ordinary inbound with none of those still goes through the
           // dedicated putaway endpoint, same as always.
           ...(locationDirty ? { location: b.location } : {}),
+          history,
           data: b,
           updatedAt: new Date(),
         })
@@ -474,8 +479,8 @@ export async function gateIn(db: DB, input: GateInInput) {
           dir: wasOut ? 'in' : 'in-new',
           tag,
           type: row.type,
-          do: b.do,
-          customer: b.customer,
+          do: returned.do,
+          customer: returned.customer,
           gate,
           wh,
           recorder,

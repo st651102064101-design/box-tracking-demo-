@@ -268,6 +268,7 @@ class SettingsScreen extends StatelessWidget {
     if (e == null) return;
     final loc = context.read<LocaleController>();
 
+    String? currentPin;
     if (e.hasPin) {
       String? otpSentTo;
       final verify = await showPinPad(
@@ -281,6 +282,8 @@ class SettingsScreen extends StatelessWidget {
             if (ok) c.prefs.cachePinHash(e.id, entered);
             return ok ? null : loc.t('รหัสไม่ถูกต้อง ลองใหม่');
           } catch (err) {
+            // A server answer (e.g. locked out) must not fall back to offline.
+            if (err is ApiException) return err.message;
             if (c.prefs.verifyPinOffline(e.id, entered)) return null;
             return loc.t(
                 'ออฟไลน์ และยังไม่เคยยืนยันรหัสนี้บนเครื่องนี้ตอนออนไลน์มาก่อน');
@@ -304,6 +307,7 @@ class SettingsScreen extends StatelessWidget {
         return;
       }
       if (verify.pin == null) return;
+      currentPin = verify.pin;
       if (!context.mounted) return;
     }
 
@@ -328,7 +332,7 @@ class SettingsScreen extends StatelessWidget {
     }
     if (!context.mounted) return;
     try {
-      await c.api.setEmployeePin(e.id, first.pin!);
+      await c.api.setEmployeePin(e.id, first.pin!, currentPin: currentPin);
     } catch (err) {
       if (!context.mounted) return;
       c.toastMsg(loc.t('ตั้งรหัส PIN ไม่สำเร็จ'), '$err', ResultKind.err);

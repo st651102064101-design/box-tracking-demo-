@@ -68,7 +68,7 @@ export const STATE_GROUPS: GroupRule[] = [
     remove: ['employee.delete'],
     /* Typed columns merged in by composeState, not part of what the client
        may set (roleId in particular is assigned through /api/roles). */
-    ignoreFields: ['userId', 'roleId', 'hasPin', 'hasLogin', 'loginUsername'],
+    ignoreFields: ['userId', 'roleId', 'hasPin', 'hasLogin', 'loginUsername', 'accountActive'],
   },
   {
     key: 'master',

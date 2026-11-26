@@ -982,7 +982,7 @@ class _RfidLocateScreenState extends State<RfidLocateScreen> {
                 Expanded(
                   child: Text(
                     loc.t(
-                        'กล่องนี้ยังไม่มีแท็ก RFID ผูกไว้ — เครื่องจะไม่มีสัญญาณให้กวาดหา ผูกแท็กได้ที่หน้า "ลงทะเบียนกล่อง"'),
+                        'กล่องนี้ยังไม่มีแท็ก RFID ผูกไว้ — เครื่องจะไม่มีสัญญาณให้กวาดหา ให้ผู้ดูแลระบบผูกแท็กก่อน'),
                     style: TextStyle(fontSize: 12.5, color: C.orange, height: 1.4),
                   ),
                 ),

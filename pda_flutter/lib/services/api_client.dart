@@ -356,9 +356,15 @@ class ApiClient {
   /// PUT /api/employees/:id/pin { pin } — set/replace an employee's PIN
   /// outright. Used right after a badge scan (first-time setup or a
   /// voluntary change), never as part of a forgot-PIN reset.
-  Future<void> setEmployeePin(String employeeId, String pin) async {
+  /// [currentPin] is required by the server to replace an existing PIN.
+  Future<void> setEmployeePin(String employeeId, String pin,
+      {String? currentPin}) async {
     await _send(() => http.put(_u('/api/employees/$employeeId/pin'),
-        headers: _headers, body: jsonEncode({'pin': pin})));
+        headers: _headers,
+        body: jsonEncode({
+          'pin': pin,
+          if (currentPin != null) 'currentPin': currentPin,
+        })));
   }
 
   /// PUT /api/employees/:id/last-post { wh, gate } — the warehouse/gate this

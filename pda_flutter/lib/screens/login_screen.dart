@@ -119,6 +119,8 @@ class _LoginScreenState extends State<LoginScreen> {
           if (ok) c.prefs.cachePinHash(e.id, entered);
           return ok ? null : 'รหัสไม่ถูกต้อง ลองใหม่';
         } catch (err) {
+          // A server answer (e.g. locked out) must not fall back to offline.
+          if (err is ApiException) return err.message;
           // The server never actually answered (offline, timeout, gate
           // unreachable) — not the same as it rejecting the PIN. Fall back
           // to the last PIN it confirmed for this employee on this device

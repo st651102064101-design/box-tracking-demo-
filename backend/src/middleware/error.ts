@@ -21,7 +21,9 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
   }
   const anyErr = err as { status?: number; message?: string; code?: string };
   const status = anyErr?.status ?? 500;
-  if (status >= 500) {
+  /* A deliberate 503 from httpError() ("SMTP/LINE not configured") carries a
+     message written for the user — only unexpected failures are masked. */
+  if (status >= 500 && !(status === 503 && anyErr?.code)) {
     /* Anything landing here without an explicit status is a bug, not a message
        for the person using the app. Echoing it verbatim leaked the driver's own
        text — a PUT /api/state conflict used to answer with
