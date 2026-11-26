@@ -94,6 +94,8 @@ class _ScanScreenState extends State<ScanScreen>
     // trigger must not fire until that's done — see AppController.
     // gateFormStep and the toast it drives in _onReaderTrigger.
     c.gateFormStep = true;
+    // Receive-and-ship: receiving needs nothing first, so open ready to scan.
+    if (c.receiveShipOnly && c.mode == 'in') _setOnScanStep(c, true);
     _pulse = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 900))
       ..repeat(reverse: true);
@@ -199,7 +201,7 @@ class _ScanScreenState extends State<ScanScreen>
     }
     await c.doCommit();
     if (!mounted) return;
-    if (c.queue.isEmpty) {
+    if (c.queue.isEmpty && !(c.receiveShipOnly && c.mode == 'in')) {
       // Keep the one-shot auto-open consumed for this screen lifecycle. A
       // successful dispatch clears the form and returns here; reopening the
       // customer picker at that point interrupts the next dispatch workflow.
@@ -569,7 +571,9 @@ class _ScanScreenState extends State<ScanScreen>
                 color: isOut ? C.orange : C.limeText,
                 bg: isOut ? C.orangeBg : C.limeBg),
             const SizedBox(width: 7),
-            Text(loc.t(isOut ? 'ส่งออก' : 'รับคืน')),
+            Text(loc.t(c.receiveShipOnly
+                ? (isOut ? 'จ่ายออก' : 'รับเข้า')
+                : (isOut ? 'ส่งออก' : 'รับคืน'))),
           ],
         ),
         subtitle: Text('${c.selWhName} · ${loc.t('ประตู')} ${c.gate}'),
@@ -589,24 +593,27 @@ class _ScanScreenState extends State<ScanScreen>
               children: !_onScanStep
                   ? [isOut ? _outForm(c, loc) : _inForm(c, loc)]
                   : [
-                      GestureDetector(
-                        onTap: () => setState(() => _setOnScanStep(c, false)),
-                        child: Padding(
-                          padding: const EdgeInsets.only(bottom: 9),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.chevron_left,
-                                  size: 17, color: C.muted),
-                              Text(loc.t('แก้ไขข้อมูลลูกค้า/รถ'),
-                                  style: TextStyle(
-                                      fontSize: 12.5,
-                                      color: C.muted,
-                                      fontWeight: FontWeight.w600)),
-                            ],
+                      if (c.receiveShipOnly)
+                        _bigEdit(c, loc, isOut)
+                      else
+                        GestureDetector(
+                          onTap: () => setState(() => _setOnScanStep(c, false)),
+                          child: Padding(
+                            padding: const EdgeInsets.only(bottom: 9),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.chevron_left,
+                                    size: 17, color: C.muted),
+                                Text(loc.t('แก้ไขข้อมูลลูกค้า/รถ'),
+                                    style: TextStyle(
+                                        fontSize: 12.5,
+                                        color: C.muted,
+                                        fontWeight: FontWeight.w600)),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
                       _scannerPanel(c, loc),
                       const SizedBox(height: 13),
                       _queueHeader(c, loc),
@@ -630,7 +637,11 @@ class _ScanScreenState extends State<ScanScreen>
               child: PrimaryButton(
                 label: loc.t(!_onScanStep
                     ? 'ถัดไป'
-                    : (isOut ? 'ยืนยันส่งออก' : 'ยืนยันรับคืน')),
+                    : (isOut
+                        ? 'ยืนยันส่งออก'
+                        : (c.receiveShipOnly
+                            ? 'ยืนยันรับเข้า'
+                            : 'ยืนยันรับคืน'))),
                 trailing: _onScanStep
                     ? Container(
                         padding: const EdgeInsets.symmetric(
@@ -659,7 +670,8 @@ class _ScanScreenState extends State<ScanScreen>
   Widget _outForm(AppController c, LocaleController loc) {
     // On outbound entry, present the customer choices immediately instead of
     // making an operator discover and tap the dropdown first.
-    _scheduleCustomerPicker(c, loc);
+    final tiles = c.receiveShipOnly;
+    if (!tiles) _scheduleCustomerPicker(c, loc);
     Map<String, dynamic>? selected;
     for (final customer in c.customerList) {
       if ((customer['id'] ?? '').toString() == c.outCustomer) {
@@ -675,29 +687,32 @@ class _ScanScreenState extends State<ScanScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           FieldLabel(loc.t('ลูกค้าปลายทาง *')),
-          Semantics(
-            button: true,
-            label: loc.t('ลูกค้าปลายทาง'),
-            child: InkWell(
-              key: _customerFieldKey,
-              borderRadius: BorderRadius.circular(12),
-              onTap: () => _showCustomerPicker(c, loc),
-              child: InputDecorator(
-                decoration: pdaInput('', radius: 12).copyWith(
-                  suffixIcon: Icon(Icons.arrow_drop_down, color: C.muted),
-                ),
-                child: Text(
-                  selectedLabel,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: selected == null ? C.faint : C.ink,
-                    fontSize: 14,
+          if (tiles)
+            for (final customer in c.customerList) _customerTile(c, customer)
+          else
+            Semantics(
+              button: true,
+              label: loc.t('ลูกค้าปลายทาง'),
+              child: InkWell(
+                key: _customerFieldKey,
+                borderRadius: BorderRadius.circular(12),
+                onTap: () => _showCustomerPicker(c, loc),
+                child: InputDecorator(
+                  decoration: pdaInput('', radius: 12).copyWith(
+                    suffixIcon: Icon(Icons.arrow_drop_down, color: C.muted),
+                  ),
+                  child: Text(
+                    selectedLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: selected == null ? C.faint : C.ink,
+                      fontSize: 14,
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
           const SizedBox(height: 11),
           Row(
             children: [
@@ -752,6 +767,100 @@ class _ScanScreenState extends State<ScanScreen>
           Text(loc.t('เลขที่ DO/PO จะสร้างอัตโนมัติเมื่อยืนยันส่งออก'),
               style: TextStyle(fontSize: 11.5, color: C.muted)),
         ],
+      ),
+    );
+  }
+
+  /// One tap picks the customer and goes straight to scanning.
+  Widget _customerTile(AppController c, Map<String, dynamic> customer) {
+    final id = (customer['id'] ?? '').toString();
+    final selected = id == c.outCustomer;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: selected ? C.menuBlueBg : Colors.transparent,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          key: Key('customer-$id'),
+          borderRadius: BorderRadius.circular(18),
+          onTap: () {
+            FocusScope.of(context).unfocus();
+            c.setOutCustomer(id);
+            setState(() => _setOnScanStep(c, true));
+          },
+          child: Container(
+            width: double.infinity,
+            constraints: const BoxConstraints(minHeight: 76),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                  color: selected ? C.menuBlue : C.chevron,
+                  width: selected ? 2.5 : 1.5),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text((customer['name'] ?? id).toString(),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: C.ink)),
+                      Text(id,
+                          style: TextStyle(fontSize: 12.5, color: C.muted)),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_right, size: 30, color: C.menuBlue),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Back to the details, large enough for a gloved thumb. On the way out it
+  /// also says who the load is going to.
+  Widget _bigEdit(AppController c, LocaleController loc, bool isOut) {
+    final customer = isOut
+        ? c.customerList
+            .where((m) => (m['id'] ?? '').toString() == c.outCustomer)
+            .map((m) => (m['name'] ?? m['id']).toString())
+            .join()
+        : '';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: OutlinedButton(
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size.fromHeight(64),
+          foregroundColor: C.ink,
+          side: BorderSide(color: C.chevron, width: 1.5),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        ),
+        onPressed: () => setState(() => _setOnScanStep(c, false)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (customer.isNotEmpty)
+              Text(customer,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.w800)),
+            Text(
+                loc.t(isOut
+                    ? 'เปลี่ยนลูกค้า / ข้อมูลรถ'
+                    : 'ข้อมูลรถ (ไม่บังคับ)'),
+                style: TextStyle(fontSize: 14, color: C.muted)),
+          ],
+        ),
       ),
     );
   }

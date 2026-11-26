@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import 'package:smarttrace_pda/controllers/app_controller.dart';
 import 'package:smarttrace_pda/screens/home_screen.dart';
+import 'package:smarttrace_pda/screens/scan_screen.dart';
 import 'package:smarttrace_pda/services/i18n.dart';
 import 'package:smarttrace_pda/widgets/system_picker.dart';
 
@@ -94,6 +95,51 @@ void main() {
     await tester.tap(find.text('ครบทุกฟีเจอร์'));
     await tester.pump();
     expect(c.receiveShipOnly, isFalse);
+    c.dispose();
+  });
+
+  testWidgets('receiving opens ready to scan, with vehicle details optional',
+      (tester) async {
+    final c = await _controller();
+    c.setReceiveShipOnly(true);
+    c.goScanIn();
+    await _show(tester, c, const ScanScreen());
+
+    expect(c.gateFormStep, isFalse);
+    expect(find.text('ข้อมูลรถ (ไม่บังคับ)'), findsOneWidget);
+    await tester.tap(find.text('ข้อมูลรถ (ไม่บังคับ)'));
+    await tester.pump();
+    expect(c.gateFormStep, isTrue);
+    expect(find.text('ถัดไป'), findsOneWidget);
+    c.dispose();
+  });
+
+  testWidgets('shipping needs one tap on a large customer button',
+      (tester) async {
+    final c = await _controller();
+    c.setReceiveShipOnly(true);
+    c.goScanOut();
+    await _show(tester, c, const ScanScreen());
+
+    final first = c.customerList.first;
+    final tile = find.byKey(Key('customer-${first['id']}'));
+    expect(tester.getSize(tile).height, greaterThanOrEqualTo(72));
+    expect(c.gateFormStep, isTrue);
+    await tester.tap(tile);
+    await tester.pump();
+    expect(c.outCustomer, first['id']);
+    expect(c.gateFormStep, isFalse);
+    expect(find.text('เปลี่ยนลูกค้า / ข้อมูลรถ'), findsOneWidget);
+    c.dispose();
+  });
+
+  testWidgets('the full system still starts receiving on the form',
+      (tester) async {
+    final c = await _controller();
+    c.goScanIn();
+    await _show(tester, c, const ScanScreen());
+
+    expect(c.gateFormStep, isTrue);
     c.dispose();
   });
 }
