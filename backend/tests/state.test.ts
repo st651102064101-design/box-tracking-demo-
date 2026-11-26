@@ -123,6 +123,41 @@ describe('state bridge (S ↔ Postgres)', () => {
     expect(get.body.theme).toBe('dark');
   });
 
+  it('serves the PDA a bounded snapshot: recent movements only, no web-only data', async () => {
+    const recent = { ts: new Date().toISOString(), dir: 'in', tag: 'BTX-2601-ABCDE' };
+    const box = sampleState.boxes['BTX-2601-ABCDE'];
+    const history = Array.from({ length: 8 }, (_, i) => ({ dir: 'relocate', ts: `2026-07-2${i}T00:00:00.000Z` }));
+    await request(ctx.app).put('/api/state').set(auth(ctx.token)).send({
+      ...sampleState,
+      restore: true,
+      boxes: { 'BTX-2601-ABCDE': { ...box, history } },
+      events: [...sampleState.events, recent],
+    });
+    const full = (await request(ctx.app).get('/api/state').set(auth(ctx.token))).body;
+    const res = await request(ctx.app).get('/api/state/pda').set(auth(ctx.token));
+    expect(res.status).toBe(200);
+    expect(res.body.boxes['BTX-2601-ABCDE'].history).toEqual(history.slice(-6));
+    expect(res.body.events).toEqual([recent]);
+    expect(res.body.employees).toEqual(full.employees);
+    expect(Object.keys(res.body).sort()).toEqual(
+      ['boxes', 'boxtypes', 'cfg', 'customers', 'employees', 'events', 'gates', 'locations', 'warehouses'],
+    );
+    expect((await request(ctx.app).get('/api/state/pda')).status).toBe(401);
+  });
+
+  it('keeps a due date the web moved on a box that is still out', async () => {
+    const state = (await request(ctx.app).get('/api/state').set(auth(ctx.token))).body;
+    const box = state.boxes['BTX-2601-ABCDE'];
+    box.status = 'out';
+    box.dueAt = '2027-01-15T16:59:59.999Z';
+    box.dueDate = '15/01/2027';
+    box.history = [...box.history, { dir: 'due', ts: new Date().toISOString(), dueAt: box.dueAt }];
+    const res = await request(ctx.app).put('/api/state').set(auth(ctx.token)).send({ ...state, restore: false });
+    expect(res.body.rejected).toEqual([]);
+    const after = (await request(ctx.app).get('/api/state').set(auth(ctx.token))).body.boxes['BTX-2601-ABCDE'];
+    expect([after.dueAt, after.dueDate, after.history.at(-1).dir]).toEqual([box.dueAt, box.dueDate, 'due']);
+  });
+
   it('replaces (not merges) on subsequent PUT', async () => {
     await request(ctx.app).put('/api/state').set(auth(ctx.token)).send({ boxes: {}, customers: {} });
     const get = await request(ctx.app).get('/api/state').set(auth(ctx.token));

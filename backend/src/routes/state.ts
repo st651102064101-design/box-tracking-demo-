@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { getDb } from '../db/client.js';
 import { employees, customers } from '../db/schema.js';
-import { composeState, replaceState } from '../services/state.js';
+import { composePdaState, composeState, replaceState } from '../services/state.js';
 import { stateSchema } from '../validators/schemas.js';
 import { asyncHandler, httpError } from '../middleware/error.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
@@ -18,6 +18,7 @@ import { activeSuperAdminHolders, totalHolders } from '../lib/superAdminGuard.js
 /**
  * The persistence bridge used by the legacy single-page UI.
  *   GET /api/state → the full `S` snapshot (what localStorage used to hold)
+ *   GET /api/state/pda → the smaller snapshot the handheld reads
  *   PUT /api/state → replace the stored state wholesale (what `save()` did)
  */
 export const stateRouter = Router();
@@ -30,6 +31,13 @@ stateRouter.get(
     const db = getDb();
     const state = await composeState(db);
     res.json(state);
+  }),
+);
+
+stateRouter.get(
+  '/pda',
+  asyncHandler(async (_req, res) => {
+    res.json(await composePdaState(getDb()));
   }),
 );
 

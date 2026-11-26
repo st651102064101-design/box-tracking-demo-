@@ -82,6 +82,21 @@ export async function composeState(db: DB): Promise<Record<string, unknown>> {
   return { ...state, baseTags: Object.keys(state.boxes as Record<string, unknown>) };
 }
 
+/** What the handheld renders: the same records as the full snapshot, minus
+ *  web-only tables and old history, which would grow without bound. */
+export async function composePdaState(db: DB): Promise<Record<string, unknown>> {
+  const state = await composeSnapshot(db) as Record<string, any>;
+  const since = Date.now() - 2 * 24 * 60 * 60 * 1000;
+  const boxesForPda = Object.entries(state.boxes as Record<string, Record<string, unknown>>)
+    .map(([tag, box]) => [tag, Array.isArray(box.history) ? { ...box, history: box.history.slice(-6) } : box]);
+  const { customers, boxtypes, warehouses, gates, employees, locations, cfg } = state;
+  return {
+    boxes: Object.fromEntries(boxesForPda),
+    customers, boxtypes, warehouses, gates, employees, locations, cfg,
+    events: (state.events as { ts?: string }[]).filter((event) => Date.parse(event?.ts ?? '') >= since),
+  };
+}
+
 async function composeSnapshot(db: DB): Promise<Record<string, unknown>> {
   const [
     boxRows,

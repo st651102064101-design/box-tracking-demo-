@@ -477,6 +477,31 @@ input[readonly]:focus{box-shadow:none;border-color:var(--line2);}
 .stab{transition:background .25s,color .25s,border-color .25s,box-shadow .25s;}
 .stab.active{background:var(--ink);color:var(--bg);border-color:var(--ink);box-shadow:0 6px 16px color-mix(in srgb,var(--ink) 28%,transparent);}
 .stab.active:hover{background:var(--ink);}
+/* ===== system picker ===== */
+html[data-system="rfidgate"] #bulkInvShip,html[data-system="rfidgate"] #bulkInvRelocate,html[data-system="rfidgate"] button[onclick*="invImportFile"],html[data-system="rfidgate"] .sys-pda{display:none!important;}
+.sys-hidden,html[data-system="rfidgate"] #gateInModeBar,html[data-system="rfidgate"] [data-gateout-mode="rfid"],html[data-system="rfidgate"] .sys-plates,html[data-system="rfidgate"] #tab-gatein .wg-scan-s{display:none!important;}
+.sys-switch{display:inline-flex;align-items:center;gap:7px;min-height:40px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--ink);font:inherit;font-size:13px;font-weight:800;cursor:pointer;white-space:nowrap;}
+.sys-switch:hover{border-color:var(--ink);}
+@media (max-width:700px){.sys-switch span{display:none;}.sys-switch{padding:0 12px;}}
+#systemPicker{position:fixed;inset:0;z-index:100000;overflow:auto;display:grid;align-items:center;background:var(--bg);color:var(--ink);padding:28px 16px;}
+#systemPicker[hidden]{display:none;}
+.sp-inner{width:min(760px,100%);margin:auto;text-align:center;}
+.sp-inner h2{font-size:34px;margin:0;}
+.sp-hint{color:var(--muted);margin:6px 0 26px;font-size:14px;}
+.sp-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(280px,100%),1fr));gap:18px;}
+.sp-card{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:12px;text-align:left;padding:26px;border-radius:26px;border:2px solid var(--line);background:color-mix(in srgb,var(--ink) 5%,transparent);color:inherit;font:inherit;cursor:pointer;transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease;}
+.sp-card:hover,.sp-card:focus-visible{outline:0;transform:translateY(-6px);border-color:#a3f04b;box-shadow:0 18px 44px color-mix(in srgb,#a3f04b 24%,transparent);}
+.sp-card b{font-size:24px;}
+.sp-key{position:absolute;top:18px;right:20px;width:28px;height:28px;display:grid;place-items:center;border-radius:9px;border:1px solid var(--line);font-size:13px;color:var(--muted);}
+.sp-ic{width:58px;height:58px;display:grid;place-items:center;border-radius:18px;background:color-mix(in srgb,#a3f04b 18%,transparent);}
+.sp-ic svg{width:32px;height:32px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
+.sp-flow{display:flex;gap:10px;align-items:baseline;font-size:14px;}
+.sp-flow i{font-style:normal;color:var(--muted);min-width:56px;}
+.sp-flow em{font-style:normal;font-weight:700;}
+.sp-go{margin-top:auto;align-self:stretch;text-align:center;padding:12px;border-radius:999px;background:var(--ink);color:var(--bg);font-weight:800;}
+.sp-card:hover .sp-go,.sp-card:focus-visible .sp-go{background:#a3f04b;color:#102000;}
+@media (prefers-reduced-motion:reduce){.sp-card{transition:none;}.sp-card:hover,.sp-card:focus-visible{transform:none;}}
+
 /* .sf-badge's default dark-on-dark (color-mix ink 10%/ink2) reads as almost
    invisible once its own button goes active (background flips to var(--ink))
    — invert it to a light chip so the count stays legible against the dark pill. */
@@ -2315,6 +2340,9 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
   display:grid;place-items:center;font-size:12px;font-weight:800;flex:0 0 auto;}
 </style>
 <script src="/legacy-sync.js"></script>
+<script src="/pda-device.js?v=20261126-2"></script>
+<script src="/overdue.js?v=20261126"></script>
+<script src="/systems.js?v=20261126-3"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
@@ -2330,6 +2358,28 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
   try{if(localStorage.getItem('smarttrace_sidebar_collapsed')==='1')document.documentElement.setAttribute('data-sidebar-collapsed','1');}catch(e){}})();
 </script>
 
+<div id="systemPicker" class="no-print" role="dialog" aria-modal="true" aria-labelledby="systemPickerTitle" hidden>
+  <div class="sp-inner">
+    <h2 id="systemPickerTitle">เลือกระบบ</h2>
+    <p class="sp-hint">กดการ์ดเพื่อเริ่ม · หรือกดเลข 1 / 2 บนแป้นพิมพ์</p>
+    <div class="sp-cards">
+      <button type="button" class="sp-card sp-main" data-system-card="rfidgate" onclick="chooseSystem('rfidgate')">
+        <span class="sp-key">1</span><span class="sp-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 8.5a5 5 0 0 1 7 0M6 6a8.5 8.5 0 0 1 12 0M11 12a1.5 1.5 0 1 1 2 0M12 13.5V21"/></svg></span>
+        <b>RFID Gate</b>
+        <span class="sp-flow"><i>รับเข้า</i><em>FX9600 อัตโนมัติ</em></span>
+        <span class="sp-flow"><i>ส่งออก</i><em>Import Excel · ยิงมือ</em></span>
+        <span class="sp-go">เริ่มใช้ ›</span>
+      </button>
+      <button type="button" class="sp-card" data-system-card="full" onclick="chooseSystem('full')">
+        <span class="sp-key">2</span><span class="sp-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg></span>
+        <b>ครบทุกฟีเจอร์</b>
+        <span class="sp-flow"><i>ใช้ได้</i><em>ภาพรวม คลังกล่อง ติดตาม ตั้งค่า</em></span>
+        <span class="sp-flow"><i>ประตู</i><em>ทุกวิธีรับและส่ง</em></span>
+        <span class="sp-go">เริ่มใช้ ›</span>
+      </button>
+    </div>
+  </div>
+</div>
 <header class="chrome"><div class="chrome-inner">
   <button class="iconbtn no-print" id="btnMobileNav" onclick="toggleMobileNav()" aria-label="เปิดเมนู" data-app-tooltip-th="เปิดเมนู"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></span></button>
   <div class="brand" onclick="switchTab('overview')">
@@ -2337,6 +2387,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
     <div><div class="nm" id="appBrandName">Smart Tracking</div><div class="sub" id="appBrandSubtitle">WMS · เฟส 1 · Returnable Asset Tracking</div></div>
   </div>
   <div class="spacer"></div>
+  <button type="button" class="no-print sys-switch" onclick="openSystemPicker()" title="เปลี่ยนระบบ" aria-haspopup="dialog">⇄ <span id="systemName">เลือกระบบ</span></button>
   <button type="button" class="no-print live-sync-indicator is-connecting" id="liveSyncIndicator" onclick="return liveSyncClick(event)" title="รีเฟรชข้อมูลล่าสุด" aria-label="รีเฟรชข้อมูลล่าสุด"><span id="liveSyncDot" class="live-sync-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><circle class="live-sync-ring" cx="12" cy="12" r="8"></circle><circle class="live-sync-core" cx="12" cy="12" r="3"></circle></svg></span><span id="liveSyncText">กำลังเชื่อมต่อ…</span></button>
   <div class="who-wrap">
     <div class="who" onclick="pickUser()" style="cursor:pointer;" title="ผู้ที่ล็อกอิน / ผู้บันทึกปัจจุบัน — คลิกเพื่อดูบัตรพนักงาน"><span class="who-ic svgi" id="whoAvatar" style="width:20px;height:20px;border-radius:50%;overflow:hidden;display:grid;place-items:center;background:var(--accentSoft);color:var(--accentInk);font-size:9px;font-weight:700;"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.4"/><path d="M5 20c1.1-4.1 3.9-6.3 7-6.3s5.9 2.2 7 6.3"/></svg></span><span id="whoTxt">บัญชีสาธิต · ระบบบริการออนไลน์</span></div>
@@ -2980,7 +3031,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
     <span class="muted small" id="outCount"></span>
   </div>
 
-  <div class="wg-board reveal">
+  <div class="wg-board reveal sys-plates">
     <div class="wg xl wg-table">
       <div class="wg-top" aria-label="ป้ายทะเบียน · ขาส่งออก" title="ป้ายทะเบียน · ขาส่งออก"><span class="wg-ic" role="img" aria-label="ป้ายทะเบียน · ขาส่งออก"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h5M7 14h3"/></svg></span></span><span class="wg-lbl visually-hidden">ป้ายทะเบียน · ขาส่งออก</span><div class="wg-scope" id="df-gateOutPlate-mount"></div></div>
       <p class="wg-cap" id="gateOutPlateDesc"></p><div class="wg-body"><div id="gateOutPlateReport"></div></div>
@@ -3101,7 +3152,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
   </div>
   </div>
 
-  <div class="wg-board reveal">
+  <div class="wg-board reveal sys-plates">
     <div class="wg xl wg-table">
       <div class="wg-top"><span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h5M7 14h3"/></svg></span></span><span class="wg-lbl">ป้ายทะเบียน · ขารับเข้า</span><div class="wg-scope" id="df-gateInPlate-mount"></div></div>
       <p class="wg-cap" id="gateInPlateDesc"></p><div class="wg-body"><div id="gateInPlateReport"></div></div>
@@ -6411,6 +6462,7 @@ function refreshGateOutRfidWorkflow(){
   if(rfid&&!ready){pendingOut=[];outConditionMap={};}
 }
 function applyGateOutEntryMode(mode,openPicker){
+  mode=window.Systems.mode(currentSystem(),'out',mode);
   gateOutEntryMode=(mode==='excel'||mode==='manual'||mode==='rfid')?mode:'manual';
   var imp=$('#gateOutImportBoard'),config=$('#gateOutManualConfig'),man=$('#gateOutManualBoard'),acts=$('#gateOutManualActions');
   if(imp)imp.style.display=gateOutEntryMode==='excel'?'':'none';
@@ -6423,7 +6475,7 @@ function applyGateOutEntryMode(mode,openPicker){
   refreshGateOutRfidWorkflow();
   refreshRfidLprTimingNotes();
   $all('[data-gateout-mode]').forEach(function(btn){var active=btn.dataset.gateoutMode===gateOutEntryMode;btn.classList.toggle('active',active);btn.setAttribute('aria-selected',active?'true':'false');});
-  uiPrefSet('gateOutMode',gateOutEntryMode);
+  if(currentSystem()!=='rfidgate')uiPrefSet('gateOutMode',gateOutEntryMode);
   setTimeout(function(){
     if(gateOutEntryMode==='manual'){
       refreshGateOutManualVisibility();
@@ -6461,6 +6513,9 @@ window.openGateOutModeChooser=openGateOutModeChooser;
 window.chooseGateOutEntryMode=chooseGateOutEntryMode;
 var APP_BOOTING=true;
 function switchTab(name){
+  /* "Home" (logo, default page) means the home of the system in use. */
+  if(name==='overview'&&!window.Systems.allowsTab(currentSystem(),name))name=window.Systems.home(currentSystem());
+  if(!window.Systems.allowsTab(currentSystem(),name)){toast('ไม่มีในระบบนี้','กด "เปลี่ยนระบบ" มุมขวาบนเพื่อใช้ฟีเจอร์นี้','info');return;}
   var tabPerms={overview:['dashboard.view'],gateout:['gate.out'],gatein:['gate.in'],inventory:['box.view'],track:['box.view'],setup:['setting.view']};
   if(RBAC.loaded&&RBAC.available&&tabPerms[name]&&!hasAnyPerm.apply(null,tabPerms[name])){toast('ไม่มีสิทธิ์เข้าถึง','บัญชีนี้ไม่มีสิทธิ์เปิดหน้านี้','err');return;}
   /* Scroll to top BEFORE swapping which .tab is visible, and with no smooth
@@ -6519,6 +6574,7 @@ window.switchTab=switchTab;
    (ปุ่มถูกซ่อนตามสิทธิ์) ถ้ากู้คืนแบบไม่ตรวจสอบจะได้หน้าว่างที่ไม่มีทางกดกลับ */
 function restoreLastTab(){
   var want=uiPrefGet('tab',null);
+  if(want&&!window.Systems.allowsTab(currentSystem(),want))want=window.Systems.home(currentSystem());
   if(!want)return;
   var btn=document.querySelector('#nav button[data-tab="'+String(want).replace(/"/g,'')+'"]');
   if(!btn||btn.offsetParent===null&&btn.hidden)return;
@@ -7893,6 +7949,7 @@ function renderOptionalLocation(){
   var tab=$('#stabLoc');if(tab)tab.style.display=S.cfg&&S.cfg.putawayEnabled?'':'none';
   var sec=$('#ssec-loc');if(sec&&!(S.cfg&&S.cfg.putawayEnabled))sec.style.display='none';
   if(S.cfg&&S.cfg.putawayEnabled)renderLocMaster();
+  ensureSetupSub();
 }
 window.renderOptionalLocation=renderOptionalLocation;
 function goSetup(stab){
@@ -7925,10 +7982,59 @@ window.addEventListener('resize',function(){
   syncNavTop();
   var a=$('#nav button.active');if(a&&eff==='top')movePill(a);
 });
+/* ===== เลือกระบบ ===== */
+function currentSystem(){
+  if(window.activeSystem===undefined){try{window.activeSystem=localStorage.getItem('smarttrace_system')||'';}catch(e){window.activeSystem='';}}
+  return window.activeSystem;
+}
+function applySystem(){
+  var id=currentSystem(),root=document.documentElement;
+  root.setAttribute('data-system',window.Systems.valid(id)?id:'full');
+  $all('#nav button[data-tab]').forEach(function(b){b.classList.toggle('sys-hidden',!window.Systems.allowsTab(id,b.dataset.tab));});
+  $all('.stab').forEach(function(b){b.classList.toggle('sys-hidden',!window.Systems.allowsStab(id,b.dataset.stab));});
+  var home=$('#nav button[data-tab="overview"]');
+  if(home){var text=window.Systems.label(id,'overview');home.title=text;var lbl=home.querySelector('.navlbl');if(lbl)lbl.textContent=text;}
+  var inv=$('#tab-inventory .h-sub');
+  if(inv){if(!inv.dataset.full)inv.dataset.full=inv.textContent;
+    inv.textContent=id==='rfidgate'?'สต็อกกล่องทั้งหมด ค้นหา กรองตามสถานะ และส่งออก Excel':inv.dataset.full;}
+  var label=$('#systemName');if(label)label.textContent=window.Systems.name(id);
+  var sub=$('#tab-gatein .h-sub');
+  if(sub){if(!sub.dataset.full)sub.dataset.full=sub.textContent;
+    sub.textContent=id==='rfidgate'?'ขับกล่องผ่านประตู เครื่อง FX9600 อ่านแท็กและรับเข้าคลังให้':sub.dataset.full;}
+  ensureSetupSub();
+}
+function chooseSystem(id){
+  if(!window.Systems.valid(id))return;
+  window.activeSystem=id;
+  try{localStorage.setItem('smarttrace_system',id);}catch(e){}
+  closeSystemPicker();applySystem();
+  applyGateInEntryMode(uiPrefGet('gateInEntryMode','manual'),false);
+  applyGateOutEntryMode(uiPrefGet('gateOutMode','manual'),false);
+  switchTab(window.Systems.home(id));
+}
+function openSystemPicker(){
+  var el=$('#systemPicker');if(!el)return;
+  el.hidden=false;document.body.style.overflow='hidden';
+  var on=el.querySelector('[data-system-card="'+currentSystem()+'"]')||el.querySelector('[data-system-card]');
+  if(on)on.focus();
+}
+function closeSystemPicker(){var el=$('#systemPicker');if(el)el.hidden=true;document.body.style.overflow='';}
+document.addEventListener('keydown',function(e){
+  var el=$('#systemPicker');if(!el||el.hidden)return;
+  var cards=Array.prototype.slice.call(el.querySelectorAll('[data-system-card]'));
+  if(e.key==='Escape'){if(window.Systems.valid(currentSystem()))closeSystemPicker();return;}
+  if(/^[1-9]$/.test(e.key)&&cards[+e.key-1]){e.preventDefault();chooseSystem(cards[+e.key-1].dataset.systemCard);return;}
+  var step={ArrowRight:1,ArrowDown:1,ArrowLeft:-1,ArrowUp:-1,Tab:e.shiftKey?-1:1}[e.key];
+  if(!step)return;
+  e.preventDefault();
+  var at=cards.indexOf(document.activeElement);
+  cards[(at<0?0:at+step+cards.length)%cards.length].focus();
+});
+window.chooseSystem=chooseSystem;window.openSystemPicker=openSystemPicker;
 function showSetupSub(stab){
   var btn=document.querySelector('.stab[data-stab="'+String(stab).replace(/"/g,'')+'"]');
   var sec=$('#ssec-'+stab);
-  if(!btn||!sec)return false;
+  if(!btn||!sec||btn.style.display==='none'||!window.Systems.allowsStab(currentSystem(),stab))return false;
   $all('.stab').forEach(function(x){x.classList.remove('active');});btn.classList.add('active');
   $all('.ssec').forEach(function(s){s.style.display='none';});sec.style.display='block';
   if(stab==='box'&&typeof setBoxRegMode==='function')setBoxRegMode(boxRegMode||'single');
@@ -7938,8 +8044,17 @@ function showSetupSub(stab){
   if(stab==='wh')loadRfidDebugLog();
   return true;
 }
+/* A sub-tab can be hidden while open (feature off, no permission); the page
+   would then show nothing at all, so move to the first one still offered. */
+function ensureSetupSub(){
+  var offered=function(t){return t.style.display!=='none'&&window.Systems.allowsStab(currentSystem(),t.dataset.stab);};
+  var tabs=Array.prototype.slice.call($all('.stab'));
+  if(tabs.some(function(t){return t.classList.contains('active')&&offered(t);}))return;
+  var first=tabs.filter(offered)[0];
+  if(first)showSetupSub(first.dataset.stab);
+}
 $all('.stab').forEach(function(b){b.addEventListener('click',function(){
-  showSetupSub(b.dataset.stab);
+  if(!showSetupSub(b.dataset.stab))return;
   /* ในหน้าตั้งค่า "อยู่หน้าไหน" ยังไม่พอ — ต้องจำด้วยว่ากำลังดูข้อมูลชุดไหนอยู่
      (ประเภทกล่อง/ลูกค้า/คลัง/พนักงาน/กล่อง) ไม่งั้นกลับมาก็ต้องไล่กดหาใหม่ทุกครั้ง */
   uiPrefSet('setupTab',b.dataset.stab);});});
@@ -7964,9 +8079,18 @@ function pdaServerUrl(){
   try{
     var u=new URL(window.location.origin);
     if(u.port==='3000')u.port='4000';
-    return u.origin.replace(/\/+$/,'');
+    var here=u.origin.replace(/\/+$/,'');
+    /* "localhost" means the handheld itself to a handheld. */
+    return window.PdaDevice.isLocalUrl(here)?window.PdaDevice.serverUrl(pdaSavedHost()):here;
   }catch(e){return window.location.origin.replace(/\/+$/,'');}
 }
+function pdaSavedHost(){try{return localStorage.getItem('pdaServerHost')||'';}catch(e){return window.pdaTypedHost||'';}}
+function pdaHostTyped(v){
+  window.pdaTypedHost=v;
+  try{localStorage.setItem('pdaServerHost',v);}catch(e){}
+  renderPdaQr();
+}
+window.pdaHostTyped=pdaHostTyped;
 function pdaQrPayload(){
   var url=pdaServerUrl();
   if(!/^https?:\/\/[^\/\s]+/.test(url))return{err:'อ่านที่อยู่หน้านี้ไม่ได้ (window.location.origin ผิดปกติ)'};
@@ -7978,6 +8102,8 @@ function renderPdaQr(){
   var box=$('#pdaQrBox');if(!box)return;
   var err=$('#pdaQrErr'),txt=$('#pdaQrText');
   var p=pdaQrPayload();
+  if(!pdaServerUrl())p={err:'กรอกที่อยู่ IP ของเครื่องเซิร์ฟเวอร์ก่อน เช่น 192.168.1.10'};
+  box.style.visibility=p.err?'hidden':'';
   if(p.err){
     box.innerHTML='';txt.textContent='';
     err.style.display='';err.textContent=p.err;
@@ -8025,10 +8151,13 @@ function openPdaConnectModal(){
     +'</div>'
     +'<div style="display:flex;gap:26px;flex-wrap:wrap;align-items:flex-start;">'
       +'<div style="flex:1 1 260px;min-width:240px;">'
-        +'<div class="field"><label>ที่อยู่เซิร์ฟเวอร์</label>'
-          +'<input id="pdaQrUrlDisplay" readonly value="'+esc(pdaServerUrl())+'">'
-          +'<div class="tag" style="margin-top:5px;">อ่านอัตโนมัติจากที่อยู่ที่เปิดหน้านี้อยู่ — ไม่ต้องพิมพ์เอง</div>'
-        +'</div>'
+        +(window.PdaDevice.isLocalUrl(window.location.origin)
+          ?'<div class="field"><label for="pdaQrHost">IP ของเครื่องเซิร์ฟเวอร์</label>'
+            +'<input id="pdaQrHost" inputmode="url" autocomplete="off" placeholder="เช่น 192.168.1.10" oninput="pdaHostTyped(this.value)">'
+            +'<div class="tag" style="margin-top:5px;">หน้านี้เปิดผ่าน localhost ซึ่งเครื่อง PDA ใช้ไม่ได้ — กรอกครั้งเดียว ระบบจำไว้</div></div>'
+          :'<div class="field"><label>ที่อยู่เซิร์ฟเวอร์</label>'
+            +'<input id="pdaQrUrlDisplay" readonly value="'+esc(pdaServerUrl())+'">'
+            +'<div class="tag" style="margin-top:5px;">อ่านอัตโนมัติจากที่อยู่ที่เปิดหน้านี้อยู่ — ไม่ต้องพิมพ์เอง</div></div>')
       +'</div>'
       +'<div style="flex:0 0 auto;text-align:center;">'
         +'<div id="pdaQrBox" style="background:#fff;padding:16px;border-radius:16px;border:1px solid var(--line);display:inline-block;min-width:260px;min-height:260px;"></div>'
@@ -8043,9 +8172,38 @@ function openPdaConnectModal(){
     +'</div>'
     +'<div class="mfoot"><button class="btn gray" data-close>ปิด</button></div>';
   openModal(h);
+  var host=$('#pdaQrHost');if(host)host.value=pdaSavedHost();
   renderPdaQr();
 }
 window.openPdaConnectModal=openPdaConnectModal;
+function pdaDetailHtml(d){
+  var wh=(S.warehouses||{})[d.warehouse]||{};
+  var v=window.PdaDevice.view(d,{now:Date.now(),warehouseName:wh.name});
+  var row=function(label,value){return '<div style="display:flex;justify-content:space-between;gap:16px;padding:11px 0;border-top:1px solid var(--line);"><span class="muted">'+label+'</span><b style="text-align:right;word-break:break-word;">'+esc(value)+'</b></div>';};
+  var has=function(x){return x===null?'—':(x?'มี':'ไม่มี');};
+  return '<div class="mhead"><h3>'+esc(v.title)+'</h3><span style="margin-left:auto;margin-right:10px;font-weight:700;color:'+(v.online?'#22c55e':'var(--neg)')+';">● '+(v.online?'Online':'Offline')+'</span><button class="x" data-close aria-label="ปิด"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
+    +'<div class="mbody">'
+    +'<div class="muted small">ผู้ใช้งาน</div><div style="font-size:22px;font-weight:800;margin:2px 0 14px;word-break:break-word;">'+esc(v.user)+'</div>'
+    +row('ประจำที่',v.post)+row('ติดต่อล่าสุด',v.seen)
+    +(v.hint?'<p class="desc" style="color:var(--neg);">'+esc(v.hint)+'</p>':'')
+    +'<div class="muted small" style="margin:18px 0 4px;">ข้อมูลเครื่อง</div>'
+    +row('รุ่น',v.model)+row('IP',v.ip)+row('RFID ในตัว',has(v.rfid))+row('ปุ่มสแกน Zebra',has(v.zebra))
+    +'</div>'
+    +'<div class="mfoot"><button class="btn ghost" onclick="openPdaConnectModal()">เชื่อมต่อเครื่องใหม่ (QR)</button><button class="btn gray" data-close>ปิด</button></div>';
+}
+var pdaDetailId=null;
+function openPdaDevice(index){
+  var d=pdaDeviceRegistry[index];if(!d){openPdaConnectModal();return;}
+  pdaDetailId=d.deviceId;
+  openModal('<div id="pdaDetail">'+pdaDetailHtml(d)+'</div>');
+}
+function refreshPdaDetail(){
+  var el=$('#pdaDetail');if(!el||!$('#modal').classList.contains('show'))return;
+  var d=pdaDeviceRegistry.filter(function(x){return x.deviceId===pdaDetailId;})[0];
+  /* A server restart forgets devices until their next report. */
+  el.innerHTML=pdaDetailHtml(d||{name:'PDA Scanner',online:false});
+}
+window.openPdaDevice=openPdaDevice;
 window.printPdaQr=printPdaQr;window.downloadPdaQr=downloadPdaQr;
 
 /* ===== SETUP: box register ===== */
@@ -11641,6 +11799,11 @@ function openBoxActionModal(tag){
      out/lost/damaged as well; hiding the action made those records immortal. */
   actions.push({label:'<span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3m-9 0 1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/><path d="M10 11v6M14 11v6"/></svg></span> ลบกล่องนี้',cls:'btn gray',fn:'closeModal();delBox(\''+esc(tag)+'\')'});
 
+  actions=actions.filter(function(a){
+    if(a.fn.indexOf('trackBox(')>=0)return window.Systems.allowsTab(currentSystem(),'track');
+    if(canRelocateBox(b)&&a.label.indexOf('ย้ายตำแหน่งจัดเก็บ')>=0)return window.Systems.can(currentSystem(),'relocate');
+    return true;
+  });
   openModal(
     '<div class="mhead"><h3 class="mono">'+esc(tag)+'</h3><button class="x" data-close><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
     +'<div class="mbody">'
@@ -11671,6 +11834,71 @@ function openBoxActionModal(tag){
   );
 }
 window.openBoxActionModal=openBoxActionModal;
+/* What a late box needs, and nothing else; the full box window stays on the row. */
+function openOverdueModal(tag){
+  var b=S.boxes[tag];if(!b||b.status!=='out')return;
+  var c=S.customers[b.customer]||{};
+  var contact=[c.contactPerson,c.contact].filter(Boolean).join(' · ')||'—';
+  var row=function(label,value){return '<div class="ts-line"><span class="k">'+label+'</span><span class="v">'+esc(value)+'</span></div>';};
+  var arg='\''+esc(tag)+'\'';
+  var canReturn=window.Systems.can(currentSystem(),'manualReceive')&&hasAnyPerm('gate.in','return.create'),canEdit=hasPerm('box.update');
+  var today=new Date();
+  var quick=[7,15].map(function(n){var to=window.Overdue.after(b,n,today);
+    return '<button type="button" class="btn ghost" style="flex:1 1 130px;" onclick="extendDue('+arg+',\''+window.Overdue.day(to)+'\')">+'+n+' วัน<span class="muted small" style="margin-left:6px;">'+window.Overdue.dmy({dueAt:to.toISOString()}).slice(0,5)+'</span></button>';}).join('');
+  openModal(
+    '<div class="mhead"><h3 class="mono">'+esc(tag)+'</h3><span class="days-badge over" style="margin-left:auto;margin-right:10px;">'+esc(relOverdueText(b.dueAt)||'เกินกำหนด')+'</span><button class="x" data-close aria-label="ปิด"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
+    +'<div class="mbody">'
+      +'<div style="font-size:20px;font-weight:800;">'+esc(custName(b.customer))+'</div>'
+      +'<div class="muted small" style="margin:2px 0 12px;">'+esc(typeName(b.type))+(b.do?' · '+esc(b.do):'')+'</div>'
+      +row('ส่งออก',b.outAt?fmtTs(b.outAt):'—')+row('ครบกำหนดคืน',window.Overdue.dmy(b))+row('ติดต่อ',contact)
+      +(canReturn?'<button type="button" class="btn pos" style="width:100%;justify-content:center;margin-top:18px;" onclick="returnOverdue('+arg+')">✓ รับคืนเข้าคลัง</button>':'')
+      +(canEdit?'<div class="sectlabel" style="margin:18px 2px 8px;">เลื่อนกำหนดคืน</div>'
+        +'<div style="display:flex;gap:8px;flex-wrap:wrap;">'+quick+'</div>'
+        +'<div style="display:flex;gap:8px;margin-top:8px;"><input type="date" id="overdueDate" aria-label="เลือกวันครบกำหนดใหม่" min="'+window.Overdue.day(today)+'" style="flex:1;min-width:0;"><button type="button" class="btn ghost" onclick="extendDue('+arg+',val(\'overdueDate\'))">ใช้วันที่เลือก</button></div>'
+        +'<button type="button" class="btn red" style="width:100%;justify-content:center;margin-top:18px;" onclick="closeModal();markLost('+arg+')">แจ้งกล่องหาย</button>':'')
+      +(!window.Systems.can(currentSystem(),'manualReceive')?'<p class="desc">เมื่อกล่องผ่านประตูขาเข้า เครื่อง FX9600 จะรับคืนให้</p>':'')
+      +(!canReturn&&!canEdit&&window.Systems.can(currentSystem(),'manualReceive')?'<p class="desc">บัญชีนี้ดูข้อมูลได้อย่างเดียว</p>':'')
+    +'</div>'
+    +'<div class="mfoot"><button class="btn gray" data-close>ปิด</button></div>'
+  );
+}
+function returnOverdue(tag){closeModal();switchTab('gatein');scanIn(tag);}
+function extendDue(tag,date){
+  var b=S.boxes[tag];if(!b||!hasPerm('box.update'))return;
+  var before={dueAt:b.dueAt,dueDate:b.dueDate};
+  if(!window.Overdue.extend(b,date,now())){toast('เลือกวันที่ไม่ได้','กรุณาเลือกวันนี้หรือวันถัดไป','err');return;}
+  auditEntry('UPDATE',USER,tag,typeName(b.type),before,{dueAt:b.dueAt,dueDate:b.dueDate});
+  save();closeModal();toast('เลื่อนกำหนดคืนแล้ว',tag+' · '+b.dueDate,'ok');
+  if(trackTags.indexOf(tag)>=0)renderTrack();renderAll();
+}
+/* The status pill in lists: a lost box opens its own short window. */
+function listStatusPill(b){
+  if(b.status!=='lost')return statusPill(b.status,b);
+  return '<button type="button" class="pill bad" style="cursor:pointer;border:0;font:inherit;" title="จัดการกล่องสูญหาย" onclick="event.stopPropagation();openLostModal(\''+esc(b.tag)+'\')">สูญหาย ›</button>';
+}
+function openLostModal(tag){
+  var b=S.boxes[tag];if(!b||b.status!=='lost')return;
+  var c=S.customers[b.customer]||{};
+  var contact=[c.contactPerson,c.contact].filter(Boolean).join(' · ')||'—';
+  var row=function(label,value){return '<div class="ts-line"><span class="k">'+label+'</span><span class="v">'+esc(value)+'</span></div>';};
+  var arg='\''+esc(tag)+'\'';
+  var canReturn=!!b.customer&&window.Systems.can(currentSystem(),'manualReceive')&&hasAnyPerm('gate.in','return.create'),canEdit=hasPerm('box.update');
+  var days=b.lostAt?daysSince(b.lostAt):null;
+  openModal(
+    '<div class="mhead"><h3 class="mono">'+esc(tag)+'</h3><span class="days-badge over" style="margin-left:auto;margin-right:10px;">สูญหาย'+(days>0?' '+days+' วัน':'')+'</span><button class="x" data-close aria-label="ปิด"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div>'
+    +'<div class="mbody">'
+      +'<div style="font-size:20px;font-weight:800;">'+esc(b.customer?custName(b.customer):'ไม่มีลูกค้าถือกล่องนี้')+'</div>'
+      +'<div class="muted small" style="margin:2px 0 12px;">'+esc(typeName(b.type))+(b.do?' · '+esc(b.do):'')+'</div>'
+      +row('ส่งออก',b.outAt?fmtTs(b.outAt):'—')+row('แจ้งหาย',b.lostAt?fmtTs(b.lostAt):'—')+row('มูลค่า',money(b.value)+' บาท')+(b.customer?row('ติดต่อ',contact):'')
+      +(canReturn||canEdit?'<div class="sectlabel" style="margin:18px 2px 8px;">เจอกล่องแล้วใช่ไหม</div>':'<p class="desc">บัญชีนี้ดูข้อมูลได้อย่างเดียว</p>')
+      +(canReturn?'<button type="button" class="btn pos" style="width:100%;justify-content:center;" onclick="returnOverdue('+arg+')">✓ ลูกค้าส่งคืน — รับเข้าที่ประตู</button>':'')
+      +(canEdit?'<button type="button" class="btn ghost" style="width:100%;justify-content:center;margin-top:8px;" onclick="closeModal();recoverLost('+arg+')">พบในคลัง / แจ้งผิด — คืนสถานะ</button>':'')
+    +'</div>'
+    +'<div class="mfoot"><button class="btn gray" data-close>ปิด</button></div>'
+  );
+}
+window.openLostModal=openLostModal;
+window.openOverdueModal=openOverdueModal;window.returnOverdue=returnOverdue;window.extendDue=extendDue;
 function historyLocationText(h,tag){
   var parts=[];
   var gate=h.gate||h.gateId; if(gate) parts.push('Gate '+String(gate).replace(/^GATE-/i,''));
@@ -12760,7 +12988,7 @@ function updateRfidGateAvailability(){
       btn.dataset.rfidAvailability=available?'ready':'unavailable';
       btn.title=available?'':reason;
     });
-    if(!hasReader&&((dir==='out'&&gateOutEntryMode==='rfid')||(dir==='in'&&gateInEntryMode==='rfid'))){
+    if(!hasReader&&window.Systems.mode(currentSystem(),dir,'manual')==='manual'&&((dir==='out'&&gateOutEntryMode==='rfid')||(dir==='in'&&gateInEntryMode==='rfid'))){
       if(dir==='out')applyGateOutEntryMode('manual',true);else applyGateInEntryMode('manual',true);
       toast('ไม่ใช้ RFID Gate','ซ่อนตัวเลือก RFID Gate + LPR สำหรับคลังหรือประตูที่ไม่ได้เปิดใช้งาน','info');
     }
@@ -12801,7 +13029,8 @@ function loadRfidGateBindings(){
     if(typeof renderOverviewOperations==='function'&&$('#ovHardwareHealth'))renderOverviewOperations(Object.values(S.boxes||{}));
   });
 }
-function rfidGateUnavailableHtml(g){var bound=rfidGateIsBound(g);return '<div class="banner warn"><b>'+btT('RFID ใช้งานไม่ได้ที่ประตูนี้')+'</b> '+btT('— ประตู')+' '+esc(g||'-')+' '+btT(bound?'ยังไม่ได้รับ heartbeat ล่าสุดจากเครื่องอ่าน RFID':'ยังไม่ได้ผูกเครื่องอ่าน RFID ที่เปิดใช้งานอยู่')+'</div>';}
+function rfidGateUnavailableHtml(g){var bound=rfidGateIsBound(g);return '<div class="banner warn"><b>'+btT('RFID ใช้งานไม่ได้ที่ประตูนี้')+'</b> '+btT('— ประตู')+' '+esc(g||'-')+' '+btT(bound?'ยังไม่ได้รับ heartbeat ล่าสุดจากเครื่องอ่าน RFID':'ยังไม่ได้ผูกเครื่องอ่าน RFID ที่เปิดใช้งานอยู่')+'</div>'
+  +(currentSystem()==='rfidgate'&&g?'<button type="button" class="btn pos" style="width:100%;justify-content:center;margin-top:12px;" onclick="manageRfidGate('+Number(g)+')">'+(bound?'ตรวจเครื่อง FX9600':'ผูกเครื่อง FX9600 กับประตู '+Number(g))+' ›</button>':'');}
 function fx9600LastSeen(g){return S.gateWebhookLastSeen&&S.gateWebhookLastSeen[String(g)]||'';}
 function fx9600OfflineAfterMs(g){var sec=Number(S.gateHeartbeatIntervalSeconds&&S.gateHeartbeatIntervalSeconds[String(g)])||1;return Math.max(90000,sec*5000);}
 function fx9600IsOnline(g){var ts=Date.parse(fx9600LastSeen(g));return !!ts&&(Date.now()-ts)<=fx9600OfflineAfterMs(g);}
@@ -13753,6 +13982,8 @@ window.clearGateOut=clearGateOut;
 /* ===== GATE IN ===== */
 var gateInEntryMode='manual',gateInStep='scan',gateInVehicleOpen=false;
 function applyGateInEntryMode(mode,persist){
+  mode=window.Systems.mode(currentSystem(),'in',mode);
+  if(currentSystem()==='rfidgate')persist=false;
   gateInEntryMode=(mode==='excel'||mode==='rfid')?mode:'manual';
   if(gateInEntryMode==='rfid'&&fixedGatesRef().in)gateInStep='scan';
   $all('[data-gatein-mode]').forEach(function(btn){var active=btn.dataset.gateinMode===gateInEntryMode;btn.classList.toggle('active',active);btn.setAttribute('aria-selected',active?'true':'false');});
@@ -13936,7 +14167,7 @@ function saveInbound(){
       // CASE B: box was previously dispatched → this is a genuine return from customer
       b.history.push({dir:'in',ts:inTs,do:b.do,po:b.po,customer:b.customer,gate:Number(gate),wh:wh,loc:loc,plate:plate,driver:driver,vehicle:vehicle,partner:partner,recorder:recorder,note:(note||''),condition:condition,platform:'web'});
       S.events.push({ts:inTs,dir:'in',tag:t,type:b.type,do:b.do,customer:b.customer,customerName:custName(b.customer),partner:partner,gate:Number(gate),wh:wh,plate:plate,driver:driver,recorder:recorder,condition:condition,platform:'web'});
-      b.status=receivedStatus;b.inCondition=condition;b.cycles=(b.cycles||0)+1;b.customer='';b.do='';b.po='';b.outGate=null;b.outWh='';b.outAt=null;b.dueAt=null;
+      b.status=receivedStatus;b.inCondition=condition;b.lostAt=null;b.lostReason=null;b.cycles=(b.cycles||0)+1;b.customer='';b.do='';b.po='';b.outGate=null;b.outWh='';b.outAt=null;b.dueAt=null;
       b.location={wh:wh,zone:loc.zone,rack:loc.rack,shelf:loc.shelf,slot:loc.slot,gate:Number(gate),ts:inTs};b.lastSeenAt=inTs;
       returnCount++;
     }
@@ -14109,7 +14340,7 @@ function trackCardHtml(b){
     var isReport=REPORT_DIRS.indexOf(h.dir)>=0;
     var cls=h.dir==='out'?'out':h.dir==='in'?'in':(h.dir==='lost'||isReport)?'lost':h.dir==='relocate'?'in':'reg';
     var isInitialIn=h.dir==='in'&&(h.note||'').indexOf('Initial Inbound')===0;
-    var title=h.dir==='out'?'ออกจากคลัง → '+custName(h.customer):isInitialIn?'รับเข้าคลัง (ครั้งแรก) '+whName(h.wh):h.dir==='in'?'รับคืนเข้า '+whName(h.wh):h.dir==='lost'?'ตีเป็นสูญหาย':isReport?('แจ้งปัญหาหน้างาน: '+(EV_DIR[h.dir]||{}).t):h.dir==='relocate'?'ย้ายตำแหน่งจัดเก็บ':h.dir==='label'?'พิมพ์/ติดป้ายบาร์โค้ด':h.dir==='putaway'?'จัดเก็บขึ้นชั้นวาง':h.dir==='hold'?'พักใช้งาน':h.dir==='damage'?'ระบุว่าชำรุด':'ลงทะเบียนกล่องเข้าระบบ';
+    var title=h.dir==='out'?'ออกจากคลัง → '+custName(h.customer):isInitialIn?'รับเข้าคลัง (ครั้งแรก) '+whName(h.wh):h.dir==='in'?'รับคืนเข้า '+whName(h.wh):h.dir==='lost'?'ตีเป็นสูญหาย':isReport?('แจ้งปัญหาหน้างาน: '+(EV_DIR[h.dir]||{}).t):h.dir==='relocate'?'ย้ายตำแหน่งจัดเก็บ':h.dir==='due'?'เลื่อนกำหนดคืน':h.dir==='label'?'พิมพ์/ติดป้ายบาร์โค้ด':h.dir==='putaway'?'จัดเก็บขึ้นชั้นวาง':h.dir==='hold'?'พักใช้งาน':h.dir==='damage'?'ระบุว่าชำรุด':'ลงทะเบียนกล่องเข้าระบบ';
     var meta=[];
     if(h.synth)meta.push('เวลาโดยประมาณ');
     /* หมายเหตุที่พนักงานพิมพ์มากับฟอร์ม — ของ Initial Inbound เป็นข้อความระบบ
@@ -14674,6 +14905,7 @@ function manageRfidGate(gate){
 window.manageRfidGate=manageRfidGate;
 var pdaDeviceRegistry=[];
 var pdaDeviceRefreshTimer=null;
+var pdaDeviceShown='';
 var pdaDeviceEndpointUnavailable=false;
 function refreshPdaDeviceRegistry(){
   if(pdaDeviceEndpointUnavailable||typeof apiFetch!=='function'||!authHeaders().Authorization)return;
@@ -14683,18 +14915,23 @@ function refreshPdaDeviceRegistry(){
   }).then(function(body){
     if(!body)return;
     pdaDeviceRegistry=Array.isArray(body&&body.devices)?body.devices:[];
+    refreshPdaDetail();
+    /* Redraw the cards only when something on them changed. */
+    var shown=JSON.stringify(pdaDeviceRegistry.map(function(d){return [d.deviceId,d.name,d.online,d.warehouse,d.gate];}));
+    if(shown===pdaDeviceShown)return;
+    pdaDeviceShown=shown;
     if(typeof renderOverviewOperations==='function')renderOverviewOperations(Object.values(S.boxes||{}));
   }).catch(function(){ /* keep last known device list */ });
 }
 function renderOverviewOperations(all){
-  if(!pdaDeviceRefreshTimer){refreshPdaDeviceRegistry();pdaDeviceRefreshTimer=setInterval(refreshPdaDeviceRegistry,5000);}
+  if(!pdaDeviceRefreshTimer){refreshPdaDeviceRegistry();pdaDeviceRefreshTimer=setInterval(refreshPdaDeviceRegistry,2000);}
   var hardware=$('#ovHardwareHealth'),gates=Object.keys(S.gates||{}).filter(function(g){return warehouseRfidEnabledForGate(g);}),offline=gates.filter(function(g){return rfidGateIsBound(g)&&!whGateRfidOnline(g);});
   if(hardware){
     var gateIcon='<span class="hardware-device-icon"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V7h14v13M8 7V4h8v3M9 12h.01M15 12h.01M9 16h.01M15 16h.01"/></svg></span></span>';
     var pdaIcon='<span class="hardware-device-icon"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="3" width="10" height="18" rx="2"/><path d="M10 7h4M11 17h2"/></svg></span></span>';
     var tile=function(kind,title,detail,stateClass,stateText,action,tooltip){var cls='hardware-device '+stateClass+(action?' is-action':'');return (action?'<button type="button"':'<div')+' class="'+cls+'"'+(action?' title="'+tooltip+'" onclick="event.stopPropagation();'+action+'"':'')+'>'+kind+'<span class="hardware-device-copy"><b>'+title+'</b><small>'+detail+'</small></span><span class="hardware-device-state"><i></i>'+stateText+'</span>'+(action?'</button>':'</div>');};
     var lprIcon='<span class="hardware-device-icon"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2"/><path d="M7 12h10M9 9v6M12 9v6M15 9v6"/></svg></span></span>';
-    var pdaTiles=pdaDeviceRegistry.length?pdaDeviceRegistry.map(function(d){var ok=d.online===true;return tile(pdaIcon,d.name||'PDA Scanner',(d.warehouse?'คลัง '+esc(d.warehouse):'ยังไม่ได้ระบุคลัง')+(d.gate?' · Gate '+esc(d.gate):''),ok?'online':'offline',ok?'Online':'Offline','openPdaConnectModal()','จัดการการเชื่อมต่อ PDA');}).join(''):tile(pdaIcon,'PDA Scanner','ยังไม่พบการเชื่อมต่อ','offline','Offline','openPdaConnectModal()','จัดการการเชื่อมต่อ PDA');
+    var pdaTiles=pdaDeviceRegistry.length?pdaDeviceRegistry.map(function(d,i){var ok=d.online===true;return tile(pdaIcon,esc(d.name||'PDA Scanner'),(d.warehouse?'คลัง '+esc(d.warehouse):'ยังไม่ได้ระบุคลัง')+(d.gate?' · Gate '+esc(d.gate):''),ok?'online':'offline',ok?'Online':'Offline','openPdaDevice('+i+')','ดูข้อมูลเครื่อง');}).join(''):tile(pdaIcon,'PDA Scanner','ยังไม่พบการเชื่อมต่อ','offline','Offline','openPdaConnectModal()','จัดการการเชื่อมต่อ PDA');
     var gateTile=function(g){var bound=rfidGateIsBound(g),ok=bound&&whGateRfidOnline(g),stateClass=ok?'online':(bound?'offline':'unbound'),stateText=ok?'Online':(bound?'Offline':'ยังไม่ผูก'),detail=ok?'FX9600 พร้อมอ่านแท็ก':(bound?'FX9600 ไม่ตอบสนอง':'ยังไม่มี FX9600 ที่ผูกกับ Gate นี้'),action=bound?(ok?'manageRfidGate('+Number(g)+')':'whGateRfidZebraGuide('+Number(g)+')'):'manageRfidGate('+Number(g)+')';return tile(gateIcon,'RFID Gate '+esc(g),detail,stateClass,stateText,action,bound?(ok?'จัดการ RFID Gate '+esc(g):'ตั้งค่า Zebra FX9600'):'จัดการการผูก FX9600');};
     if(gates.length){
       var gatesByWarehouse={};gates.forEach(function(g){var whId=String((S.gates||{})[g]||gateWh(g)||'');(gatesByWarehouse[whId]||(gatesByWarehouse[whId]=[])).push(g);});
@@ -14707,7 +14944,7 @@ function renderOverviewOperations(all){
         }).join('');
         return '<section class="hardware-wh-group"><div class="hardware-wh-head"><b>คลัง '+esc(label)+'</b><span>'+groupGates.length+' Gate</span></div>'+'<div class="hardware-gate-grid">'+gateGroups+'</div></section>';
       }).join('');
-      hardware.innerHTML='<div class="hardware-groups">'+warehouseGroups+'<section class="hardware-wh-group"><div class="hardware-wh-head"><b>อุปกรณ์ส่วนกลาง</b><span>PDA</span></div><div class="hardware-visual">'+pdaTiles+'</div></section></div>';
+      hardware.innerHTML='<div class="hardware-groups">'+warehouseGroups+'<section class="hardware-wh-group sys-pda"><div class="hardware-wh-head"><b>อุปกรณ์ส่วนกลาง</b><span>PDA</span></div><div class="hardware-visual">'+pdaTiles+'</div></section></div>';
     }else hardware.innerHTML='<div class="hardware-visual"><div class="hardware-device"><span class="hardware-device-icon"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M5 8a9 9 0 0 1 14 0M7.5 11a6 6 0 0 1 9 0M10 14a3 3 0 0 1 4 0"/></svg></span></span><span class="hardware-device-copy"><b>RFID Gate / LPR</b><small>คลังนี้ไม่ได้เปิดใช้งานอุปกรณ์ประตู</small></span></div></div>';
   }
   /* A box only carries a warehouse-level position at present, so call out the
@@ -14835,7 +15072,7 @@ function renderOverview(){
         +'<td>'+esc(typeName(b.type))+'</td>'
         +'<td>'+esc(custName(b.customer))+'</td>'
         +'<td class="small">'+(b.outAt?fmtTs(b.outAt):'-')+'</td>'
-        +'<td class="small">'+esc(b.dueDate||'-')+'</td>'
+        +'<td class="small">'+esc(window.Overdue.dmy(b))+'</td>'
         +'<td>'+(od?'<span class="pill bad">เกินกำหนด</span>':'<span class="pill">ปกติ</span>')+'</td>'
       +'</tr>';
     }).join(''):emptyRow(6,'ไม่มีของที่ยังไม่ได้คืนในช่วงที่กรองไว้');
@@ -14862,8 +15099,8 @@ function renderOverview(){
         +'<td>'+esc(typeName(b.type))+'</td>'
         +'<td>'+esc(custName(b.customer))+'</td>'
         +'<td class="small">'+(b.outAt?fmtTs(b.outAt):'-')+'</td>'
-        +'<td class="small">'+esc(b.dueDate||'-')+'</td>'
-        +'<td class="r"><span class="days-badge over">'+esc(relOverdueText(b.dueAt)||'-')+'</span></td>'
+        +'<td class="small">'+esc(window.Overdue.dmy(b))+'</td>'
+        +'<td class="r"><button type="button" class="days-badge over" style="border:0;cursor:pointer;font:inherit;font-size:12px;" title="จัดการกล่องค้างคืน" onclick="event.stopPropagation();openOverdueModal(\''+esc(b.tag)+'\')">'+esc(relOverdueText(b.dueAt)||'เกินกำหนด')+' ›</button></td>'
       +'</tr>';
     }).join(''):emptyRow(6,'ไม่มีกล่องที่เกินกำหนดคืนในช่วงที่กรองไว้');
   }
@@ -15221,7 +15458,7 @@ function renderReports(){
           :b.lostReason==='reported-missing'?'<span class="pill bad">แจ้งจาก PDA</span>'
           :'<span class="pill gray">ดำเนินการเอง</span>')+'</td>'
         +'<td class="r mono">'+money(b.value)+'</td>'
-        +'<td class="c"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.3" fill="currentColor" stroke="none"/></svg></span></td>'
+        +'<td class="c"><button type="button" class="btn ghost sm" onclick="event.stopPropagation();openLostModal(\''+esc(b.tag)+'\')">จัดการ ›</button></td>'
       +'</tr>';
     });
     lostHtml+='</tbody></table></div>';
@@ -15533,6 +15770,7 @@ function applyPermVisibility(){
   // still enforce role.manage / permission.manage independently.
   var stabRole=$('#stabRole');
   if(stabRole)stabRole.style.display=hasAnyPerm('role.manage','permission.manage')?'':'none';
+  ensureSetupSub();
 }
 window.applyPermVisibility=applyPermVisibility;
 
@@ -17029,20 +17267,25 @@ var SICON_INFO='<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="
 function openSystemSettingsModal(){settingsGoHome();}
 window.openSystemSettingsModal=openSystemSettingsModal;
 function openBrandingEditor(){
-  if(typeof isSuperAdminUser==='function'&&isSuperAdminUser())settingsGoGeneral(true);
+  if(window.Systems.allowsSetting(currentSystem(),'brand')&&typeof isSuperAdminUser==='function'&&isSuperAdminUser())settingsGoGeneral(true);
   else switchTab('overview');
 }
 window.openBrandingEditor=openBrandingEditor;
 
 function settingsGoHome(){
+  var rows=[
+    ['brand',SICON_BRAND,'ระบบและแบรนด์','ชื่อระบบ โลโก้ และข้อความใต้ชื่อระบบ','settingsGoGeneral()'],
+    ['workflow',SICON_DEVICE,'Workflow คลังสินค้า',S.cfg&&S.cfg.putawayEnabled?'Putaway เปิดใช้งานอยู่':'Putaway ปิดใช้งานอยู่','settingsGoWorkflow()'],
+    ['devices',SICON_DEVICE,'อุปกรณ์','เชื่อมต่อ PDA และอุปกรณ์เสริม','settingsGoDevices()'],
+    ['data',SICON_DATA,'ข้อมูลและการสำรอง','นำเข้า และสำรองข้อมูล','settingsGoData()'],
+    ['security',SICON_SHIELD,'ความปลอดภัย','บทบาทและสิทธิ์การเข้าถึง','settingsGoSecurity()'],
+    ['advanced',SICON_ADV,'ขั้นสูง','พื้นที่อันตราย — ล้างข้อมูลระบบทั้งหมด','settingsGoAdvanced()']
+  ].filter(function(r){return window.Systems.allowsSetting(currentSystem(),r[0]);});
+  /* A menu with one entry is only an extra click. */
+  if(rows.length===1&&rows[0][0]==='data'){settingsGoData();return;}
   var h='<div class="mhead"><h3>ตั้งค่าระบบ</h3>'+settingsCloseX()+'</div>'
     +'<div class="mbody" style="padding-top:6px;">'
-    +settingsRow(SICON_BRAND,'ระบบและแบรนด์','ชื่อระบบ โลโก้ และข้อความใต้ชื่อระบบ','settingsGoGeneral()')
-    +settingsRow(SICON_DEVICE,'Workflow คลังสินค้า',S.cfg&&S.cfg.putawayEnabled?'Putaway เปิดใช้งานอยู่':'Putaway ปิดใช้งานอยู่','settingsGoWorkflow()')
-    +settingsRow(SICON_DEVICE,'อุปกรณ์','เชื่อมต่อ PDA และอุปกรณ์เสริม','settingsGoDevices()')
-    +settingsRow(SICON_DATA,'ข้อมูลและการสำรอง','นำเข้า และสำรองข้อมูล','settingsGoData()')
-    +settingsRow(SICON_SHIELD,'ความปลอดภัย','บทบาทและสิทธิ์การเข้าถึง','settingsGoSecurity()')
-    +settingsRow(SICON_ADV,'ขั้นสูง','พื้นที่อันตราย — ล้างข้อมูลระบบทั้งหมด','settingsGoAdvanced()')
+    +rows.map(function(r){return settingsRow(r[1],r[2],r[3],r[4]);}).join('')
     +'</div>'
     +'<div class="mfoot"><button class="btn gray" data-close>ปิด</button></div>';
   openModal(h);
@@ -17149,13 +17392,14 @@ window.settingsGoDevices=settingsGoDevices;
    เดิม — เดิมซ่อนอยู่เป็น auto-step ก่อนลบเท่านั้น ตอนนี้เปิดเป็นเมนูกดเองได้
    ด้วยเพราะฟังก์ชันมีอยู่แล้วจริง ไม่ใช่ของใหม่) ═══════════════════════════ */
 function settingsGoData(){
-  var h='<div class="mhead">'+settingsBackBtn('settingsGoHome')+'<h3>ข้อมูลและการสำรอง</h3>'+settingsCloseX()+'</div>'
+  var alone=!window.Systems.allowsSetting(currentSystem(),'security');
+  var h='<div class="mhead">'+(alone?'':settingsBackBtn('settingsGoHome'))+'<h3>ข้อมูลและการสำรอง</h3>'+settingsCloseX()+'</div>'
     +'<div class="mbody">'
     +'<input type="file" id="importJsonFile" accept="application/json,.json" style="display:none;" onchange="doImportJSON(this.files[0]);this.value=\'\';">'
     +settingsRow(SICON_BACKUP,'สำรองข้อมูล','ดาวน์โหลดไฟล์สำรองข้อมูลระบบทั้งหมด (.json)','doBackup()')
     +settingsRow(SICON_IMPORT,'นำเข้าข้อมูล','นำเข้าข้อมูลจากไฟล์สำรอง (.json) — แทนที่ข้อมูลปัจจุบันทั้งหมด','document.getElementById(\'importJsonFile\').click()')
     +'</div>'
-    +'<div class="mfoot"><button class="btn ghost" onclick="settingsGoHome()">ย้อนกลับ</button></div>';
+    +'<div class="mfoot">'+(alone?'<button class="btn gray" data-close>ปิด</button>':'<button class="btn ghost" onclick="settingsGoHome()">ย้อนกลับ</button>')+'</div>';
   openModal(h);
 }
 window.settingsGoData=settingsGoData;
@@ -17574,6 +17818,9 @@ loadFromServer().then(function(){
       has been restored and the selected page has finished its first render.
       This prevents the static Overview tab from flashing before the actual tab. */
    APP_BOOTING=false;
+   applySystem();
+   if(!window.Systems.valid(currentSystem()))openSystemPicker();
+   else if(!window.Systems.allowsTab(currentSystem(),($('#nav button.active')||{dataset:{}}).dataset.tab))switchTab(window.Systems.home(currentSystem()));
    requestAnimationFrame(function(){requestAnimationFrame(function(){
      document.documentElement.classList.add('app-ready');
      requestAnimationFrame(function(){
@@ -17687,7 +17934,7 @@ function invDueDateText(b) {
   if (b.status !== 'out' || !due) return '<span class="muted small">—</span>';
   var onclick = 'event.stopPropagation();toast(\'วันที่ต้องคืน\',\'' + due + '\',\'info\')';
   if (isOverdue(b)) {
-    return '<span class="pill bad" style="cursor:pointer;" onclick="' + onclick + '">' + esc(relOverdueText(b.dueAt) || due) + '</span>';
+    return '<button type="button" class="pill bad" style="cursor:pointer;border:0;font:inherit;" title="จัดการกล่องค้างคืน" onclick="event.stopPropagation();openOverdueModal(\'' + esc(b.tag) + '\')">' + esc(relOverdueText(b.dueAt) || due) + ' ›</button>';
   }
   return '<span class="small" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;" onclick="' + onclick + '">' + esc(relRemainingText(b.dueAt) || due) + '</span>';
 }
@@ -18329,7 +18576,7 @@ function renderInventory() {
       + '<td class="mono"><b>' + esc(b.tag) + '</b></td>'
       + '<td>' + esc(typeName(b.type)) + '</td>'
       + '<td>' + invLocText(b) + '</td>'
-      + '<td>' + statusPill(b.status,b) + rfidBadge(b) + '</td>'
+      + '<td>' + listStatusPill(b) + rfidBadge(b) + '</td>'
       + '<td class="small">' + invShipRecvText(b) + '</td>'
       + (showValue ? '<td class="r mono small" data-mobile-label="มูลค่า">' + money(b.value) + ' บาท</td>' : '')
       + (hideDue ? '' : '<td class="small">' + invDueDateText(b) + '</td>')
@@ -18443,7 +18690,7 @@ function renderInvSummary() {
               return '<tr class="row-click" style="cursor:pointer;" onclick="event.stopPropagation();openBoxActionModal(\'' + esc(b.tag) + '\')">'
                 + '<td class="mono" data-mobile-label="รหัสกล่อง"><b>' + esc(b.tag) + '</b></td>'
                 + '<td data-mobile-label="ตำแหน่ง / ลูกค้า">' + invLocText(b) + '</td>'
-                + '<td data-mobile-label="สถานะ">' + statusPill(b.status,b) + '</td>'
+                + '<td data-mobile-label="สถานะ">' + listStatusPill(b) + '</td>'
                 + '<td class="c" data-mobile-label="RFID">' + rfidBadge(b) + '</td>'
                 + '<td class="small" data-mobile-label="รับ/ส่งล่าสุด">' + invShipRecvText(b) + '</td>'
                 + '<td class="r mono small" data-mobile-label="มูลค่า">' + money(b.value) + '</td>'
@@ -20155,7 +20402,7 @@ function exportTrackExcel(tag) {
     var title = h.dir === 'out' ? 'ออกจากคลัง → ' + custName(h.customer)
       : (h.dir === 'in' && (h.note || '').indexOf('Initial Inbound') === 0) ? 'รับเข้าคลัง (ครั้งแรก) ' + whName(h.wh)
       : h.dir === 'in' ? 'รับคืนเข้า ' + whName(h.wh)
-      : h.dir === 'lost' ? 'ตีเป็นสูญหาย' : 'ลงทะเบียน';
+      : h.dir === 'lost' ? 'ตีเป็นสูญหาย' : h.dir === 'due' ? (h.note || 'เลื่อนกำหนดคืน') : 'ลงทะเบียน';
     return [barcodeCell(tag), fmtTs(h.ts), title, whName(h.wh), h.gate || '',
       h.po || '', custName(h.customer), h.plate || '', h.driver || '', h.recorder || ''];
   });
