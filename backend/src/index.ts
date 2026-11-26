@@ -2,7 +2,6 @@ import { createApp } from './app.js';
 import { env } from './env.js';
 import { applySchema, getDb, closeDb, startWarehouse3dChangeListener } from './db/client.js';
 import { config, sequences } from './db/schema.js';
-import { startAutoLineScheduler } from './services/autoLineNotifications.js';
 import { bumpFromDatabase } from './lib/bus.js';
 import { synchronizeWarehouseGeometryFromLocationMaster } from './services/state.js';
 
@@ -31,14 +30,12 @@ async function main() {
   });
 
   const app = createApp();
-  const stopAutoLineScheduler = startAutoLineScheduler(db);
   const server = app.listen(env.port, () => {
     console.log(`[boxtrace-api] listening on http://localhost:${env.port}`);
     console.log(`[boxtrace-api] driver: ${env.usePglite ? 'PGlite (in-process)' : 'PostgreSQL'}`);
   });
 
   const shutdown = async () => {
-    stopAutoLineScheduler();
     await stopWarehouse3dChangeListener();
     server.close();
     await closeDb();

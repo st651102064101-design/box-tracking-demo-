@@ -36,12 +36,6 @@ import {
 import type { StatePayload } from '../validators/schemas.js';
 import type { JwtPayload } from '../lib/jwt.js';
 import { env } from '../env.js';
-import {
-  sendGateInNotifications,
-  sendGateOutLineNotification,
-  type GateInNotificationInput,
-  type GateOutLineInput,
-} from './autoLineNotifications.js';
 import { isEmployeeCrudAuditEntry } from './audit.js';
 import { deriveWarehouseGeometry } from './warehouseGeometry.js';
 
@@ -331,8 +325,6 @@ export async function replaceState(
   s: StatePayload,
   actor?: JwtPayload,
 ): Promise<void> {
-  const pendingGateOutNotifications: GateOutLineInput[] = [];
-  const pendingGateInNotifications: GateInNotificationInput[] = [];
   await db.transaction(async (tx) => {
     /* Serialize whole-snapshot writes against each other. Two clients saving at
        the same moment (two browser tabs, or the page and its sync module) used
@@ -533,45 +525,6 @@ export async function replaceState(
       };
     });
 
-    // The legacy Web App ships boxes by changing its full state snapshot,
-    // rather than calling services/gate.ts. Detect the same warehouse→out
-    // transition here so browser, PDA and fixed-reader flows all produce the
-    // same automatic LINE side effect. Existing out rows and initial imports
-    // are excluded, preventing a normal state re-save from notifying twice.
-    const transitioned = new Map<string, { customerId: string; doNo: string; dueAt: Date; tags: string[]; plate: string }>();
-    const returned = new Map<string, { customerId: string; doNo: string | null; receivedAt: Date; tags: string[]; plate: string }>();
-    const historyPlate = (history: unknown): string => {
-      if (!Array.isArray(history)) return '';
-      for (let i = history.length - 1; i >= 0; i -= 1) {
-        const plate = String((history[i] as Record<string, unknown> | null)?.plate ?? '').trim();
-        if (plate) return plate;
-      }
-      return '';
-    };
-    for (const row of boxRows) {
-      const before = persistedBoxes.get(row.tag);
-      if (!before) continue;
-      if (before.status !== 'out' && row.status === 'out' && row.customer && row.dueAt) {
-        const doNo = row.doNo ?? `WEB-${row.outAt?.getTime() ?? Date.now()}`;
-        const key = `${row.customer}\n${doNo}\n${row.dueAt.toISOString()}`;
-        const group = transitioned.get(key) ?? { customerId: row.customer, doNo, dueAt: row.dueAt, tags: [], plate: historyPlate(row.history) };
-        group.tags.push(row.tag);
-        transitioned.set(key, group);
-      }
-      if (before.status === 'out' && row.status !== 'out' && before.customer) {
-        const receivedAt = row.lastSeenAt ?? new Date();
-        const key = `${before.customer}\n${before.doNo ?? ''}\n${receivedAt.toISOString()}`;
-        const group = returned.get(key) ?? {
-          customerId: before.customer,
-          doNo: before.doNo,
-          receivedAt,
-          tags: [],
-          plate: historyPlate(before.history),
-        };
-        group.tags.push(row.tag);
-        returned.set(key, group);
-      }
-    }
     await syncKeyed(tx, boxes, 'tag', boxRows);
 
     // 5) master data
@@ -624,44 +577,6 @@ export async function replaceState(
       }),
       { preserveCols: ['deletedAt'], liveOnly: isNull(customers.deletedAt) },
     );
-
-    if (transitioned.size || returned.size) {
-      const customerRows = new Map(
-        (await tx.select({
-          id: customers.id,
-          name: customers.name,
-          lineUserId: customers.lineUserId,
-          contactEmail: customers.contactEmail,
-        }).from(customers))
-          .map((row) => [row.id, row]),
-      );
-      for (const group of transitioned.values()) {
-        const customer = customerRows.get(group.customerId);
-        pendingGateOutNotifications.push({
-          customerId: group.customerId,
-          customerName: customer?.name ?? group.customerId,
-          lineUserId: customer?.lineUserId ?? null,
-          contactEmail: customer?.contactEmail ?? null,
-          doNo: group.doNo,
-          tags: group.tags,
-          dueAt: group.dueAt.toISOString(),
-          plate: group.plate,
-        });
-      }
-      for (const group of returned.values()) {
-        const customer = customerRows.get(group.customerId);
-        pendingGateInNotifications.push({
-          customerId: group.customerId,
-          customerName: customer?.name ?? group.customerId,
-          lineUserId: customer?.lineUserId ?? null,
-          contactEmail: customer?.contactEmail ?? null,
-          doNo: group.doNo,
-          tags: group.tags,
-          receivedAt: group.receivedAt.toISOString(),
-          plate: group.plate,
-        });
-      }
-    }
 
     await syncKeyed(
       tx,
@@ -888,14 +803,6 @@ export async function replaceState(
     await chunkInsert(tx, auditLog, newAuditRows);
   });
 
-  // Commit stock first. LINE errors are persisted in the durable outbox and
-  // retried independently; they must never roll back a completed Gate Out.
-  for (const notification of pendingGateOutNotifications) {
-    await sendGateOutLineNotification(db, notification);
-  }
-  for (const notification of pendingGateInNotifications) {
-    await sendGateInNotifications(db, notification);
-  }
 }
 
 /** Insert in bounded chunks to stay well under Postgres' bind-parameter limit. */

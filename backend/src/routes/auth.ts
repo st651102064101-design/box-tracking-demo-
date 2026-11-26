@@ -1,11 +1,8 @@
-import { randomInt } from 'node:crypto';
 import { Router } from 'express';
-import rateLimit from 'express-rate-limit';
 import { eq, sql } from 'drizzle-orm';
 import { getDb } from '../db/client.js';
 import { users, employees, auditLog } from '../db/schema.js';
 import { hashPassword, verifyPassword } from '../lib/password.js';
-import { assertMailConfigured, sendMail } from '../lib/mailer.js';
 import { writeAuditLog } from '../services/audit.js';
 import { signToken } from '../lib/jwt.js';
 import { effectivePermissions } from '../lib/effectivePermissions.js';
@@ -15,40 +12,11 @@ import {
   updateRoleSchema,
   firstSetupSchema,
   linkEmployeeSchema,
-  forgotPasswordRequestSchema,
-  resetPasswordSchema,
 } from '../validators/schemas.js';
 import { asyncHandler, httpError } from '../middleware/error.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 
 export const authRouter = Router();
-
-const OTP_TTL_MS = 5 * 60 * 1000;
-
-function genOtp(): string {
-  return String(randomInt(100000, 1000000)); // 6 digits
-}
-
-/* A valid bcrypt hash built once, so the "no such account / nothing pending" paths
-   of forgot-password and reset-password pay for the same bcrypt work as the real
-   ones. Without it, response time alone would tell an attacker which usernames exist. */
-let dummyHash: Promise<string> | null = null;
-const timingEqualizerHash = () => (dummyHash ??= hashPassword('boxtrace-timing-equalizer'));
-
-/** One answer for every way a reset can fail — unknown account, nothing pending,
- *  expired, wrong code — so the response never says which accounts exist. */
-const otpRejected = () =>
-  httpError(400, 'รหัส OTP ไม่ถูกต้องหรือหมดอายุ — กด "ลืมรหัสผ่าน?" เพื่อขอรหัสใหม่', 'otp_invalid');
-
-/** Throttles reset requests per IP — this endpoint sends an email and is
- *  reachable from the login screen by anyone, signed in or not. */
-const forgotPasswordLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'too_many_requests', message: 'ขอรีเซ็ตรหัสผ่านบ่อยเกินไป กรุณาลองใหม่ภายหลัง' },
-});
 
 /** Maps a `users.role` to the legacy `S.employees[x].data.access` level, so the
  *  two role vocabularies stay in sync instead of drifting independently. */
@@ -239,169 +207,6 @@ authRouter.post(
     }
 
     throw httpError(401, 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง', 'invalid_credentials');
-  }),
-);
-
-/** POST /api/auth/forgot-password — starts a reset: generates a 6-digit OTP
- *  good for 5 minutes and emails it to the address on the account's own
- *  record (never one supplied in the request — that would let anyone probe
- *  or hijack a reset by pointing it at their own inbox). Checks `users`
- *  (system/service accounts) first, then falls back to `employees` (accounts
- *  an admin set up via PUT /api/employees/:id/credentials) — same precedence
- *  as POST /login, since either kind of account can sign in here. `username`
- *  also accepts the account's email (same reasoning as POST /login — someone
- *  who can't remember their username is exactly who needs this). Always
- *  responds the same shape whether or not the account exists, except for the
- *  one case an admin actually needs to act on: an account that exists but has
- *  no email on file yet. */
-authRouter.post(
-  '/forgot-password',
-  forgotPasswordLimiter,
-  asyncHandler(async (req, res) => {
-    const { username } = forgotPasswordRequestSchema.parse(req.body);
-    const identifier = username.trim();
-    const db = getDb();
-
-    /* Not configured is a property of the system, not of this account, so it is
-       reported to everyone alike — before any lookup. */
-    assertMailConfigured();
-
-    let [userRow] = await db.select().from(users).where(eq(users.username, identifier));
-    if (!userRow && identifier.includes('@')) {
-      [userRow] = await db.select().from(users).where(sql`lower(${users.email}) = lower(${identifier})`);
-    }
-    const account = userRow
-      ? { kind: 'user' as const, id: userRow.id, email: userRow.email }
-      : await (async () => {
-          let [empRow] = await db.select().from(employees).where(eq(employees.username, identifier));
-          if (!empRow && identifier.includes('@')) {
-            [empRow] = await db
-              .select()
-              .from(employees)
-              .where(sql`lower(${employees.data}->>'email') = lower(${identifier})`);
-          }
-          if (!empRow) return null;
-          const email = ((empRow.data as Record<string, unknown> | null)?.email as string | undefined)?.trim() || null;
-          return { kind: 'employee' as const, id: empRow.id, email };
-        })();
-
-    /* The reply is the same whether or not the account exists, has an email on
-       file, or the mail went out: { ok: true, sentTo: null }. It used to say
-       "sent to j****@c****.com" for real accounts and fail with
-       no_email_on_file / an SMTP error for real accounts only, which let anyone
-       enumerate usernames. Where the code went is for the person reading their
-       own inbox, not for the response body. */
-    if (!account || !account.email) {
-      await timingEqualizerHash(); // same bcrypt cost as the real path
-      if (account) console.warn(`[forgot-password] ${account.kind} ${account.id} has no email on file — no code sent`);
-      return res.json({ ok: true, sentTo: null });
-    }
-
-    const otp = genOtp();
-    const passwordResetOtpHash = await hashPassword(otp);
-    const passwordResetExpiresAt = new Date(Date.now() + OTP_TTL_MS);
-    if (account.kind === 'user') {
-      await db.update(users).set({ passwordResetOtpHash, passwordResetExpiresAt }).where(eq(users.id, account.id));
-    } else {
-      await db
-        .update(employees)
-        .set({ passwordResetOtpHash, passwordResetExpiresAt })
-        .where(eq(employees.id, account.id));
-    }
-
-    /* Not awaited: waiting on SMTP would make real accounts visibly slower than
-       unknown ones, and a delivery failure must not surface as an error only for
-       real accounts. Failures are logged for the operator instead. */
-    void sendMail({
-      to: account.email,
-      subject: 'รหัส OTP สำหรับตั้งรหัสผ่านใหม่ — BoxTrace',
-      text:
-        `รหัส OTP ของคุณคือ ${otp}\n\n` +
-        `ใช้รหัสนี้ที่หน้า "ลืมรหัสผ่าน?" เพื่อตั้งรหัสผ่านใหม่ — รหัสนี้หมดอายุใน 5 นาที และใช้ได้ครั้งเดียว\n\n` +
-        `หากคุณไม่ได้เป็นผู้ขอ ไม่ต้องดำเนินการใดๆ — รหัสผ่านเดิมของคุณยังใช้งานได้ตามปกติ`,
-      html:
-        `<p>รหัส OTP ของคุณคือ</p>` +
-        `<p style="font:700 32px monospace;letter-spacing:6px;">${otp}</p>` +
-        `<p>ใช้รหัสนี้ที่หน้า "ลืมรหัสผ่าน?" เพื่อตั้งรหัสผ่านใหม่ — รหัสนี้หมดอายุใน 5 นาที และใช้ได้ครั้งเดียว</p>` +
-        `<p>หากคุณไม่ได้เป็นผู้ขอ ไม่ต้องดำเนินการใดๆ — รหัสผ่านเดิมของคุณยังใช้งานได้ตามปกติ</p>`,
-    }).catch((error) => {
-      console.error(`[forgot-password] could not send the OTP email for ${account.kind} ${account.id}:`, error);
-    });
-
-    res.json({ ok: true, sentTo: null });
-  }),
-);
-
-/** POST /api/auth/reset-password — the other half of forgot-password: the OTP
- *  that arrived by email, plus a new password. Signs the account straight in
- *  on success so nobody has to remember to go back to the login form. Same
- *  users-then-employees precedence as forgot-password, so whichever table
- *  actually got the OTP on its row is the one that gets checked. */
-authRouter.post(
-  '/reset-password',
-  forgotPasswordLimiter,
-  asyncHandler(async (req, res) => {
-    const { username, otp, password } = resetPasswordSchema.parse(req.body);
-    const identifier = username.trim();
-    const db = getDb();
-    const passwordHash = await hashPassword(password);
-
-    let [userRow] = await db.select().from(users).where(eq(users.username, identifier));
-    if (!userRow && identifier.includes('@')) {
-      [userRow] = await db.select().from(users).where(sql`lower(${users.email}) = lower(${identifier})`);
-    }
-
-    /* Every way this can fail — no such account, no reset pending, expired, wrong
-       code — throws the same otpRejected(). The old messages ("ยังไม่มีคำขอ…",
-       "หมดอายุแล้ว") only existed for real accounts, so they told an attacker which
-       usernames exist. An unknown account still does one bcrypt compare, so timing
-       does not give it away either. */
-    const verifyOtp = async (hash: string | null, expiresAt: Date | null): Promise<boolean> => {
-      const live = !!hash && !!expiresAt && expiresAt.getTime() >= Date.now();
-      const matches = await verifyPassword(otp, live ? hash! : await timingEqualizerHash());
-      return live && matches;
-    };
-
-    if (userRow) {
-      if (!(await verifyOtp(userRow.passwordResetOtpHash, userRow.passwordResetExpiresAt))) throw otpRejected();
-      const [updated] = await db
-        .update(users)
-        .set({ passwordHash, passwordResetOtpHash: null, passwordResetExpiresAt: null })
-        .where(eq(users.id, userRow.id))
-        .returning();
-      const token = signToken({ sub: updated.id, username: updated.username, name: updated.name, role: updated.role });
-      return res.json({ token, user: publicUser(updated) });
-    }
-
-    let [empRow] = await db.select().from(employees).where(eq(employees.username, identifier));
-    if (!empRow && identifier.includes('@')) {
-      [empRow] = await db
-        .select()
-        .from(employees)
-        .where(sql`lower(${employees.data}->>'email') = lower(${identifier})`);
-    }
-    if (!(await verifyOtp(empRow?.passwordResetOtpHash ?? null, empRow?.passwordResetExpiresAt ?? null)) || !empRow) {
-      throw otpRejected();
-    }
-    const [updatedEmp] = await db
-      .update(employees)
-      .set({ passwordHash, passwordResetOtpHash: null, passwordResetExpiresAt: null })
-      .where(eq(employees.id, empRow.id))
-      .returning();
-    const access = (updatedEmp.data as Record<string, unknown> | null)?.access;
-    const accessLevel = typeof access === 'string' && access ? access : 'operator';
-    const role = ROLE_BY_ACCESS[accessLevel] ?? 'staff';
-    const token = signToken({
-      sub: updatedEmp.id,
-      username: updatedEmp.username!,
-      name: updatedEmp.name ?? updatedEmp.username!,
-      role,
-      employeeId: updatedEmp.id,
-    });
-    res.json({
-      token,
-      user: { id: updatedEmp.id, username: updatedEmp.username, name: updatedEmp.name, role, employeeId: updatedEmp.id },
-    });
   }),
 );
 

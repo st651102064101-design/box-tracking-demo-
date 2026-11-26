@@ -105,11 +105,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _verifyThenEnter(Employee e) async {
     final c = context.read<AppController>();
-    String? otpSentTo;
     final result = await showPinPad(
       context,
       title: 'ใส่รหัส PIN ของ ${e.name}',
-      showForgot: true,
       validate: (entered) async {
         try {
           final ok = await c.api.verifyEmployeePin(e.id, entered);
@@ -129,131 +127,10 @@ class _LoginScreenState extends State<LoginScreen> {
           return 'ออฟไลน์ และยังไม่เคยยืนยันรหัสนี้บนเครื่องนี้ตอนออนไลน์มาก่อน';
         }
       },
-      onForgot: () async {
-        try {
-          final req = await c.api.requestPinReset(e.id);
-          otpSentTo = req['sentTo']?.toString();
-          return null;
-        } catch (err) {
-          return err is ApiException ? err.message : c.errorMessage(err);
-        }
-      },
     );
     if (result == null) return; // cancelled
-    if (result.forgot) {
-      await _forgotPin(e, otpSentTo);
-      return;
-    }
     if (result.pin == null) return;
     if (!mounted) return;
-    final err = c.identifyAs(e);
-    if (err != null) c.toastMsg(err, '', ResultKind.err);
-  }
-
-  /// "ลืมรหัส PIN?" — mints a 6-digit OTP and emails it straight to whatever
-  /// address is on this employee's own record (see backend/src/routes/pin.ts).
-  /// No admin in the loop: unlike the shared PDA there's a real inbox only
-  /// that person can read, so there's no second person needed to relay it.
-  ///
-  /// The OTP request itself already ran inside the PIN sheet's `onForgot`
-  /// (see [_verifyThenEnter]) — that's what keeps the sheet showing a loading
-  /// state for the whole round trip instead of popping and leaving this
-  /// screen idle while it waits. [sentTo] is whatever that request found.
-  ///
-  /// Step order is **OTP first**, then new-PIN → confirm. The operator taps
-  /// "ลืมรหัส PIN?" expecting to land straight on the OTP entry they were
-  /// just emailed about — not a "set a new PIN" screen that only reveals a
-  /// wrong/expired code several taps later. `verifyPinReset(id, otp)` checks
-  /// the code against what's on file without consuming it or touching the
-  /// PIN, so a wrong code shows inline right here and the pad stays open for
-  /// a retype; only a verified OTP is allowed through to the PIN screens.
-  /// The actual PIN write still goes through `confirmPinReset(id, otp, pin)`
-  /// at the end — the only call that touches the PIN — carrying the same OTP
-  /// that was just verified.
-  Future<void> _forgotPin(Employee e, String? sentTo) async {
-    if (!mounted) return;
-    final c = context.read<AppController>();
-    c.toastMsg(
-      'ส่งรหัส OTP แล้ว',
-      sentTo != null ? 'ส่งไปที่อีเมล $sentTo แล้ว' : 'เช็คอีเมลของคุณ',
-      ResultKind.info,
-    );
-
-    final otpResult = await showPinPad(
-      context,
-      title: 'กรอกรหัส OTP',
-      subtitle: sentTo != null
-          ? 'ส่งไปที่ $sentTo (มีอายุ 5 นาที)'
-          : 'รหัส 6 หลักที่ส่งไปทางอีเมล (มีอายุ 5 นาที)',
-      length: 6,
-      validate: (otp) async {
-        try {
-          await c.api.verifyPinReset(e.id, otp);
-          return null;
-        } on ApiException catch (err) {
-          // The server answered and refused — almost always a wrong or
-          // expired code. Its own message is more specific than anything
-          // guessable here, so it's shown verbatim.
-          return err.message.isEmpty
-              ? 'รหัส OTP ไม่ถูกต้องหรือหมดอายุ'
-              : err.message;
-        } catch (err) {
-          return c.errorMessage(err);
-        }
-      },
-      // "ส่งรหัสอีกครั้ง" — re-mints a fresh OTP the same way onForgot above
-      // did, gated to once per 3 minutes so it can't be used to spam the
-      // employee's inbox. The rate limiter is the server's own
-      // (pinResetLimiter, 10/15min) — this is just the client-side cooldown
-      // that keeps the button itself from being tapped every second.
-      resendCooldown: const Duration(minutes: 3),
-      onResend: () async {
-        try {
-          final req = await c.api.requestPinReset(e.id);
-          sentTo = req['sentTo']?.toString();
-          return null;
-        } catch (err) {
-          return err is ApiException ? err.message : c.errorMessage(err);
-        }
-      },
-    );
-    if (otpResult == null || otpResult.pin == null) return; // cancelled
-    final verifiedOtp = otpResult.pin!;
-
-    if (!mounted) return;
-    final newPinResult = await showPinPad(
-      context,
-      title: 'ตั้งรหัส PIN ใหม่สำหรับ ${e.name}',
-    );
-    if (newPinResult == null || newPinResult.pin == null) return;
-    final newPin = newPinResult.pin!;
-
-    if (!mounted) return;
-    var applied = false;
-    final confirm = await showPinPad(
-      context,
-      title: 'ยืนยันรหัส PIN ใหม่อีกครั้ง',
-      validate: (entered) async {
-        if (entered != newPin) return 'รหัสไม่ตรงกัน ลองใหม่';
-        try {
-          await c.api.confirmPinReset(e.id, otp: verifiedOtp, pin: newPin);
-          applied = true;
-          return null;
-        } on ApiException catch (err) {
-          return err.message.isEmpty
-              ? 'รหัส OTP ไม่ถูกต้องหรือหมดอายุ'
-              : err.message;
-        } catch (err) {
-          return c.errorMessage(err);
-        }
-      },
-    );
-    if (confirm == null || !applied) return; // cancelled, or never accepted
-
-    c.prefs.clearPinSkip(e.id);
-    c.prefs.cachePinHash(e.id, newPin);
-    if (!mounted) return;
-    c.toastMsg('ตั้งรหัส PIN ใหม่แล้ว', '', ResultKind.ok);
     final err = c.identifyAs(e);
     if (err != null) c.toastMsg(err, '', ResultKind.err);
   }

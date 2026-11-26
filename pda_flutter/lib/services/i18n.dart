@@ -237,7 +237,6 @@ class LocaleController extends ChangeNotifier {
     'รหัสไม่ถูกต้อง ลองใหม่': 'Wrong PIN, try again',
     'ออฟไลน์ และยังไม่เคยยืนยันรหัสนี้บนเครื่องนี้ตอนออนไลน์มาก่อน':
         'Offline, and this PIN was never confirmed on this device while online',
-    'ขอรหัส OTP ไม่สำเร็จ': 'Failed to request an OTP',
     'ตั้งรหัส PIN ใหม่สำหรับ': 'Set a new PIN for',
     'ตั้งรหัส PIN สำหรับ': 'Set a PIN for',
     'ตั้งรหัส 4 หลักไว้กันคนอื่นแตะชื่อคุณเข้าใช้งาน':
@@ -248,12 +247,10 @@ class LocaleController extends ChangeNotifier {
     'รหัสไม่ตรงกัน ลองใหม่': 'PINs don\'t match, try again',
     'ตั้งรหัส PIN ไม่สำเร็จ': 'Failed to set PIN',
     'ตั้งรหัส PIN แล้ว': 'PIN set',
-    'ส่งรหัส OTP แล้ว': 'OTP sent',
     'ส่งไปที่อีเมล': 'Sent to email',
     'แล้ว — กรอกรหัส 6 หลักด้านล่าง': '— enter the 6-digit code below',
     'เช็คอีเมลของคุณแล้วกรอกรหัส 6 หลักด้านล่าง':
         'Check your email and enter the 6-digit code below',
-    'กรอกรหัส OTP': 'Enter the OTP',
     'ส่งไปที่': 'Sent to',
     '(มีอายุ 5 นาที)': '(valid for 5 minutes)',
     'รหัส 6 หลักที่ส่งไปทางอีเมล (มีอายุ 5 นาที)':
@@ -360,7 +357,6 @@ class LocaleController extends ChangeNotifier {
     'แจ้งกล่องชำรุด — ทำได้ตอนรับเข้า (Gate In): ติ๊กสถานะ "ชำรุด" ที่การ์ดกล่องนั้นในคิวก่อนยืนยัน':
         'Flagging a box damaged is done at Gate In: tick "Damaged" on that box\'s card in the queue before confirming',
     // pin reset
-    'รหัส OTP ไม่ถูกต้องหรือหมดอายุ': 'OTP is incorrect or has expired',
 
     // scan (gate) screen
     'กลับไปสแกนกล่องเพิ่ม': 'Back to scan more boxes',

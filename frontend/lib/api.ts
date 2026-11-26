@@ -80,20 +80,6 @@ export function getBranding() {
   return request<SystemBranding>('/branding');
 }
 
-export function forgotPassword(username: string) {
-  return request<{ ok: true; sentTo: string | null }>('/auth/forgot-password', {
-    method: 'POST',
-    body: JSON.stringify({ username }),
-  });
-}
-
-export function resetPassword(username: string, otp: string, password: string) {
-  return request<{ token: string; user: AuthUser }>('/auth/reset-password', {
-    method: 'POST',
-    body: JSON.stringify({ username, otp, password }),
-  });
-}
-
 export function me() {
   return request<{ user: AuthUser; role?: { key?: string | null }; identityConflicts?: unknown[] }>('/auth/me');
 }
