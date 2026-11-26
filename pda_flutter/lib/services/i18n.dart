@@ -31,8 +31,8 @@ class LocaleController extends ChangeNotifier {
     'ระยะประมาณจากสัญญาณ ต้องเทียบระยะที่ 1 เมตรก่อน ทิศทางแท็กและสิ่งกีดขวางมีผลต่อค่า':
         'Signal-based estimate: calibrate at 1 m first. Tag orientation and obstacles affect the reading.',
     // badge screen
-    'ยิงบัตรพนักงานเพื่อเริ่มงาน': 'Scan your badge to start',
-    'ยิงบัตรพนักงาน': 'Scan employee badge',
+    'เหนี่ยวไกยิงบัตรได้เลย': 'Pull the trigger to scan your badge',
+    'พิมพ์รหัสพนักงานแทน': 'Type employee code instead',
     'กรอกรหัสพนักงาน': 'Enter employee code',
     'ยืนยันรหัสพนักงาน': 'Confirm employee code',
     'ยิงบัตร หรือพิมพ์รหัสพนักงาน': 'Scan a badge, or type an employee id',

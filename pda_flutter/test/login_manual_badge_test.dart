@@ -91,4 +91,25 @@ void main() {
     expect(c.screen, Screen.home);
     c.dispose();
   });
+
+  testWidgets('says to just pull the trigger; typing is the named alternative',
+      (tester) async {
+    final c = await makeController(FakeApi());
+    c.emp = null;
+    c.screen = Screen.login;
+    await tester.pumpWidget(MultiProvider(
+      providers: [
+        ChangeNotifierProvider<AppController>.value(value: c),
+        ChangeNotifierProvider<LocaleController>.value(
+            value: LocaleController(c.prefs)),
+      ],
+      child: const MaterialApp(home: Scaffold(body: LoginScreen())),
+    ));
+
+    expect(find.text('เหนี่ยวไกยิงบัตรได้เลย'), findsOneWidget);
+    expect(find.text('พิมพ์รหัสพนักงานแทน'), findsOneWidget);
+    expect(find.text('ยิงบัตรพนักงาน'), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+    c.dispose();
+  });
 }

@@ -50,7 +50,8 @@ class _LoginScreenState extends State<LoginScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || generation != _onlineLabelGeneration) return;
       _onlineLabelTimer = Timer(const Duration(seconds: 5), () {
-        if (mounted && generation == _onlineLabelGeneration &&
+        if (mounted &&
+            generation == _onlineLabelGeneration &&
             _lastOnlineDisplay == true) {
           setState(() => _showOnlineLabel = false);
         }
@@ -347,8 +348,7 @@ class _LoginScreenState extends State<LoginScreen> {
               const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(13),
-            borderSide:
-                BorderSide(color: C.onHero.withValues(alpha: 0.16)),
+            borderSide: BorderSide(color: C.onHero.withValues(alpha: 0.16)),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(13),
@@ -378,33 +378,34 @@ class _LoginScreenState extends State<LoginScreen> {
     }
     return Semantics(
       button: true,
-      label: loc.t('ยิงบัตรพนักงาน'),
+      label: loc.t('พิมพ์รหัสพนักงานแทน'),
       child: InkWell(
         key: const Key('open-employee-code-input'),
         onTap: _openManualBadge,
         borderRadius: BorderRadius.circular(13),
         child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-        decoration: BoxDecoration(
-          color: C.onHero.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(13),
-          border: Border.all(color: C.onHero.withValues(alpha: 0.16)),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.qr_code_scanner, size: 18, color: C.lime),
-            const SizedBox(width: 9),
-            Flexible(
-              child: Text(loc.t('ยิงบัตรพนักงาน'),
-                  style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: C.onHero)),
-            ),
-          ],
-        ),
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          decoration: BoxDecoration(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(13),
+            border: Border.all(color: C.onHero.withValues(alpha: 0.16)),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.keyboard_alt_outlined,
+                  size: 18, color: C.onHero.withValues(alpha: 0.7)),
+              const SizedBox(width: 9),
+              Flexible(
+                child: Text(loc.t('พิมพ์รหัสพนักงานแทน'),
+                    style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: C.onHero.withValues(alpha: 0.8))),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -567,7 +568,7 @@ class _BadgePrompt extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              loc.t('ยิงบัตรพนักงานเพื่อเริ่มงาน'),
+              loc.t('เหนี่ยวไกยิงบัตรได้เลย'),
               textAlign: TextAlign.center,
               style: TextStyle(
                   fontSize: 19,
