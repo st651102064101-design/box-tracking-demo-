@@ -1,7 +1,28 @@
 /* The systems a user can enter, and what each one offers. Pure data: no DOM.
    Hiding only: permissions are still enforced by the server. */
 (function () {
+  /* The three gate installations differ only in who decides the direction. */
+  function gateSystem(name, extra) {
+    var system = {
+      name: name, home: 'gate',
+      tabs: ['overview', 'gate', 'inventory', 'setup'],
+      labels: { overview: 'รายงาน' },
+      stabs: ['btype', 'box', 'wh', 'cust'],
+      settings: ['data'],
+      without: ['manualReceive', 'stockImport', 'stockShip', 'relocate'],
+    };
+    Object.keys(extra).forEach(function (key) { system[key] = extra[key]; });
+    return system;
+  }
   var LIST = {
+    gate1: gateSystem('ประตูเดียว อัตโนมัติ', { unattended: true }),
+    /* The attended gate confirms on the existing in/out screens (not in the menu). */
+    gate2: gateSystem('ประตูมีเจ้าหน้าที่', {
+      tabs: ['overview', 'gate', 'gatein', 'gateout', 'inventory', 'setup'],
+      hidden: ['gatein', 'gateout'],
+      modes: { in: ['rfid'], out: ['rfid'] },
+    }),
+    gate3: gateSystem('ประตูทิศเดียว', { unattended: true }),
     rfidgate: {
       name: 'RFID Gate', home: 'gatein',
       tabs: ['overview', 'gateout', 'gatein', 'inventory', 'setup'],
@@ -19,7 +40,10 @@
     valid: function (id) { return Object.prototype.hasOwnProperty.call(LIST, id); },
     name: function (id) { return get(id).name; },
     home: function (id) { return get(id).home; },
-    allowsTab: function (id, tab) { var t = get(id).tabs; return !t || t.indexOf(tab) >= 0; },
+    /** The "gate" page exists only in the systems that list it. */
+    allowsTab: function (id, tab) { var t = get(id).tabs; return t ? t.indexOf(tab) >= 0 : tab !== 'gate'; },
+    inMenu: function (id, tab) { return this.allowsTab(id, tab) && (get(id).hidden || []).indexOf(tab) < 0; },
+    unattended: function (id) { return !!get(id).unattended; },
     allowsStab: function (id, stab) { var t = get(id).stabs; return !t || t.indexOf(stab) >= 0; },
     label: function (id, tab) { return (get(id).labels || {})[tab] || (tab === 'overview' ? 'ภาพรวม' : ''); },
     can: function (id, feature) { return (get(id).without || []).indexOf(feature) < 0; },

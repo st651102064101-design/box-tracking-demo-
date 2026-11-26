@@ -478,17 +478,32 @@ input[readonly]:focus{box-shadow:none;border-color:var(--line2);}
 .stab.active{background:var(--ink);color:var(--bg);border-color:var(--ink);box-shadow:0 6px 16px color-mix(in srgb,var(--ink) 28%,transparent);}
 .stab.active:hover{background:var(--ink);}
 /* ===== system picker ===== */
+.gp-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin:26px 0 18px;}
+.gp-pick{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--muted);}
+.gp-pick select{min-width:240px;font-size:16px;font-weight:700;}
+.gp-tiles,.gp-dirs{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr));gap:14px;margin-bottom:14px;}
+.gp-tile,.gp-card{border:1px solid var(--line);border-radius:20px;padding:18px;background:color-mix(in srgb,var(--ink) 5%,transparent);}
+.gp-card{margin-bottom:14px;}
+.gp-card h3{margin:0 0 10px;font-size:17px;}
+.gp-tile small{color:var(--muted);display:block;}
+.gp-tile b{font-size:22px;display:block;margin:4px 0;}
+.gp-dir{min-height:150px;border:0;border-radius:24px;font:inherit;font-size:30px;font-weight:900;cursor:pointer;background:#a3f04b;color:#102000;}
+.gp-dir.out{background:var(--ink);color:var(--bg);}
+.gp-sub{font-weight:700;font-size:13px;margin:16px 0 8px;}
+.gp-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px;}
+.gp-actions select{min-width:220px;}
+.gp-row{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--line);}
 html[data-system="rfidgate"] #bulkInvShip,html[data-system="rfidgate"] #bulkInvRelocate,html[data-system="rfidgate"] button[onclick*="invImportFile"],html[data-system="rfidgate"] .sys-pda{display:none!important;}
-.sys-hidden,html[data-system="rfidgate"] #gateInModeBar,html[data-system="rfidgate"] [data-gateout-mode="rfid"],html[data-system="rfidgate"] .sys-plates,html[data-system="rfidgate"] #tab-gatein .wg-scan-s{display:none!important;}
+.sys-hidden,html[data-system="gate2"] .gateout-mode-panel,html[data-system="rfidgate"] #gateInModeBar,html[data-system="rfidgate"] [data-gateout-mode="rfid"],html[data-system="rfidgate"] .sys-plates,html[data-system="rfidgate"] #tab-gatein .wg-scan-s{display:none!important;}
 .sys-switch{display:inline-flex;align-items:center;gap:7px;min-height:40px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--ink);font:inherit;font-size:13px;font-weight:800;cursor:pointer;white-space:nowrap;}
 .sys-switch:hover{border-color:var(--ink);}
 @media (max-width:700px){.sys-switch span{display:none;}.sys-switch{padding:0 12px;}}
 #systemPicker{position:fixed;inset:0;z-index:100000;overflow:auto;display:grid;align-items:center;background:var(--bg);color:var(--ink);padding:28px 16px;}
 #systemPicker[hidden]{display:none;}
-.sp-inner{width:min(760px,100%);margin:auto;text-align:center;}
+.sp-inner{width:min(1040px,100%);margin:auto;text-align:center;}
 .sp-inner h2{font-size:34px;margin:0;}
 .sp-hint{color:var(--muted);margin:6px 0 26px;font-size:14px;}
-.sp-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(280px,100%),1fr));gap:18px;}
+.sp-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr));gap:18px;}
 .sp-card{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:12px;text-align:left;padding:26px;border-radius:26px;border:2px solid var(--line);background:color-mix(in srgb,var(--ink) 5%,transparent);color:inherit;font:inherit;cursor:pointer;transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease;}
 .sp-card:hover,.sp-card:focus-visible{outline:0;transform:translateY(-6px);border-color:#a3f04b;box-shadow:0 18px 44px color-mix(in srgb,#a3f04b 24%,transparent);}
 .sp-card b{font-size:24px;}
@@ -2342,7 +2357,8 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
 <script src="/legacy-sync.js"></script>
 <script src="/pda-device.js?v=20261126-2"></script>
 <script src="/overdue.js?v=20261126"></script>
-<script src="/systems.js?v=20261126-3"></script>
+<script src="/systems.js?v=20261127"></script>
+<script src="/gate-view.js?v=20261127"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
@@ -2361,7 +2377,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
 <div id="systemPicker" class="no-print" role="dialog" aria-modal="true" aria-labelledby="systemPickerTitle" hidden>
   <div class="sp-inner">
     <h2 id="systemPickerTitle">เลือกระบบ</h2>
-    <p class="sp-hint">กดการ์ดเพื่อเริ่ม · หรือกดเลข 1 / 2 บนแป้นพิมพ์</p>
+    <p class="sp-hint">กดการ์ดเพื่อเริ่ม · หรือกดเลข 1–5 บนแป้นพิมพ์</p>
     <div class="sp-cards">
       <button type="button" class="sp-card sp-main" data-system-card="rfidgate" onclick="chooseSystem('rfidgate')">
         <span class="sp-key">1</span><span class="sp-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 8.5a5 5 0 0 1 7 0M6 6a8.5 8.5 0 0 1 12 0M11 12a1.5 1.5 0 1 1 2 0M12 13.5V21"/></svg></span>
@@ -2370,8 +2386,29 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
         <span class="sp-flow"><i>ส่งออก</i><em>Import Excel · ยิงมือ</em></span>
         <span class="sp-go">เริ่มใช้ ›</span>
       </button>
+      <button type="button" class="sp-card" data-system-card="gate1" onclick="chooseSystem('gate1')">
+        <span class="sp-key">2</span><span class="sp-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h13M16 3l4 4-4 4M17 17H4M8 13l-4 4 4 4"/></svg></span>
+        <b>ประตูเดียว อัตโนมัติ</b>
+        <span class="sp-flow"><i>คนเฝ้า</i><em>ไม่มี</em></span>
+        <span class="sp-flow"><i>ทิศทาง</i><em>เสาอากาศบอกเข้า/ออก</em></span>
+        <span class="sp-go">เริ่มใช้ ›</span>
+      </button>
+      <button type="button" class="sp-card" data-system-card="gate2" onclick="chooseSystem('gate2')">
+        <span class="sp-key">3</span><span class="sp-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg></span>
+        <b>ประตูมีเจ้าหน้าที่</b>
+        <span class="sp-flow"><i>คนเฝ้า</i><em>มีเจ้าหน้าที่</em></span>
+        <span class="sp-flow"><i>ทิศทาง</i><em>กดเลือกเข้า/ออก</em></span>
+        <span class="sp-go">เริ่มใช้ ›</span>
+      </button>
+      <button type="button" class="sp-card" data-system-card="gate3" onclick="chooseSystem('gate3')">
+        <span class="sp-key">4</span><span class="sp-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16M14 6l6 6-6 6"/></svg></span>
+        <b>ประตูทิศเดียว</b>
+        <span class="sp-flow"><i>คนเฝ้า</i><em>ไม่มี</em></span>
+        <span class="sp-flow"><i>ทิศทาง</i><em>ตั้งประจำประตู</em></span>
+        <span class="sp-go">เริ่มใช้ ›</span>
+      </button>
       <button type="button" class="sp-card" data-system-card="full" onclick="chooseSystem('full')">
-        <span class="sp-key">2</span><span class="sp-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg></span>
+        <span class="sp-key">5</span><span class="sp-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg></span>
         <b>ครบทุกฟีเจอร์</b>
         <span class="sp-flow"><i>ใช้ได้</i><em>ภาพรวม คลังกล่อง ติดตาม ตั้งค่า</em></span>
         <span class="sp-flow"><i>ประตู</i><em>ทุกวิธีรับและส่ง</em></span>
@@ -2404,6 +2441,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
     <div><span id="mobileNavBrandName">Smart Tracking</span><span id="mobileNavBrandSubtitle">WMS · Returnable Asset Tracking</span></div>
   </div>
   <button data-tab="overview" class="active" title="ภาพรวม"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.2 2"/></svg></span></span><span class="navlbl">ภาพรวม</span></button>
+  <button data-tab="gate" class="sys-hidden" title="ประตู"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v17M3 21h18M14 12h.01"/></svg></span></span><span class="navlbl">ประตู</span></button>
   <button data-tab="gateout" title="ประตูขาออก"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 17.5 17 7M9 7h8v8"/></svg></span></span><span class="navlbl">ประตูขาออก</span></button>
   <button data-tab="gatein" title="ประตูขาเข้า"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 8h6a4 4 0 0 1 0 8H7M9 8 6 5M9 8l-3 3"/></svg></span></span><span class="navlbl">ประตูขาเข้า</span></button>
   <button data-tab="inventory" title="คลังกล่อง"><span class="ico"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7Z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg></span></span><span class="navlbl">คลังกล่อง</span></button>
@@ -3041,6 +3079,36 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
 </section>
 
 <!-- ===================== GATE IN ===================== -->
+<section class="tab" id="tab-gate">
+  <div class="gp-head">
+    <div><div class="eyebrow" id="gpSystem">ประตู</div><h1 class="h-title" style="margin:6px 0 0;">ประตูสแกน</h1></div>
+    <label class="gp-pick">ประตู<select id="gpGate" onchange="gpSelect(this.value)"></select></label>
+  </div>
+  <div id="gpWarn"></div>
+  <div class="gp-tiles" id="gpStatus"></div>
+  <div class="gp-dirs" id="gpDirections"></div>
+  <div class="gp-card" id="gpReview" hidden></div>
+  <div class="gp-card" id="gpOutbound" hidden>
+    <h3>ขาออก: ส่งให้ใคร</h3>
+    <div class="gp-sub">1 · รายการจาก Excel (จับคู่ด้วยทะเบียนรถ)</div>
+    <div class="gp-actions">
+      <button type="button" class="btn accent sm" onclick="$('#gpPlanFile').click()">นำเข้า Excel</button>
+      <button type="button" class="btn ghost sm" onclick="gpPlanTemplate()">ไฟล์ตัวอย่าง</button>
+      <input type="file" id="gpPlanFile" accept=".xlsx,.xls,.csv" hidden onchange="gpImport(this.files[0]);this.value=''">
+    </div>
+    <div id="gpImportResult"></div>
+    <div id="gpPlans"></div>
+    <div class="gp-sub">2 · ลูกค้าที่ตั้งไว้ที่ประตูนี้ (ใช้เมื่อป้ายรถไม่อยู่ในรายการ)</div>
+    <div class="gp-actions">
+      <select id="gpCustomer" aria-label="ลูกค้าของประตูนี้"></select>
+      <button type="button" class="btn accent sm" onclick="gpSetPreset()">ตั้งไว้ 8 ชั่วโมง</button>
+      <button type="button" class="btn ghost sm" onclick="gpClearPreset()">ยกเลิก</button>
+    </div>
+    <div class="muted small" id="gpPreset"></div>
+  </div>
+  <div class="gp-card"><h3>ผ่านประตูล่าสุด</h3><div id="gpPassages"></div></div>
+</section>
+
 <section class="tab" id="tab-gatein">
   <div class="hero">
     <div class="eyebrow reveal">ขาเข้า</div>
@@ -6475,14 +6543,14 @@ function applyGateOutEntryMode(mode,openPicker){
   refreshGateOutRfidWorkflow();
   refreshRfidLprTimingNotes();
   $all('[data-gateout-mode]').forEach(function(btn){var active=btn.dataset.gateoutMode===gateOutEntryMode;btn.classList.toggle('active',active);btn.setAttribute('aria-selected',active?'true':'false');});
-  if(currentSystem()!=='rfidgate')uiPrefSet('gateOutMode',gateOutEntryMode);
+  if(currentSystem()==='full'||!window.Systems.valid(currentSystem()))uiPrefSet('gateOutMode',gateOutEntryMode);
   setTimeout(function(){
     if(gateOutEntryMode==='manual'){
       refreshGateOutManualVisibility();
       var first=gateOutMissing()[0],s=$(first?'#'+first[0]:'#scanOut');if(s)s.focus({preventScroll:true});
     }
     if(gateOutEntryMode==='rfid'){renderRfidGateStatus();syncRfidOutboundSession();if(gateOutRfidCustomerReady())fx9600OutQueuePoll();}
-    else clearRfidAutoSession(fixedGatesRef().out);
+    else if(!window.Systems.unattended(currentSystem()))clearRfidAutoSession(fixedGatesRef().out);
   },100);
 }
 /* Allow operators to select RFID mode for every configured Gate.  A reader
@@ -6516,7 +6584,7 @@ function switchTab(name){
   /* "Home" (logo, default page) means the home of the system in use. */
   if(name==='overview'&&!window.Systems.allowsTab(currentSystem(),name))name=window.Systems.home(currentSystem());
   if(!window.Systems.allowsTab(currentSystem(),name)){toast('ไม่มีในระบบนี้','กด "เปลี่ยนระบบ" มุมขวาบนเพื่อใช้ฟีเจอร์นี้','info');return;}
-  var tabPerms={overview:['dashboard.view'],gateout:['gate.out'],gatein:['gate.in'],inventory:['box.view'],track:['box.view'],setup:['setting.view']};
+  var tabPerms={overview:['dashboard.view'],gateout:['gate.out'],gatein:['gate.in'],inventory:['box.view'],track:['box.view'],setup:['setting.view'],gate:['gate.in','gate.out']};
   if(RBAC.loaded&&RBAC.available&&tabPerms[name]&&!hasAnyPerm.apply(null,tabPerms[name])){toast('ไม่มีสิทธิ์เข้าถึง','บัญชีนี้ไม่มีสิทธิ์เปิดหน้านี้','err');return;}
   /* Scroll to top BEFORE swapping which .tab is visible, and with no smooth
      animation — otherwise the operator sees the old (possibly scrolled-way-
@@ -6550,6 +6618,7 @@ function switchTab(name){
   }
   $all('#nav button[data-tab]').forEach(function(b){var on=b.dataset.tab===name;b.classList.toggle('active',on);if(on)movePill(b);});
   renderAll();
+  if(name==='gate'){gpShownFor='';renderGatePage();}
   /* GSAP's WMSMotion.page() and the plain-CSS .reveal keyframe both animate
      the same elements on every tab open — running both stacks two entrance
      animations (one of them driving rotationX/clip-path, the expensive
@@ -7982,6 +8051,116 @@ window.addEventListener('resize',function(){
   syncNavTop();
   var a=$('#nav button.active');if(a&&eff==='top')movePill(a);
 });
+/* ===== gate page (the three gate systems) ===== */
+var gpTimer=null,gpShownFor='';
+function gpGateNo(){
+  var all=allGateNums(),saved=0;
+  try{saved=Number(localStorage.getItem('smarttrace_gate'));}catch(e){saved=Number(window.gpSaved);}
+  return all.indexOf(saved)>=0?saved:(all[0]||0);
+}
+function gpSelect(g){window.gpSaved=g;try{localStorage.setItem('smarttrace_gate',g);}catch(e){}gpShownFor='';renderGatePage();}
+function gpInfo(g){
+  var wh=S.warehouses[gateWh(g)]||{};
+  return {type:gateDirOf(g),mode:String((wh.gateBidirectionalModes||{})[String(g)]||'screen')==='antenna'?'antenna':'screen'};
+}
+function gpApi(path,method,body){
+  return apiFetch(path,{method:method||'GET',headers:Object.assign({'Content-Type':'application/json'},authHeaders()),body:body?JSON.stringify(body):undefined})
+    .then(function(r){return r.json().catch(function(){return {};}).then(function(d){if(!r.ok)throw new Error(d.message||('ทำรายการไม่สำเร็จ ('+r.status+')'));return d;});});
+}
+function gpFail(e){toast('ทำรายการไม่สำเร็จ',e.message,'err');}
+function renderGatePage(){
+  if(!$('#tab-gate').classList.contains('active'))return;
+  var sys=currentSystem(),g=gpGateNo(),sel=$('#gpGate');
+  $('#gpSystem').textContent=window.Systems.name(sys);
+  if(!g){$('#gpWarn').innerHTML='<div class="banner warn">ยังไม่มีประตูในระบบ <button class="btn sm accent" onclick="goSetup(\'wh\')">เพิ่มประตู</button></div>';return;}
+  sel.innerHTML=allGateNums().map(function(n){return '<option value="'+n+'"'+(n===g?' selected':'')+'>ประตู '+n+' · '+esc(whName(gateWh(n)))+'</option>';}).join('');
+  var info=gpInfo(g),problem=window.GateView.mismatch(sys,info),auto=window.Systems.unattended(sys);
+  $('#gpWarn').innerHTML=problem?'<div class="banner warn" style="margin-bottom:14px;"><b>ประตู '+g+' ยังตั้งค่าไม่ตรงกับระบบนี้</b> '+esc(problem)+' <button class="btn sm accent" onclick="manageRfidGate('+g+')">แก้การตั้งค่า ›</button></div>':'';
+  var bound=rfidGateIsBound(g),online=bound&&fx9600IsOnline(g);
+  var seen=null;
+  Object.keys(S.boxes||{}).forEach(function(t){(S.boxes[t].history||[]).forEach(function(h){
+    if(h.dir==='lpr'&&Number(h.gateNo)===g&&(!seen||Date.parse(h.ts)>Date.parse(seen.ts)))seen=h;});});
+  var way=info.type==='in'?'ขาเข้าอย่างเดียว':info.type==='out'?'ขาออกอย่างเดียว':(info.mode==='antenna'?'เข้า-ออก · เสาอากาศบอกทิศ':'เข้า-ออก · เจ้าหน้าที่เลือก');
+  $('#gpStatus').innerHTML=
+    '<div class="gp-tile"><small>ทิศทาง</small><b>'+way+'</b><small>'+(auto?'ทำงานเองโดยไม่ต้องมีคนเฝ้า':'เจ้าหน้าที่กดเลือกทิศก่อนรถผ่าน')+'</small></div>'
+    +'<div class="gp-tile"><small>เครื่องอ่าน FX9600</small><b style="color:'+(online?'#22c55e':'var(--neg)')+';">● '+(online?'พร้อมใช้งาน':bound?'ไม่ตอบสนอง':'ยังไม่ผูก')+'</b>'+(online?'<small>'+esc(fx9600SeenText(g))+'</small>':'<button class="btn sm ghost" onclick="manageRfidGate('+g+')">'+(bound?'ตรวจเครื่อง':'ผูกเครื่อง')+' ›</button>')+'</div>'
+    +'<div class="gp-tile"><small>กล้องป้ายทะเบียน (LPR)</small><b>'+(seen?esc(seen.plateNumber):'—')+'</b><small>'+(seen?'อ่านล่าสุด '+esc(fmtTs(seen.ts)):'ยังไม่เคยอ่านป้ายคู่กับกล่องที่ประตูนี้')+'</small></div>';
+  $('#gpDirections').innerHTML=auto?'':
+    (info.type!=='out'?'<button type="button" class="gp-dir" onclick="gpDirection(\'in\')">⬇ ขาเข้า</button>':'')
+    +(info.type!=='in'?'<button type="button" class="gp-dir out" onclick="gpDirection(\'out\')">⬆ ขาออก</button>':'');
+  var rows=window.GateView.passages(S.events,g,10);
+  $('#gpPassages').innerHTML=rows.length?rows.map(function(e){return '<div class="gp-row"><b class="mono">'+esc(e.tag)+'</b><span class="pill '+(e.dir==='out'?'teal':'ok')+'">'+(e.dir==='out'?'ออก':'เข้า')+'</span><span class="muted small">'+esc([e.customer?custName(e.customer):'',e.plate].filter(Boolean).join(' · '))+'</span><span class="small">'+esc(fmtTs(e.ts))+'</span></div>';}).join(''):'<div class="muted small">ยังไม่มีกล่องผ่านประตูนี้</div>';
+  var outbound=auto&&info.type!=='in';
+  $('#gpOutbound').hidden=!outbound;$('#gpReview').hidden=!auto;
+  if(gpShownFor!==sys+':'+g){
+    gpShownFor=sys+':'+g;$('#gpImportResult').innerHTML='';$('#gpReview').innerHTML='';$('#gpPlans').innerHTML='';$('#gpPreset').textContent='';
+    $('#gpCustomer').innerHTML='<option value="">— เลือกลูกค้า —</option>'+Object.keys(S.customers||{}).map(function(id){return '<option value="'+esc(id).replace(/"/g,'&quot;')+'">'+esc(custName(id))+'</option>';}).join('');
+    gpLoad();
+  }
+  if(!gpTimer)gpTimer=setInterval(function(){if($('#tab-gate').classList.contains('active')){renderGatePage();gpLoad();}},5000);
+}
+/* Server-held data of the shown gate: boxes to check, imported jobs, preset. */
+function gpLoad(){
+  var sys=currentSystem(),g=gpGateNo();
+  if(!window.Systems.unattended(sys)||!g)return;
+  var current=function(){return g===gpGateNo()&&sys===currentSystem();};
+  gpApi('/api/rfid/pending/'+g).then(function(d){
+    if(!current())return;
+    var tags=d.tags||[];
+    $('#gpReview').innerHTML='<h3>ต้องตรวจ'+(tags.length?' · '+tags.length+' ใบ':'')+'</h3>'+(tags.length
+      ?'<div class="muted small">เครื่องอ่านเจอกล่อง แต่ระบบไม่บันทึกเอง เพราะไม่รู้ทิศทางหรือลูกค้า หรือรออ่านป้ายรถ (รายการหายเองใน 10 นาที)</div>'
+        +tags.map(function(t){var b=S.boxes[t]||{};return '<div class="gp-row"><b class="mono">'+esc(t)+'</b><span class="muted small">'+esc(typeName(b.type))+'</span><button class="btn sm ghost" data-tag="'+esc(t).replace(/"/g,'&quot;')+'" onclick="gpDismiss(this.dataset.tag)">นำออก</button></div>';}).join('')
+      :'<div class="muted small">ไม่มีรายการค้าง</div>');
+  }).catch(function(){});
+  if(gpInfo(g).type==='in')return;
+  gpApi('/api/ship-plans').then(function(d){
+    if(!current())return;
+    var list=(d.plans||[]).filter(function(p){return p.status==='waiting'||p.planDate===d.today;}).slice(0,50);
+    $('#gpPlans').innerHTML=list.length?list.map(function(p){var done=p.status==='shipped';return '<div class="gp-row"><b class="mono">'+esc(p.plate)+'</b><span>'+esc(custName(p.customer))+(p.doNo?' · '+esc(p.doNo):'')+'</span><span class="muted small">'+esc(p.planDate)+'</span><span class="pill '+(done?'ok':'warn')+'">'+(done?'ส่งแล้ว '+p.shippedTags.length+' ใบ':(p.planDate===d.today?'รอรถ':p.planDate<d.today?'เลยวันแล้ว':'รอถึงวัน'))+'</span>'+(done?'':'<button class="btn sm ghost" onclick="gpDeletePlan('+Number(p.id)+')">ลบ</button>')+'</div>';}).join(''):'<div class="muted small">ยังไม่มีรายการรอรถ</div>';
+  }).catch(function(){});
+  gpApi('/api/rfid/gates/'+g+'/auto-session').then(function(d){
+    if(!current())return;
+    var x=d.session;
+    $('#gpPreset').textContent=x&&x.direction==='out'&&x.customer?'ตอนนี้ตั้งไว้: '+custName(x.customer)+' (ถึง '+fmtTs(x.expiresAt)+')':'ยังไม่ได้ตั้งลูกค้าไว้';
+  }).catch(function(){});
+}
+function gpDirection(dir){var g=gpGateNo();setFixedGate(dir,g);switchTab('gate'+dir);if(dir==='in')applyGateInEntryMode('rfid',false);else applyGateOutEntryMode('rfid',false);}
+function gpDismiss(tag){gpApi('/api/rfid/pending/'+gpGateNo()+'/'+encodeURIComponent(tag),'DELETE').then(gpLoad).catch(gpFail);}
+function gpDeletePlan(id){gpApi('/api/ship-plans/'+id,'DELETE').then(gpLoad).catch(gpFail);}
+function gpSetPreset(){
+  var c=$('#gpCustomer').value;if(!c){toast('เลือกลูกค้าก่อน','','err');return;}
+  gpApi('/api/rfid/gates/'+gpGateNo()+'/auto-session','PUT',{direction:'out',customer:c,ttlSeconds:28800}).then(function(){toast('ตั้งลูกค้าของประตูแล้ว',custName(c),'ok');gpLoad();}).catch(gpFail);
+}
+function gpClearPreset(){gpApi('/api/rfid/gates/'+gpGateNo()+'/auto-session','DELETE').then(gpLoad).catch(gpFail);}
+function gpPlanTemplate(){
+  downloadXLS('ship-list-'+dstr()+'.xlsx',['ทะเบียนรถ','ลูกค้า','DO','PO','วันที่'],[['70-1234',Object.keys(S.customers||{})[0]||'CUST-01','DO-0001','',dstr()]]);
+}
+function gpImport(file){
+  if(!file)return;
+  var out=$('#gpImportResult'),reader=new FileReader();
+  var say=function(kind,text){out.innerHTML='<div class="banner '+kind+'">'+text+'</div>';};
+  reader.onload=function(){
+    var rows;
+    try{
+      var wb=XLSX.read(new Uint8Array(reader.result),{type:'array',cellDates:true});
+      var sheet=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:'',blankrows:false});
+      /* Date cells arrive near midnight; half a day keeps them on their date. */
+      sheet=sheet.map(function(r){return r.map(function(v){return v instanceof Date?dstr(new Date(v.getTime()+43200000)):v;});});
+      rows=window.GateView.planRows(sheet);
+    }catch(e){say('bad','อ่านไฟล์ไม่ได้');return;}
+    if(!rows){say('bad','ไฟล์ต้องมีหัวคอลัมน์ “ทะเบียนรถ” และ “ลูกค้า”');return;}
+    if(!rows.length){say('warn','ไฟล์ไม่มีรายการ');return;}
+    gpApi('/api/ship-plans','POST',{rows:rows}).then(function(d){
+      var bad=(d.errors||[]).map(function(e){return 'แถว '+(e.row+1)+': '+esc(e.message);});
+      say(bad.length?'warn':'ok','นำเข้าแล้ว '+Number(d.added)+' รายการ'+(bad.length?'<br>ข้าม '+bad.length+' แถว<br>'+bad.slice(0,8).join('<br>'):''));
+      gpLoad();
+    }).catch(function(e){say('bad',esc(e.message));});
+  };
+  reader.readAsArrayBuffer(file);
+}
+window.gpSelect=gpSelect;window.gpDirection=gpDirection;window.gpDismiss=gpDismiss;window.gpDeletePlan=gpDeletePlan;
+window.gpSetPreset=gpSetPreset;window.gpClearPreset=gpClearPreset;window.gpPlanTemplate=gpPlanTemplate;window.gpImport=gpImport;
+
 /* ===== เลือกระบบ ===== */
 function currentSystem(){
   if(window.activeSystem===undefined){try{window.activeSystem=localStorage.getItem('smarttrace_system')||'';}catch(e){window.activeSystem='';}}
@@ -7990,7 +8169,7 @@ function currentSystem(){
 function applySystem(){
   var id=currentSystem(),root=document.documentElement;
   root.setAttribute('data-system',window.Systems.valid(id)?id:'full');
-  $all('#nav button[data-tab]').forEach(function(b){b.classList.toggle('sys-hidden',!window.Systems.allowsTab(id,b.dataset.tab));});
+  $all('#nav button[data-tab]').forEach(function(b){b.classList.toggle('sys-hidden',!window.Systems.inMenu(id,b.dataset.tab));});
   $all('.stab').forEach(function(b){b.classList.toggle('sys-hidden',!window.Systems.allowsStab(id,b.dataset.stab));});
   var home=$('#nav button[data-tab="overview"]');
   if(home){var text=window.Systems.label(id,'overview');home.title=text;var lbl=home.querySelector('.navlbl');if(lbl)lbl.textContent=text;}
@@ -8008,8 +8187,9 @@ function chooseSystem(id){
   window.activeSystem=id;
   try{localStorage.setItem('smarttrace_system',id);}catch(e){}
   closeSystemPicker();applySystem();
-  applyGateInEntryMode(uiPrefGet('gateInEntryMode','manual'),false);
-  applyGateOutEntryMode(uiPrefGet('gateOutMode','manual'),false);
+  if(window.Systems.allowsTab(id,'gatein'))applyGateInEntryMode(uiPrefGet('gateInEntryMode','manual'),false);
+  if(window.Systems.allowsTab(id,'gateout'))applyGateOutEntryMode(uiPrefGet('gateOutMode','manual'),false);
+  gpShownFor='';
   switchTab(window.Systems.home(id));
 }
 function openSystemPicker(){
@@ -13075,6 +13255,7 @@ function clearRfidAutoSession(gate){
 }
 function syncRfidOutboundSession(){
   clearTimeout(rfidAutoSessionTimer);
+  if(window.Systems.unattended(currentSystem()))return;
   rfidAutoSessionTimer=setTimeout(function(){
     var gate=fixedGatesRef().out;
     var configuredMode=gateOutEntryMode||uiPrefGet('gateOutMode','');
@@ -13129,6 +13310,7 @@ var rfidInboundAutoCommitTimer=null,rfidInboundAutoCommitBusy=false;
    screen gate must not create a server auto session: its reads remain pending
    until the operator chooses In/Out and confirms. */
 function syncRfidInboundSession(){
+  if(window.Systems.unattended(currentSystem()))return;
   return Promise.resolve(null);
 }
 window.syncRfidInboundSession=syncRfidInboundSession;
@@ -13983,7 +14165,7 @@ window.clearGateOut=clearGateOut;
 var gateInEntryMode='manual',gateInStep='scan',gateInVehicleOpen=false;
 function applyGateInEntryMode(mode,persist){
   mode=window.Systems.mode(currentSystem(),'in',mode);
-  if(currentSystem()==='rfidgate')persist=false;
+  if(currentSystem()!=='full'&&window.Systems.valid(currentSystem()))persist=false;
   gateInEntryMode=(mode==='excel'||mode==='rfid')?mode:'manual';
   if(gateInEntryMode==='rfid'&&fixedGatesRef().in)gateInStep='scan';
   $all('[data-gatein-mode]').forEach(function(btn){var active=btn.dataset.gateinMode===gateInEntryMode;btn.classList.toggle('active',active);btn.setAttribute('aria-selected',active?'true':'false');});

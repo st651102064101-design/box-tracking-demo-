@@ -10,6 +10,7 @@ import { resolveBoxesByCodes } from '../services/rfid.js';
 import { and, eq } from 'drizzle-orm';
 import { bump, publishLprDetection } from '../lib/bus.js';
 import { gateOut } from '../services/gate.js';
+import { MIN_PLATE_CONFIDENCE, notePlate, planAtGate, recordShipment } from '../services/shipPlan.js';
 
 export const lprRouter = Router();
 
@@ -101,11 +102,16 @@ lprRouter.post('/', asyncHandler(async (req, res) => {
     const known = await db.select().from(vehicles);
     return known.some((row) => normalizePlate((row.data as Record<string, unknown>).plate) === payload.plateNumber);
   };
+  notePlate(gateNo, payload.plateNumber, payload.confidence);
+  /* A job imported for this plate vouches for the truck by itself. */
+  const plan = payload.direction === 'inbound' || payload.confidence < MIN_PLATE_CONFIDENCE
+    ? undefined
+    : await planAtGate(db, gateNo, normalizePlate(payload.plateNumber));
   const refusal = !recentRfid
     ? 'no_matching_recent_rfid'
     : !seenBoxes.length
       ? 'no_registered_rfid'
-      : !(await plateAccepted())
+      : !plan && !(await plateAccepted())
         ? (liveSession ? 'plate_mismatch' : 'plate_not_recognized')
         : undefined;
   const matchedRfid = !refusal;
@@ -127,7 +133,21 @@ lprRouter.post('/', asyncHandler(async (req, res) => {
       ? ((warehouse.data as Record<string, unknown>).gateBidirectionalModes as Record<string, unknown> | undefined) : undefined;
     const requiresScreenConfirmation = gateDirection === 'both'
       && String(bidirectionalModes?.[String(gateNo)] ?? 'screen') === 'screen';
-    if (!requiresScreenConfirmation && liveSession?.direction === 'out' && liveSession.customer) {
+    if (!requiresScreenConfirmation && gateDirection !== 'in' && plan) {
+      const waiting = seenBoxes.filter((row) => row.status === 'warehouse').map((row) => row.tag);
+      try {
+        if (waiting.length) {
+          const shipped = await gateOut(db, { tags: waiting, gate: gateNo, customer: plan.customer, doNo: plan.doNo ?? undefined, po: plan.po ?? undefined, plate: payload.plateNumber, recorder: 'LPR + FX9600', device: payload.cameraId });
+          autoShippedTags.push(...shipped.shipped);
+          await recordShipment(db, gateNo, plan, shipped.shipped);
+          for (const tag of shipped.shipped) await db.delete(gatePendingReads).where(and(eq(gatePendingReads.gateNo, gateNo), eq(gatePendingReads.tag, tag)));
+        }
+      } catch (error) {
+        mayOpen = false;
+        shipFailed = true;
+        console.error('[lpr-plan-out] unable to ship the planned job', error);
+      }
+    } else if (!requiresScreenConfirmation && liveSession?.direction === 'out' && liveSession.customer) {
       await db.update(rfidGateAutoSessions).set({ plate: payload.plateNumber, updatedAt: new Date(), updatedBy: payload.cameraId }).where(eq(rfidGateAutoSessions.gateNo, gateNo));
       /* A dedicated OUT gate lets the FX9600 ship these boxes before the camera
          reports. Those are done already — only ship what is still here. */

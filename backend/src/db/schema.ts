@@ -218,6 +218,20 @@ export const rfidAntennaGateMappings = pgTable(
 );
 
 /** Required business context staged before unattended outbound processing. */
+export const shipPlans = pgTable('ship_plans', {
+  id: serial('id').primaryKey(),
+  plate: text('plate').notNull(),
+  customer: text('customer').notNull(),
+  doNo: text('do_no'),
+  po: text('po'),
+  planDate: text('plan_date').notNull(),
+  status: text('status').notNull().default('waiting'),
+  shippedTags: jsonb('shipped_tags').$type<string[]>().notNull().default([]),
+  shippedAt: timestamp('shipped_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  createdBy: text('created_by'),
+});
+
 export const rfidGateAutoSessions = pgTable('rfid_gate_auto_sessions', {
   gateNo: integer('gate_no').primaryKey(),
   direction: text('direction').notNull(),

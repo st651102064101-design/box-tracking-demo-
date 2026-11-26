@@ -202,6 +202,21 @@ CREATE TABLE IF NOT EXISTS rfid_gate_auto_sessions (
   updated_by   TEXT
 );
 
+-- Outbound jobs imported before the truck arrives: the camera's plate picks one.
+CREATE TABLE IF NOT EXISTS ship_plans (
+  id           SERIAL PRIMARY KEY,
+  plate        TEXT NOT NULL,
+  customer     TEXT NOT NULL,
+  do_no        TEXT,
+  po           TEXT,
+  plan_date    TEXT NOT NULL,
+  status       TEXT NOT NULL DEFAULT 'waiting' CHECK (status IN ('waiting','shipped')),
+  shipped_tags JSONB NOT NULL DEFAULT '[]'::jsonb,
+  shipped_at   TIMESTAMPTZ,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_by   TEXT
+);
+
 -- Which gate each logged-in account last picked for Gate ขาออก/ขาเข้า (see
 -- pickGate()/fixedGatesRef() in legacy.html) — the legacy UI used to keep
 -- this in S.gatePrefs and round-trip it through PUT /api/state like

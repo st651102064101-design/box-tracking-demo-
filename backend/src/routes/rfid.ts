@@ -9,6 +9,7 @@ import { boxes, gateWebhookStatus, gatePendingReads, gates, rfidAntennaGateMappi
 import { and, eq, gte } from 'drizzle-orm';
 import { writeAuditLog } from '../services/audit.js';
 import { bump, publishReaderStatus, publishRfidRead } from '../lib/bus.js';
+import { anyPlanWaiting, planAtGate, plateAt, recordShipment } from '../services/shipPlan.js';
 import { gateIn, gateOut } from '../services/gate.js';
 import { recordRfidObservation } from './lpr.js';
 
@@ -435,6 +436,13 @@ rfidRouter.put(
   }),
 );
 
+rfidRouter.get('/gates/:gate/auto-session', requireAuth, asyncHandler(async (req, res) => {
+  const gate = Number(req.params.gate);
+  if (!Number.isInteger(gate) || gate <= 0) throw httpError(400, 'Gate ไม่ถูกต้อง', 'invalid_gate');
+  const row = (await getDb().select().from(rfidGateAutoSessions).where(eq(rfidGateAutoSessions.gateNo, gate)).limit(1))[0];
+  res.json({ session: row && row.expiresAt.getTime() > Date.now() ? row : null });
+}));
+
 rfidRouter.delete('/gates/:gate/auto-session', requireAuth, asyncHandler(async (req, res) => {
   const gate = Number(req.params.gate);
   if (!Number.isInteger(gate) || gate <= 0) throw httpError(400, 'Gate ไม่ถูกต้อง', 'invalid_gate');
@@ -512,6 +520,23 @@ async function autoProcessTag(
       await gateIn(db, { tags: [tag], gate, recorder: 'FX9600 Auto', device: readerId });
     } else {
       if (box.status !== 'warehouse') return { processed: false, reason: 'not_shippable' };
+      /* An imported job for the truck at the gate wins over the gate's preset. */
+      const plate = plateAt(gate);
+      const plan = plate ? await planAtGate(db, gate, plate) : undefined;
+      if (plan) {
+        await gateOut(db, {
+          tags: [tag], gate, customer: plan.customer, doNo: plan.doNo ?? undefined, po: plan.po ?? undefined,
+          plate, recorder: 'LPR + FX9600', device: readerId,
+        });
+        await recordShipment(db, gate, plan, [tag]);
+        autoProcessedAt.set(key, Date.now());
+        await db.delete(gatePendingReads).where(and(eq(gatePendingReads.gateNo, gate), eq(gatePendingReads.tag, tag)));
+        bump();
+        return { processed: true };
+      }
+      /* Jobs are waiting and the truck is unknown: shipping to the preset now
+         could send another customer's load. */
+      if (!plate && await anyPlanWaiting(db)) return { processed: false, reason: 'awaiting_plate' };
       const session = (await db.select().from(rfidGateAutoSessions).where(eq(rfidGateAutoSessions.gateNo, gate)).limit(1))[0];
       if (!session || session.direction !== 'out' || session.expiresAt.getTime() <= Date.now() || !session.customer) {
         return { processed: false, reason: 'outbound_context_required' };

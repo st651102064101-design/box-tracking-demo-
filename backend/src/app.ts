@@ -20,6 +20,7 @@ import { uiPrefsRouter } from './routes/uiPrefs.js';
 import { rolesRouter } from './routes/roles.js';
 import { brandingRouter } from './routes/branding.js';
 import { systemRouter } from './routes/system.js';
+import { shipPlansRouter } from './routes/ship-plans.js';
 import { lprRouter } from './routes/lpr.js';
 import { devicesRouter } from './routes/devices.js';
 import { warehouse3dRouter } from './routes/warehouse3d.js';
@@ -125,6 +126,7 @@ export function createApp() {
   app.use('/api/state', stateRouter);
   // LPR cameras authenticate with their own webhook secret, not a user JWT.
   // Mount before gateRouter, whose remaining endpoints require Bearer auth.
+  app.use('/api/ship-plans', shipPlansRouter);
   app.use('/api/gate/lpr', lprRouter);
   app.use('/api/gate', gateRouter);
   app.use('/api/boxes', boxesRouter);
