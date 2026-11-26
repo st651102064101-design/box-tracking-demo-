@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
-import '../models/employee.dart';
 import '../services/api_client.dart';
 import '../services/i18n.dart';
 import '../services/rfid_service.dart';
