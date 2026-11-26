@@ -511,6 +511,9 @@ html[data-system="rfidgate"] #bulkInvShip,html[data-system="rfidgate"] #bulkInvR
 .sp-ic{width:58px;height:58px;display:grid;place-items:center;border-radius:18px;background:color-mix(in srgb,#a3f04b 18%,transparent);}
 .sp-ic svg{width:32px;height:32px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
 .sp-flow{display:flex;gap:10px;align-items:baseline;font-size:14px;}
+.sp-brand{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--muted);}
+.sp-brand-logo{display:inline-flex;width:40px;height:24px;}
+.sp-brand-logo svg{width:100%;height:100%;}
 .sp-flow i{font-style:normal;color:var(--muted);min-width:56px;}
 .sp-flow em{font-style:normal;font-weight:700;}
 .sp-go{margin-top:auto;align-self:stretch;text-align:center;padding:12px;border-radius:999px;background:var(--ink);color:var(--bg);font-weight:800;}
@@ -2382,6 +2385,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
       <button type="button" class="sp-card sp-main" data-system-card="rfidgate" onclick="chooseSystem('rfidgate')">
         <span class="sp-key">1</span><span class="sp-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 8.5a5 5 0 0 1 7 0M6 6a8.5 8.5 0 0 1 12 0M11 12a1.5 1.5 0 1 1 2 0M12 13.5V21"/></svg></span>
         <b>RFID Gate</b>
+        <span class="sp-brand"><span class="sp-brand-logo" data-company-logo><svg viewBox="0 0 40 24" aria-hidden="true"><rect x="1" y="1" width="38" height="22" rx="5" fill="none" stroke="currentColor" stroke-dasharray="3 2"/><text x="20" y="15" text-anchor="middle" font-size="8" fill="currentColor">SVG</text></svg></span><span>แฮนออน</span></span>
         <span class="sp-flow"><i>รับเข้า</i><em>FX9600 อัตโนมัติ</em></span>
         <span class="sp-flow"><i>ส่งออก</i><em>Import Excel · ยิงมือ</em></span>
         <span class="sp-go">เริ่มใช้ ›</span>
