@@ -3050,7 +3050,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
     <div id="gateOutFormFields">
     <div class="gateout-stack">
       <div id="outVehicleQuick"></div>
-      <div class="field out-rfid-context-extra"><label>ทะเบียนรถ <span class="muted small go-rfid-only">(ถ้ามีจาก LPR)</span></label><input id="outPlate" list="dl-plate" placeholder="82-1234 กทม" autocomplete="off"><div class="field-err" id="err-outPlate" role="alert" hidden></div></div>
+      <div class="field out-rfid-context-extra"><label>ทะเบียนรถ <span class="muted small go-rfid-only">(ถ้ามีจาก LPR)</span></label><div class="cust-combo"><input id="outPlate" placeholder="82-1234 กทม" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="plateList"><div id="plateList" class="cust-list" role="listbox" hidden></div></div><div class="field-err" id="err-outPlate" role="alert" hidden></div></div>
       <div class="field out-rfid-context-extra"><label>ชื่อคนขับ</label><input id="outDriver" list="dl-driver" placeholder="นายสมชาย ใจดี" autocomplete="off"><div class="field-err" id="err-outDriver" role="alert" hidden></div></div>
       <div class="field out-rfid-context-extra"><label>เบอร์โทรคนขับ</label><input id="outDriverTel" type="tel" inputmode="tel" list="dl-tel" placeholder="08x-xxx-xxxx" maxlength="15" autocomplete="off"><div class="field-err" id="err-outDriverTel" role="alert" hidden></div></div>
       <div class="field cust-field"><label>ลูกค้า / ปลายทาง</label><div id="doCustomerTiles" class="cust-combo"></div><select id="doCustomer" style="display:none;"></select><div id="doCustomerHint" style="display:none;"></div></div>
@@ -6602,6 +6602,27 @@ function refreshGateOutManualVisibility(){
   }
 }
 function focusGateOutField(id){var el=$('#'+id);if(el){el.scrollIntoView({block:'center',behavior:'smooth'});el.focus({preventScroll:true});}}
+/* Plate picker: recent vehicles filtered as the operator types. A tap fills the
+   plate, driver and phone from the same record the recent chips use. */
+function plateOpen(open){var l=$('#plateList'),i=$('#outPlate');if(!l||!i)return;l.hidden=!open;i.setAttribute('aria-expanded',open?'true':'false');if(open)renderPlateList();}
+function renderPlateList(){
+  var list=$('#plateList'),box=$('#outPlate');if(!list||!box)return;
+  var q=String(box.value||'').trim().toUpperCase().replace(/\s+/g,'');
+  var vs=Object.values(S.vehicles||{}).filter(function(v){return v&&v.plate;}).sort(function(a,b){return new Date(b.lastUsedAt||0)-new Date(a.lastUsedAt||0);});
+  var hits=vs.filter(function(v){return !q||String(v.plate).toUpperCase().replace(/\s+/g,'').indexOf(q)>=0||String(v.driver||'').toUpperCase().indexOf(q)>=0;}).slice(0,8);
+  var html=hits.length?hits.map(function(v){return '<button type="button" role="option" class="cust-opt" data-v="'+esc(v.plate)+'">'+esc(v.plate)+(v.driver?' <span class="muted small">· '+esc(v.driver)+'</span>':'')+'</button>';}).join(''):'';
+  if(list.dataset.html!==html){list.dataset.html=html;list.innerHTML=html;}
+  if(!hits.length)plateOpen(false);
+}
+(function(){
+  var box=document.getElementById('outPlate');if(!box)return;
+  box.addEventListener('focus',function(){plateOpen(true);});
+  box.addEventListener('click',function(){plateOpen(true);});
+  box.addEventListener('input',function(){plateOpen(true);});
+  box.addEventListener('blur',function(){setTimeout(function(){plateOpen(false);},120);});
+  box.addEventListener('keydown',function(e){if(e.key==='Escape')plateOpen(false);});
+  document.addEventListener('mousedown',function(e){var b=e.target.closest&&e.target.closest('#plateList .cust-opt');if(b){e.preventDefault();var plate=b.dataset.v;plateOpen(false);applyVehicle('out',plate);refreshGateOutManualVisibility();}});
+})();
 /* Outbound form: check each field when the operator leaves it, say what is
    wrong under that field, and keep the scan row hidden until all pass. */
 var GO_RULES={
