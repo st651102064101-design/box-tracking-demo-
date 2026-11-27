@@ -3149,6 +3149,10 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
   .gp-step.now{color:var(--ink);box-shadow:inset 0 0 0 2px #f59e0b;}.gp-step.now span{background:#f59e0b;color:#2a1700;}
   @media (max-width:640px){.gp-steps{grid-template-columns:1fr;}.gp-ready{flex-direction:column;align-items:flex-start;}}
   #gpStatus[hidden],#gpPassagesCard[hidden]{display:none!important;}
+  .wh-tabs{display:flex;gap:4px;padding:4px;border-radius:14px;background:color-mix(in srgb,var(--ink) 6%,transparent);margin-bottom:16px;width:max-content;max-width:100%;}
+  .wh-tab{min-height:44px;padding:8px 18px;border:0;border-radius:11px;background:transparent;color:var(--muted);font-weight:700;font-size:15px;cursor:pointer;}
+  .wh-tab.active{background:var(--panel,#222);color:var(--ink);box-shadow:0 1px 4px rgba(0,0,0,.25);}
+  .whTab[hidden]{display:none !important;}
   details.wh-more{border:1px solid var(--line);border-radius:14px;padding:10px 14px;}
   details.wh-more summary{cursor:pointer;font-weight:700;min-height:40px;display:flex;align-items:center;}
   #whFormCard input,#whFormCard select{min-height:52px;font-size:17px;}
@@ -3714,6 +3718,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
       <div class="wg-top"><span class="wg-ic"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V9l9-6 9 6v12"/><path d="M9 21v-8h6v8"/></svg></span></span><span class="wg-lbl">ผังคลังและประตู</span></div>
       <p class="wg-cap">กำหนดคลังและช่วงเลขประตูที่ผูกกับคลังนั้น — เวลายิงที่ประตูใด ระบบจะรู้ทันทีว่ากล่องเข้า/ออกที่คลังไหน</p>
       <div class="wg-body">
+      <div class="wh-tabs" role="tablist" id="whTabs"><button type="button" class="wh-tab active" role="tab" data-whtab-btn="info" onclick="setWhTab('info')">ข้อมูลคลัง</button><button type="button" class="wh-tab" role="tab" data-whtab-btn="gates" onclick="setWhTab('gates')">ประตู</button></div>
       <div class="grid g4 wh-form-layout">
         <details class="wh-more" style="grid-column:1/-1;"><summary>รายละเอียดเพิ่มเติม</summary>
         <div class="field" style="grid-column:span 2;"><label>รหัสคลัง (สร้างอัตโนมัติ)</label>
@@ -3725,9 +3730,12 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
           </div>
         </div>
         </details>
+        <div class="whTab" data-whtab="info" style="display:contents;">
         <div class="field"><label>ชื่อคลัง </label><input id="whName" placeholder="คลัง 1 — บางปู"></div>
         <div class="field"><label>ประตูเริ่ม </label><input id="whGateFrom" type="number" min="1" placeholder="1"></div>
         <div class="field"><label>ประตูสิ้นสุด </label><input id="whGateTo" type="number" min="1" placeholder="5"></div>
+        </div>
+        <div class="whTab" data-whtab="gates" hidden style="display:contents;">
         <div class="field"><label>ประเภทประตู (ตั้งทุกประตูพร้อมกัน)</label>
           <select id="whGateType">
             <option value="both">⇄ เข้า-ออกร่วมกัน</option>
@@ -3751,6 +3759,8 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
         <div class="field" id="whGateRfidSection" style="grid-column:1/-1;width:100%;min-width:0;"><label>RFID Gate / Zebra FX9600 — จัดการราย DB Gate</label>
           <div id="whGateRfidCrud" class="muted small" style="padding:12px;border:1px solid var(--line);border-radius:12px;width:100%;min-width:0;box-sizing:border-box;">เปิดแก้ไขคลังก่อน เพื่อจัดการ RFID Reader ของแต่ละ DB Gate</div>
         </div>
+        </div>
+        <div class="whTab" data-whtab="info" style="display:contents;">
         <div class="field" style="grid-column:span 2;"><label>พื้นที่ / ที่ตั้ง</label>
           <!-- โหมด "พิมพ์เอง" กับ "เลือกบนแผนที่" แยกกันชัดเจน — เดิม #whArea พิมพ์ได้อิสระ
                อยู่ตลอดเวลาแม้ตอนแผนที่เปิดอยู่ (ปุ่ม "เลือกบนแผนที่" แค่โชว์/ซ่อนแผนที่ ไม่ได้
@@ -3786,6 +3796,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
             <button type="button" class="ivs-btn" data-val="inactive" onclick="setStatusToggle('whStatus','inactive')">ปิดใช้งาน</button>
           </div>
           <select id="whStatus" style="display:none;"><option value="active">ใช้งาน</option><option value="inactive">ปิดใช้งาน</option></select>
+        </div>
         </div>
       </div>
       </div>
@@ -6566,6 +6577,10 @@ function gateOutMissing(){return GATE_OUT_REQUIRED.filter(function(f){var v=val(
 var gateOutConfirmed=false;
 /* The operator presses confirm once the form is complete; every field is
    checked then, and the first problem is shown and focused. */
+function setWhTab(tab){
+  document.querySelectorAll('#whFormCard .whTab').forEach(function(el){el.hidden=el.dataset.whtab!==tab;});
+  document.querySelectorAll('#whTabs .wh-tab').forEach(function(b){var on=b.dataset.whtabBtn===tab;b.classList.toggle('active',on);b.setAttribute('aria-selected',on?'true':'false');});
+}
 function gateOutEdit(){gateOutConfirmed=false;refreshGateOutManualVisibility();var p=$('#outPlate');if(p)p.focus();}
 function confirmGateOutFields(){
   var bad=['outPlate','outDriver','outDriverTel'].filter(function(id){return !checkGateOutField(id);});
