@@ -52,6 +52,7 @@ class FakeApi extends ApiClient {
     String? employeeId,
     String? employeeName,
     int? heartbeatSeconds,
+    bool sleeping = false,
   }) async {
     if (throwOnState != null) throw throwOnState!;
     heartbeats.add({
@@ -65,6 +66,7 @@ class FakeApi extends ApiClient {
       'employeeId': employeeId,
       'employeeName': employeeName,
       'heartbeatSeconds': heartbeatSeconds,
+      'sleeping': sleeping,
     });
   }
 
@@ -370,6 +372,32 @@ void fillVehicle(AppController c) {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  group('screen off / on presence', () {
+    test('locking the screen reports sleeping', () async {
+      final api = FakeApi();
+      api.token = 'device-token';
+      final c = await makeController(api);
+      api.heartbeats.clear();
+      c.didChangeAppLifecycleState(AppLifecycleState.paused);
+      await Future<void>.delayed(Duration.zero);
+      expect(api.heartbeats.single['sleeping'], true);
+      c.dispose();
+    });
+
+    test('waking the screen reports awake again at once', () async {
+      final api = FakeApi();
+      api.token = 'device-token';
+      final c = await makeController(api);
+      c.didChangeAppLifecycleState(AppLifecycleState.paused);
+      await Future<void>.delayed(Duration.zero);
+      api.heartbeats.clear();
+      c.didChangeAppLifecycleState(AppLifecycleState.resumed);
+      await Future<void>.delayed(Duration.zero);
+      expect(api.heartbeats.last['sleeping'], false);
+      c.dispose();
+    });
+  });
 
   group('addScan — inbound validation', () {
     test('accepts a box that is currently out (a return)', () async {

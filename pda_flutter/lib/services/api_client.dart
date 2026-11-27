@@ -149,6 +149,7 @@ class ApiClient {
     String? employeeId,
     String? employeeName,
     int? heartbeatSeconds,
+    bool sleeping = false,
   }) async {
     await _send(() => http.post(
           _u('/api/devices/heartbeat'),
@@ -168,6 +169,8 @@ class ApiClient {
             if (employeeId != null) 'employeeId': employeeId,
             if (employeeName != null) 'employeeName': employeeName,
             if (heartbeatSeconds != null) 'heartbeatSeconds': heartbeatSeconds,
+            // true while the screen is off or locked: shown as "พักจอ", not offline.
+            'sleeping': sleeping,
           }),
         ));
   }

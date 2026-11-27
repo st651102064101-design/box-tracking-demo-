@@ -164,8 +164,15 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
       case AppLifecycleState.inactive:
       case AppLifecycleState.hidden:
         rfid.stopInventory();
+        if (state == AppLifecycleState.paused) {
+          // Screen off or locked: say so now, instead of letting the dashboard
+          // wait for the heartbeat to time out.
+          _screenAsleep = true;
+          unawaited(_reportDevicePresence(sleeping: true));
+        }
         break;
       case AppLifecycleState.resumed:
+        _screenAsleep = false;
         // DataWedge re-asserts its own default (enabled) scanner state on
         // some devices whenever the foreground app regains focus, silently
         // undoing setScanInputMode's earlier disable — reapply it every
@@ -179,10 +186,11 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
         // If the chip is still offline, retry auth+state immediately —
         // waiting for the next periodic tick is what made "open the app"
         // look like a long hang before it went green.
+        // Always report the screen is on again, so the dashboard leaves
+        // "พักจอ" at once; a retry of the connection is on top of that.
+        unawaited(_reportDevicePresence());
         if (!_liveConnected) {
           unawaited(retryConnection());
-        } else {
-          _reportDevicePresence();
         }
         break;
       case AppLifecycleState.detached:
@@ -659,7 +667,12 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     );
   }
 
-  Future<void> _reportDevicePresence() async {
+  /// True from the moment the screen goes dark until it comes back. Periodic
+  /// ticks stay quiet meanwhile, so they cannot overwrite the sleeping report.
+  bool _screenAsleep = false;
+
+  Future<void> _reportDevicePresence({bool sleeping = false}) async {
+    if (_screenAsleep && !sleeping) return;
     // Do not wait on the live-state flag. That flag follows the SSE stream,
     // and a stream that has not connected yet (or just dropped) is exactly
     // when the dashboard most needs a REST heartbeat to tell an idle but
@@ -678,8 +691,9 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
         employeeId: emp?.id,
         employeeName: emp?.name,
         heartbeatSeconds: _heartbeatSeconds,
+        sleeping: sleeping,
       );
-      _markLiveFromPresence();
+      if (!sleeping) _markLiveFromPresence();
       final ip = _cachedLanIp ?? await readLanIp();
       if (ip != null && ip != _cachedLanIp) {
         _cachedLanIp = ip;
@@ -694,6 +708,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
           employeeId: emp?.id,
           employeeName: emp?.name,
           heartbeatSeconds: _heartbeatSeconds,
+          sleeping: sleeping,
         );
       }
     } catch (_) {
