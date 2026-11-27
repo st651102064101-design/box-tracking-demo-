@@ -6596,6 +6596,8 @@ function whUpdateRangeHint(){
   }
 }
 (function(){['whGateFrom','whGateTo'].forEach(function(id){var el=document.getElementById(id);if(el)el.addEventListener('input',whUpdateRangeHint);});})();
+/* Values filled in by the editor (not typed) never fire input, so keep the hint in step while the form is open. */
+setInterval(function(){var f=document.getElementById('whFormCard');if(f&&f.offsetParent)whUpdateRangeHint();},500);
 function setWhTab(tab){
   document.querySelectorAll('#whFormCard .whTab').forEach(function(el){el.hidden=el.dataset.whtab!==tab;});
   document.querySelectorAll('#whTabs .wh-tab').forEach(function(b){var on=b.dataset.whtabBtn===tab;b.classList.toggle('active',on);b.setAttribute('aria-selected',on?'true':'false');});
