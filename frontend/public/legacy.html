@@ -3235,7 +3235,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
       <div class="field" id="inPartnerFieldWrap"><label>รถของคู่ค้า</label><select id="inPartner"></select>
         <div id="inPartnerHint" style="display:none;"></div>
         <div class="hint">รถที่เข้าประตูต้องเป็นของซัพพลายเออร์ (ส่งกล่องใหม่) หรือลูกค้า (คืนกล่อง) เสมอ</div></div>
-      <div class="field"><label>ทะเบียนรถ</label><input id="inPlate" list="dl-plate" placeholder="82-1234 กทม" autocomplete="off"></div>
+      <div class="field"><label>ทะเบียนรถ</label><div class="cust-combo"><input id="inPlate" placeholder="82-1234 กทม" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="inPlateList"><div id="inPlateList" class="cust-list" role="listbox" hidden></div></div></div>
       <div class="field"><label>ชื่อคนขับ</label><input id="inDriver" list="dl-driver" placeholder="นายสมชาย ใจดี" autocomplete="off"></div>
       <div class="field"><label>ประเภทรถ</label><div id="inVehicleField"></div></div>
       <div class="field"><label>เบอร์โทรคนขับ</label><input id="inDriverTel" type="tel" inputmode="tel" list="dl-tel" placeholder="08x-xxx-xxxx" maxlength="15" autocomplete="off"></div>
@@ -6622,6 +6622,26 @@ function renderPlateList(){
   box.addEventListener('blur',function(){setTimeout(function(){plateOpen(false);},120);});
   box.addEventListener('keydown',function(e){if(e.key==='Escape')plateOpen(false);});
   document.addEventListener('mousedown',function(e){var b=e.target.closest&&e.target.closest('#plateList .cust-opt');if(b){e.preventDefault();var plate=b.dataset.v;plateOpen(false);applyVehicle('out',plate);refreshGateOutManualVisibility();}});
+})();
+/* Same picker for receiving: recent vehicles under the plate field. */
+function inPlateOpen(open){var l=$('#inPlateList'),i=$('#inPlate');if(!l||!i)return;l.hidden=!open;i.setAttribute('aria-expanded',open?'true':'false');if(open)renderInPlateList();}
+function renderInPlateList(){
+  var list=$('#inPlateList'),box=$('#inPlate');if(!list||!box)return;
+  var q=String(box.value||'').trim().toUpperCase().replace(/\s+/g,'');
+  var vs=Object.values(S.vehicles||{}).filter(function(v){return v&&v.plate;}).sort(function(a,b){return new Date(b.lastUsedAt||0)-new Date(a.lastUsedAt||0);});
+  var hits=vs.filter(function(v){return !q||String(v.plate).toUpperCase().replace(/\s+/g,'').indexOf(q)>=0||String(v.driver||'').toUpperCase().indexOf(q)>=0;}).slice(0,8);
+  var html=hits.map(function(v){return '<button type="button" role="option" class="cust-opt" data-v="'+esc(v.plate)+'">'+esc(v.plate)+(v.driver?' <span class="muted small">· '+esc(v.driver)+'</span>':'')+'</button>';}).join('');
+  if(list.dataset.html!==html){list.dataset.html=html;list.innerHTML=html;}
+  if(!hits.length)inPlateOpen(false);
+}
+(function(){
+  var box=document.getElementById('inPlate');if(!box)return;
+  box.addEventListener('focus',function(){inPlateOpen(true);});
+  box.addEventListener('click',function(){inPlateOpen(true);});
+  box.addEventListener('input',function(){inPlateOpen(true);});
+  box.addEventListener('blur',function(){setTimeout(function(){inPlateOpen(false);},120);});
+  box.addEventListener('keydown',function(e){if(e.key==='Escape')inPlateOpen(false);});
+  document.addEventListener('mousedown',function(e){var b=e.target.closest&&e.target.closest('#inPlateList .cust-opt');if(b){e.preventDefault();var plate=b.dataset.v;inPlateOpen(false);applyVehicle('in',plate);}});
 })();
 /* Outbound form: check each field when the operator leaves it, say what is
    wrong under that field, and keep the scan row hidden until all pass. */
