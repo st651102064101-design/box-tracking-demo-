@@ -3744,9 +3744,12 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
           </select>
           <div class="tag" style="margin-top:5px;" id="whGateTypeHint">เลือกที่นี่ = ตั้งให้ทุกประตูในช่วง แล้วปรับแยกรายประตูด้านล่างได้</div>
         </div>
+        <details class="wh-more" style="grid-column:1/-1;"><summary>ปรับทิศทางรายประตู</summary>
         <div class="field" style="grid-column:1/-1;width:100%;min-width:0;"><label>ทิศทางรายประตู — แยกตั้งได้ทุกประตู</label>
           <div id="whGateTypeList" style="display:flex;flex-wrap:wrap;gap:8px;width:100%;"></div>
         </div>
+        </details>
+        <details class="wh-more" style="grid-column:1/-1;"><summary>ตั้งค่าขั้นสูง (วิธีทำรายการ · RFID)</summary>
         <div class="field" style="grid-column:1/-1;width:100%;min-width:0;"><label>วิธีทำรายการสำหรับประตู “เข้า-ออกร่วมกัน”</label>
           <div id="whGateBidirectionalList" style="display:flex;flex-direction:column;gap:8px;width:100%;"></div>
           <div class="muted small" style="margin-top:6px;">เลือก “หน้าจอ” เมื่อพนักงานระบุขาเข้า/ออกเอง; เลือก “2 เสาอากาศ” เมื่อผูก Outer และ Inner ของ DB Gate เดียวกันแล้ว</div>
@@ -3756,6 +3759,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
           <button type="button" class="btn ghost sm" id="btnWhRfidEnabled" onclick="toggleWhRfidEnabled()">RFID Gate + LPR: ใช้งาน</button>
           <div class="muted small" id="whRfidEnabledHint" style="margin-top:6px;">เปิดใช้เมื่อคลังนี้มี RFID Gate หรือ LPR</div>
         </div>
+        </details>
         <div class="field" id="whGateRfidSection" style="grid-column:1/-1;width:100%;min-width:0;"><label>RFID Gate / Zebra FX9600 — จัดการราย DB Gate</label>
           <div id="whGateRfidCrud" class="muted small" style="padding:12px;border:1px solid var(--line);border-radius:12px;width:100%;min-width:0;box-sizing:border-box;">เปิดแก้ไขคลังก่อน เพื่อจัดการ RFID Reader ของแต่ละ DB Gate</div>
         </div>
