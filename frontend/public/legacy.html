@@ -8104,33 +8104,38 @@ function gpApi(path,method,body){
     .then(function(r){return r.json().catch(function(){return {};}).then(function(d){if(!r.ok)throw new Error(d.message||('ทำรายการไม่สำเร็จ ('+r.status+')'));return d;});});
 }
 function gpFail(e){toast('ทำรายการไม่สำเร็จ',e.message,'err');}
+/* Redraw only what changed: this page refreshes itself, and rewriting equal
+   content makes it flicker. Compared with what was last written, because the
+   translator may have changed the text on screen since. */
+function gpHtml(el,html){if(el.gpWritten===html)return;el.gpWritten=html;el.innerHTML=html;}
 function renderGatePage(){
   if(!$('#tab-gate').classList.contains('active'))return;
   var sys=currentSystem(),g=gpGateNo(),sel=$('#gpGate');
-  $('#gpSystem').textContent=window.Systems.name(sys);
-  if(!g){$('#gpWarn').innerHTML='<div class="banner warn">ยังไม่มีประตูในระบบ <button class="btn sm accent" onclick="goSetup(\'wh\')">เพิ่มประตู</button></div>';return;}
-  sel.innerHTML=allGateNums().map(function(n){return '<option value="'+n+'"'+(n===g?' selected':'')+'>ประตู '+n+' · '+esc(whName(gateWh(n)))+'</option>';}).join('');
+  var title=$('#gpSystem'),systemName=window.Systems.name(sys);if(title.gpWritten!==systemName){title.gpWritten=systemName;title.textContent=systemName;}
+  if(!g){gpHtml($('#gpWarn'),'<div class="banner warn">ยังไม่มีประตูในระบบ <button class="btn sm accent" onclick="goSetup(\'wh\')">เพิ่มประตู</button></div>');return;}
+  gpHtml(sel,allGateNums().map(function(n){return '<option value="'+n+'"'+(n===g?' selected':'')+'>ประตู '+n+' · '+esc(whName(gateWh(n)))+'</option>';}).join(''));
   var info=gpInfo(g),problem=window.GateView.mismatch(sys,info),auto=window.Systems.unattended(sys);
-  $('#gpWarn').innerHTML=problem?'<div class="banner warn" style="margin-bottom:14px;"><b>ประตู '+g+' ยังตั้งค่าไม่ตรงกับระบบนี้</b> '+esc(problem)+' <button class="btn sm accent" onclick="manageRfidGate('+g+')">แก้การตั้งค่า ›</button></div>':'';
+  gpHtml($('#gpWarn'),problem?'<div class="banner warn" style="margin-bottom:14px;"><b>ประตู '+g+' ยังตั้งค่าไม่ตรงกับระบบนี้</b> '+esc(problem)+' <button class="btn sm accent" onclick="manageRfidGate('+g+')">แก้การตั้งค่า ›</button></div>':'');
   var bound=rfidGateIsBound(g),online=bound&&fx9600IsOnline(g);
   var seen=null;
   Object.keys(S.boxes||{}).forEach(function(t){(S.boxes[t].history||[]).forEach(function(h){
     if(h.dir==='lpr'&&Number(h.gateNo)===g&&(!seen||Date.parse(h.ts)>Date.parse(seen.ts)))seen=h;});});
   var way=info.type==='in'?'ขาเข้าอย่างเดียว':info.type==='out'?'ขาออกอย่างเดียว':(info.mode==='antenna'?'เข้า-ออก · เสาอากาศบอกทิศ':'เข้า-ออก · เจ้าหน้าที่เลือก');
-  $('#gpStatus').innerHTML=
+  gpHtml($('#gpStatus'),
     '<div class="gp-tile"><small>ทิศทาง</small><b>'+way+'</b><small>'+(auto?'ทำงานเองโดยไม่ต้องมีคนเฝ้า':'เจ้าหน้าที่กดเลือกทิศก่อนรถผ่าน')+'</small></div>'
     +'<div class="gp-tile"><small>เครื่องอ่าน FX9600</small><b style="color:'+(online?'#22c55e':'var(--neg)')+';">● '+(online?'พร้อมใช้งาน':bound?'ไม่ตอบสนอง':'ยังไม่ผูก')+'</b>'+(online?'<small>'+esc(fx9600SeenText(g))+'</small>':'<button class="btn sm ghost" onclick="manageRfidGate('+g+')">'+(bound?'ตรวจเครื่อง':'ผูกเครื่อง')+' ›</button>')+'</div>'
-    +'<div class="gp-tile"><small>กล้องป้ายทะเบียน (LPR)</small><b>'+(seen?esc(seen.plateNumber):'—')+'</b><small>'+(seen?'อ่านล่าสุด '+esc(fmtTs(seen.ts)):'ยังไม่เคยอ่านป้ายคู่กับกล่องที่ประตูนี้')+'</small></div>';
-  $('#gpDirections').innerHTML=auto?'':
+    +'<div class="gp-tile"><small>กล้องป้ายทะเบียน (LPR)</small><b>'+(seen?esc(seen.plateNumber):'—')+'</b><small>'+(seen?'อ่านล่าสุด '+esc(fmtTs(seen.ts)):'ยังไม่เคยอ่านป้ายคู่กับกล่องที่ประตูนี้')+'</small></div>');
+  gpHtml($('#gpDirections'),auto?'':
     (info.type!=='out'?'<button type="button" class="gp-dir" onclick="gpDirection(\'in\')">⬇ ขาเข้า</button>':'')
-    +(info.type!=='in'?'<button type="button" class="gp-dir out" onclick="gpDirection(\'out\')">⬆ ขาออก</button>':'');
+    +(info.type!=='in'?'<button type="button" class="gp-dir out" onclick="gpDirection(\'out\')">⬆ ขาออก</button>':''));
   var rows=window.GateView.passages(S.events,g,10);
-  $('#gpPassages').innerHTML=rows.length?rows.map(function(e){return '<div class="gp-row"><b class="mono">'+esc(e.tag)+'</b><span class="pill '+(e.dir==='out'?'teal':'ok')+'">'+(e.dir==='out'?'ออก':'เข้า')+'</span><span class="muted small">'+esc([e.customer?custName(e.customer):'',e.plate].filter(Boolean).join(' · '))+'</span><span class="small">'+esc(fmtTs(e.ts))+'</span></div>';}).join(''):'<div class="muted small">ยังไม่มีกล่องผ่านประตูนี้</div>';
+  gpHtml($('#gpPassages'),rows.length?rows.map(function(e){return '<div class="gp-row"><b class="mono">'+esc(e.tag)+'</b><span class="pill '+(e.dir==='out'?'teal':'ok')+'">'+(e.dir==='out'?'ออก':'เข้า')+'</span><span class="muted small">'+esc([e.customer?custName(e.customer):'',e.plate].filter(Boolean).join(' · '))+'</span><span class="small">'+esc(fmtTs(e.ts))+'</span></div>';}).join(''):'<div class="muted small">ยังไม่มีกล่องผ่านประตูนี้</div>');
   var outbound=auto&&info.type!=='in';
   $('#gpOutbound').hidden=!outbound;$('#gpReview').hidden=!auto;
   if(gpShownFor!==sys+':'+g){
+    gpShownFor=sys+':'+g;
     if(gpPre.gate!==g){gpPre={gate:g,data:null,editing:false,customer:'',ttl:'28800',sig:''};}
-    gpPre.sig='';$('#gpImportResult').innerHTML='';$('#gpReview').innerHTML='';$('#gpPlans').innerHTML='';$('#gpPreset').innerHTML='';
+    gpPre.sig='';$('#gpImportResult').innerHTML='';gpHtml($('#gpReview'),'');gpHtml($('#gpPlans'),'');$('#gpPreset').innerHTML='';
     gpRenderPreset();
     gpLoad();
   }
@@ -8144,16 +8149,16 @@ function gpLoad(){
   gpApi('/api/rfid/pending/'+g).then(function(d){
     if(!current())return;
     var tags=d.tags||[];
-    $('#gpReview').innerHTML='<h3>ต้องตรวจ'+(tags.length?' · '+tags.length+' ใบ':'')+'</h3>'+(tags.length
+    gpHtml($('#gpReview'),'<h3>ต้องตรวจ'+(tags.length?' · '+tags.length+' ใบ':'')+'</h3>'+(tags.length
       ?'<div class="muted small">เครื่องอ่านเจอกล่อง แต่ระบบไม่บันทึกเอง เพราะไม่รู้ทิศทางหรือลูกค้า หรือรออ่านป้ายรถ (รายการหายเองใน 10 นาที)</div>'
         +tags.map(function(t){var b=S.boxes[t]||{};return '<div class="gp-row"><b class="mono">'+esc(t)+'</b><span class="muted small">'+esc(typeName(b.type))+'</span><button class="btn sm ghost" data-tag="'+esc(t).replace(/"/g,'&quot;')+'" onclick="gpDismiss(this.dataset.tag)">นำออก</button></div>';}).join('')
-      :'<div class="muted small">ไม่มีรายการค้าง</div>');
+      :'<div class="muted small">ไม่มีรายการค้าง</div>'));
   }).catch(function(){});
   if(gpInfo(g).type==='in')return;
   gpApi('/api/ship-plans').then(function(d){
     if(!current())return;
     var list=(d.plans||[]).filter(function(p){return p.status==='waiting'||p.planDate===d.today;}).slice(0,50);
-    $('#gpPlans').innerHTML=list.length?list.map(function(p){var done=p.status==='shipped';return '<div class="gp-row"><b class="mono">'+esc(p.plate)+'</b><span>'+esc(custName(p.customer))+(p.doNo?' · '+esc(p.doNo):'')+'</span><span class="muted small">'+esc(p.planDate)+'</span><span class="pill '+(done?'ok':'warn')+'">'+(done?'ส่งแล้ว '+p.shippedTags.length+' ใบ':(p.planDate===d.today?'รอรถ':p.planDate<d.today?'เลยวันแล้ว':'รอถึงวัน'))+'</span>'+(done?'':'<button class="btn sm ghost" onclick="gpDeletePlan('+Number(p.id)+')">ลบ</button>')+'</div>';}).join(''):'<div class="muted small">ยังไม่มีรายการรอรถ</div>';
+    gpHtml($('#gpPlans'),list.length?list.map(function(p){var done=p.status==='shipped';return '<div class="gp-row"><b class="mono">'+esc(p.plate)+'</b><span>'+esc(custName(p.customer))+(p.doNo?' · '+esc(p.doNo):'')+'</span><span class="muted small">'+esc(p.planDate)+'</span><span class="pill '+(done?'ok':'warn')+'">'+(done?'ส่งแล้ว '+p.shippedTags.length+' ใบ':(p.planDate===d.today?'รอรถ':p.planDate<d.today?'เลยวันแล้ว':'รอถึงวัน'))+'</span>'+(done?'':'<button class="btn sm ghost" onclick="gpDeletePlan('+Number(p.id)+')">ลบ</button>')+'</div>';}).join(''):'<div class="muted small">ยังไม่มีรายการรอรถ</div>');
   }).catch(function(){});
   gpApi('/api/rfid/gates/'+g+'/auto-session').then(function(d){
     if(!current())return;
