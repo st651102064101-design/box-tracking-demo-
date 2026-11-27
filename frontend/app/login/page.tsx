@@ -63,7 +63,7 @@ export default function LoginPage() {
       setMode('sent');
       setBusy(false);
     } catch (err) {
-      setError(isThai ? 'ส่งลิงก์ไม่สำเร็จ ตรวจอีเมลแล้วลองอีกครั้ง' : 'Could not send the link. Check the email and try again.');
+      setError(err instanceof Error && err.message ? err.message : (isThai ? 'ส่งลิงก์ไม่สำเร็จ ตรวจอีเมลแล้วลองอีกครั้ง' : 'Could not send the link. Check the email and try again.'));
       setBusy(false);
     }
   }
@@ -329,7 +329,7 @@ export default function LoginPage() {
               <p className="mt-1 text-sm text-ink-2/80">
                 {isThai ? 'เปิดอีเมล ' : 'Open the email '}<span className="font-semibold">{resetEmail}</span>{isThai ? ' แล้วกดลิงก์เพื่อตั้งรหัสผ่านใหม่' : ' and click the link to set a new password.'}
               </p>
-              <p className="mt-2 text-xs text-ink-2/60">{isThai ? 'ไม่เจออีเมล? ดูในโฟลเดอร์สแปม' : "Can't find it? Check your spam folder."}</p>
+              <p className="mt-2 text-xs text-ink-2/60">{isThai ? 'ไม่ได้รับภายใน 1 นาที? ตรวจโฟลเดอร์สแปม หรือติดต่อผู้ดูแลระบบ' : "Not received within a minute? Check spam, or contact the system admin."}</p>
             </div>
             <button type="button" onClick={() => { setMode('signin'); setResetEmail(''); }} className="w-full rounded-xl bg-ink py-3 text-sm font-semibold text-white transition hover:opacity-90">
               {isThai ? 'กลับไปเข้าสู่ระบบ' : 'Back to sign in'}

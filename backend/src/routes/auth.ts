@@ -250,11 +250,9 @@ authRouter.get(
 
 
 /* POST /api/auth/password-reset/request — "ลืมรหัสผ่าน?".
-   The server checks the account. Only an existing account's email gets a link
-   (sent by Firebase, through its REST API). The answer is the same whether or
-   not the email is registered, so the form cannot be used to find accounts. */
+   Used on the factory network only, so an unknown email is reported plainly.
+   A link is sent (by Firebase, through its REST API) only for a registered email. */
 const resetRequestSchema = z.object({ email: z.string().trim().email().max(254) });
-const RESET_REQUEST_ANSWER = { ok: true, message: 'ถ้ามีบัญชีที่ใช้อีเมลนี้ ระบบจะส่งลิงก์ไปให้' };
 authRouter.post(
   '/password-reset/request',
   asyncHandler(async (req, res) => {
@@ -262,7 +260,8 @@ authRouter.post(
     const email = input.email.toLowerCase();
     const db = getDb();
     const [row] = await db.select({ id: users.id }).from(users).where(sql`lower(${users.email}) = ${email}`).limit(1);
-    if (row) {
+    if (!row) throw httpError(404, 'ไม่พบอีเมลนี้ในระบบ กรุณาติดต่อผู้ดูแลระบบ', 'email_not_found');
+    {
       try {
         const r = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${encodeURIComponent(env.firebaseApiKey)}`, {
           method: 'POST',
@@ -279,7 +278,7 @@ authRouter.post(
         console.warn('[password-reset] could not reach firebase:', err instanceof Error ? err.message : 'unknown');
       }
     }
-    res.json(RESET_REQUEST_ANSWER);
+    res.json({ ok: true, message: 'ส่งลิงก์ไปที่อีเมลแล้ว' });
   }),
 );
 

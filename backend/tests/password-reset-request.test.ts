@@ -8,13 +8,12 @@ beforeAll(async () => {
 });
 
 describe('password reset request', () => {
-  it('answers the same way for an unknown email and sends nothing to Firebase', async () => {
+  it('says plainly that the email is unknown and sends nothing to Firebase', async () => {
     const fetchSpy = vi.fn(async () => new Response('{}', { status: 200 }));
     vi.stubGlobal('fetch', fetchSpy);
     const res = await request(ctx.app).post('/api/auth/password-reset/request').send({ email: 'nobody@example.com' });
-    expect(res.status).toBe(200);
-    expect(res.body.ok).toBe(true);
-    expect(res.body.message).toContain('ถ้ามีบัญชี');
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('email_not_found');
     expect(fetchSpy).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   });
