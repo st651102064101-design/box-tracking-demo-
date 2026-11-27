@@ -307,7 +307,7 @@ authRouter.post(
     const [row] = await db.select().from(users).where(sql`lower(${users.email}) = ${email}`).limit(1);
     if (!row) throw httpError(400, RESET_FAILED, 'reset_link_invalid');
     const passwordHash = await hashPassword(input.password);
-    await db.update(users).set({ passwordHash, mustChangePassword: false, passwordResetOtpHash: null, passwordResetExpiresAt: null }).where(eq(users.id, row.id));
+    await db.update(users).set({ passwordHash, mustChangePassword: false }).where(eq(users.id, row.id));
     res.json({ ok: true });
   }),
 );

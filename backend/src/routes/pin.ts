@@ -45,8 +45,8 @@ async function checkSecret(key: string, value: string, hash: string): Promise<bo
 }
 
 /** Set/replace the PIN directly — used right after a badge scan (first-time
- *  setup, or a voluntary change from the in-shift settings screen). No OTP:
- *  the badge scan that got the operator here already proved who they are. */
+ *  setup, or a voluntary change from the in-shift settings screen). The badge
+ *  scan that got the operator here already proved who they are. */
 employeePinRouter.put(
   '/:id/pin',
   asyncHandler(async (req, res) => {

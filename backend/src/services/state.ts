@@ -355,7 +355,7 @@ export async function replaceState(
        (GET /api/state) never take this lock and are unaffected. */
     await tx.execute(sql`select pg_advisory_xact_lock(${STATE_WRITE_LOCK})`);
 
-    // PDA PIN data (pinHash / pending email-reset OTP) and each employee's
+    // PDA PIN data (pinHash) and each employee's
     // own web-app login (username/passwordHash) never round-trip through the
     // legacy `S.employees` payload — the frontend that calls PUT /api/state
     // has no idea either exists. Capture both before the wipe below so every
@@ -365,12 +365,8 @@ export async function replaceState(
         .select({
           id: employees.id,
           pinHash: employees.pinHash,
-          pinResetOtpHash: employees.pinResetOtpHash,
-          pinResetExpiresAt: employees.pinResetExpiresAt,
           username: employees.username,
           passwordHash: employees.passwordHash,
-          passwordResetOtpHash: employees.passwordResetOtpHash,
-          passwordResetExpiresAt: employees.passwordResetExpiresAt,
           accountActive: employees.accountActive,
           sessionVersion: employees.sessionVersion,
           /* role_id is captured here for a second reason on top of "the blob
@@ -725,12 +721,8 @@ export async function replaceState(
              must never be overwritten by a stale whole-state snapshot. */
           data: e,
           pinHash: pin?.pinHash ?? null,
-          pinResetOtpHash: pin?.pinResetOtpHash ?? null,
-          pinResetExpiresAt: pin?.pinResetExpiresAt ?? null,
           username: pin?.username ?? null,
           passwordHash: pin?.passwordHash ?? null,
-          passwordResetOtpHash: pin?.passwordResetOtpHash ?? null,
-          passwordResetExpiresAt: pin?.passwordResetExpiresAt ?? null,
           // Without these a routine save would lift a suspension and revive revoked sessions.
           accountActive: pin?.accountActive ?? true,
           sessionVersion: pin?.sessionVersion ?? 0,

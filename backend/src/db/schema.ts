@@ -36,14 +36,10 @@ export const users = pgTable('users', {
   mustChangePassword: boolean('must_change_password').notNull().default(false),
   name: text('name').notNull(),
   role: text('role').notNull().default('staff'),
-  /** Where "ลืมรหัสผ่าน?" sends its OTP — set at registration. Nullable only
-   *  for accounts created before this existed; forgot-password refuses to run
-   *  for those until an admin backfills one, same pattern as the employee PDA
-   *  PIN reset in routes/pin.ts. */
+  /** Where the "ลืมรหัสผ่าน?" reset link is sent — set at registration. Nullable
+   *  only for accounts created before this existed; forgot-password refuses to
+   *  run for those until an admin backfills one. */
   email: text('email'),
-  /** bcrypt hash of a pending "ลืมรหัสผ่าน?" email OTP; cleared once used. */
-  passwordResetOtpHash: text('password_reset_otp_hash'),
-  passwordResetExpiresAt: timestamp('password_reset_expires_at', { withTimezone: true }),
   /** RBAC role this account resolves its permissions through. Nullable for
    *  accounts created before RBAC existed — those fall back to mapping the
    *  legacy `role` string onto a seeded role (see roleKeyForLegacy). */
@@ -381,20 +377,12 @@ export const employees = pgTable('employees', {
   /** Bumped to sign the employee out everywhere (see requireAuth). */
   sessionVersion: integer('session_version').notNull().default(0),
   pinHash: text('pin_hash'),
-  /** bcrypt hash of a pending "ลืมรหัส PIN?" email OTP; cleared once used. */
-  pinResetOtpHash: text('pin_reset_otp_hash'),
-  pinResetExpiresAt: timestamp('pin_reset_expires_at', { withTimezone: true }),
   /** This employee's own web-app login — set by an admin (see PUT
    *  /api/employees/:id/credentials), separate from the `users` table of
    *  system/service accounts. Null until set: an employee with no username
    *  yet can't sign in as themselves, only be picked as a display name. */
   username: text('username').unique(),
   passwordHash: text('password_hash'),
-  /** bcrypt hash of a pending "ลืมรหัสผ่าน?" (web login, not the PDA PIN)
-   *  email OTP; cleared once used. Separate from pinResetOtpHash above —
-   *  different secret, different expiry, different form. */
-  passwordResetOtpHash: text('password_reset_otp_hash'),
-  passwordResetExpiresAt: timestamp('password_reset_expires_at', { withTimezone: true }),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 

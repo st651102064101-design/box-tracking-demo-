@@ -1,7 +1,7 @@
 /* Forgotten PIN on the handheld, approved by a supervisor standing there.
    The employee scans their own card, a supervisor (anyone holding the
    employee.pin.manage permission) scans theirs on the same handheld, and the
-   employee sets a new PIN right away. No email, no OTP, no one waiting elsewhere. */
+   employee sets a new PIN right away. No email, no codes sent anywhere, no one waiting elsewhere. */
 import { Router } from 'express';
 import { z } from 'zod';
 import { eq, or, sql } from 'drizzle-orm';

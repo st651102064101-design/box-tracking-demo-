@@ -10,9 +10,8 @@ export const registerSchema = z.object({
   username: z.string().min(3, 'ชื่อผู้ใช้อย่างน้อย 3 ตัวอักษร'),
   password: z.string().min(6, 'รหัสผ่านอย่างน้อย 6 ตัวอักษร'),
   name: z.string().min(1, 'กรุณากรอกชื่อ'),
-  // Required so "ลืมรหัสผ่าน?" always has somewhere to send the reset OTP —
-  // accounts created before this existed just won't have one on file yet
-  // (see the 'no_email_on_file' error on POST /auth/forgot-password).
+  // Required so "ลืมรหัสผ่าน?" always has somewhere to send the reset link —
+  // accounts created before this existed just won't have one on file yet.
   email: z.string().trim().email('อีเมลไม่ถูกต้อง').max(254, 'อีเมลยาวเกินไป'),
   // No `role` here: every self-registration starts as 'staff', promoted only
   // via the admin-only PATCH /api/auth/users/:id/role endpoint.

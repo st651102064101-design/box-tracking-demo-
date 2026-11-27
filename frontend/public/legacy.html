@@ -4307,7 +4307,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
             <option value="rfid_replace">เปลี่ยนแท็ก RFID</option>
             <option value="rfid_detach">ถอดแท็ก RFID</option>
             <option value="pin_set">ตั้ง/เปลี่ยนรหัส PIN</option>
-            <option value="pin_reset">รีเซ็ต PIN (OTP)</option>
+            <option value="pin_reset_approved">รีเซ็ต PIN (หัวหน้าอนุมัติ)</option>
             <option value="credentials_set">ตั้งบัญชีเข้าสู่ระบบเว็บ</option>
           </select>
         </div>
@@ -20527,7 +20527,7 @@ function renderAuditLog() {
     DAMAGE: '<span class="pill bad">ชำรุด</span>', REPAIR: '<span class="pill ok">ซ่อมเสร็จ</span>',
     rfid_associate: '<span class="pill ok">ผูกแท็ก RFID</span>', rfid_replace: '<span class="pill info">เปลี่ยนแท็ก RFID</span>',
     rfid_detach: '<span class="pill teal">ถอดแท็ก RFID</span>', pin_set: '<span class="pill info">ตั้ง PIN</span>',
-    pin_reset: '<span class="pill warn">รีเซ็ต PIN (OTP)</span>', credentials_set: '<span class="pill info">ตั้งบัญชีเว็บ</span>' };
+    pin_reset_approved: '<span class="pill warn">รีเซ็ต PIN (หัวหน้าอนุมัติ)</span>', credentials_set: '<span class="pill info">ตั้งบัญชีเว็บ</span>' };
   document.getElementById('auditBody').innerHTML = pg.rows.length ? pg.rows.map(function(e) {
     var before = auditObjText(e.before);
     var after = auditObjText(e.after);

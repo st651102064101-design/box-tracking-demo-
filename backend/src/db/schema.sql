@@ -13,16 +13,12 @@ CREATE TABLE IF NOT EXISTS users (
   name                      TEXT NOT NULL,
   role                      TEXT NOT NULL DEFAULT 'staff',
   email                     TEXT,
-  password_reset_otp_hash   TEXT,
-  password_reset_expires_at TIMESTAMPTZ,
   created_at                TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- Additive migrations for databases created before these columns existed.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT false;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_otp_hash TEXT;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_expires_at TIMESTAMPTZ;
 
 -- RBAC. Permission keys are developer-defined in src/lib/permissions.ts and
 -- deliberately not a table — only the grants below are data.
@@ -415,12 +411,8 @@ CREATE TABLE IF NOT EXISTS employees (
   user_id               INTEGER REFERENCES users(id),
   data                  JSONB NOT NULL DEFAULT '{}'::jsonb,
   pin_hash              TEXT,
-  pin_reset_otp_hash    TEXT,
-  pin_reset_expires_at  TIMESTAMPTZ,
   username              TEXT UNIQUE,
   password_hash         TEXT,
-  password_reset_otp_hash    TEXT,
-  password_reset_expires_at  TIMESTAMPTZ,
   updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -431,8 +423,6 @@ ALTER TABLE employees ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(
 -- that most of them don't have.
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS role_id INTEGER REFERENCES roles(id);
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS pin_hash TEXT;
-ALTER TABLE employees ADD COLUMN IF NOT EXISTS pin_reset_otp_hash TEXT;
-ALTER TABLE employees ADD COLUMN IF NOT EXISTS pin_reset_expires_at TIMESTAMPTZ;
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS username TEXT;
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'employees_username_unique') THEN
@@ -440,8 +430,13 @@ DO $$ BEGIN
   END IF;
 END $$;
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS password_hash TEXT;
-ALTER TABLE employees ADD COLUMN IF NOT EXISTS password_reset_otp_hash TEXT;
-ALTER TABLE employees ADD COLUMN IF NOT EXISTS password_reset_expires_at TIMESTAMPTZ;
+-- Email one-time codes were removed; drop what older databases still have.
+ALTER TABLE users DROP COLUMN IF EXISTS password_reset_otp_hash;
+ALTER TABLE users DROP COLUMN IF EXISTS password_reset_expires_at;
+ALTER TABLE employees DROP COLUMN IF EXISTS pin_reset_otp_hash;
+ALTER TABLE employees DROP COLUMN IF EXISTS pin_reset_expires_at;
+ALTER TABLE employees DROP COLUMN IF EXISTS password_reset_otp_hash;
+ALTER TABLE employees DROP COLUMN IF EXISTS password_reset_expires_at;
 
 CREATE TABLE IF NOT EXISTS boxes (
   tag          TEXT PRIMARY KEY,
