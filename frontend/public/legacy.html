@@ -478,6 +478,23 @@ input[readonly]:focus{box-shadow:none;border-color:var(--line2);}
 .stab.active{background:var(--ink);color:var(--bg);border-color:var(--ink);box-shadow:0 6px 16px color-mix(in srgb,var(--ink) 28%,transparent);}
 .stab.active:hover{background:var(--ink);}
 /* ===== system picker ===== */
+.rd{border:1px solid var(--line);border-radius:20px;margin:22px 0 20px;background:color-mix(in srgb,var(--ink) 4%,transparent);overflow:hidden;}
+.rd summary{display:flex;align-items:center;gap:12px;padding:16px 18px;cursor:pointer;list-style:none;font-weight:800;font-size:17px;}
+.rd summary::-webkit-details-marker{display:none;}
+.rd summary::after{content:"▾";margin-left:auto;color:var(--muted);transition:transform .15s;}
+.rd:not([open]) summary::after{transform:rotate(-90deg);}
+.rd-dot{width:12px;height:12px;flex:0 0 auto;border-radius:50%;background:var(--muted);}
+.rd-ok{--rd:#22c55e;}.rd-warn{--rd:#f59e0b;}.rd-bad{--rd:#ef4444;}.rd-wait{--rd:#8e8e93;}
+.rd .rd-dot{background:var(--rd);box-shadow:0 0 0 4px color-mix(in srgb,var(--rd) 18%,transparent);}
+.rd-groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr));gap:12px;padding:0 14px 14px;}
+.rd-group{border:1px solid var(--line);border-radius:14px;padding:8px;min-width:0;}
+.rd-group h4{margin:4px 8px 6px;font-size:12px;color:var(--muted);}
+.rd-item{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;padding:8px;border:0;border-radius:10px;background:transparent;color:inherit;font:inherit;font-size:14px;text-align:left;}
+.rd-item .rd-dot{width:9px;height:9px;box-shadow:none;}
+.rd-item span:nth-child(2){flex:1;min-width:0;}
+.rd-item.rd-warn,.rd-item.rd-bad{font-weight:700;background:color-mix(in srgb,var(--rd) 10%,transparent);margin-bottom:4px;}
+button.rd-item{cursor:pointer;}button.rd-item:hover,button.rd-item:focus-visible{background:color-mix(in srgb,var(--ink) 9%,transparent);}
+.rd-go{color:var(--muted);}
 .gp-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin:26px 0 18px;}
 .gp-pick{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--muted);}
 .gp-pick select{min-width:240px;font-size:16px;font-weight:700;}
@@ -2362,6 +2379,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
 <script src="/overdue.js?v=20261126"></script>
 <script src="/systems.js?v=20261127"></script>
 <script src="/gate-view.js?v=20261127"></script>
+<script src="/readiness.js?v=20261127"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
@@ -2574,6 +2592,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
     #tab-overview>.hero,#tab-reports>.hero{padding:18px 0 14px;margin-bottom:18px;}
   }
   </style>
+  <div id="readinessPanel" aria-live="polite"></div>
   <div id="mdHealthBanner"></div>
 
   <div class="hero">
@@ -8164,6 +8183,68 @@ function gpImport(file){
 }
 window.gpSelect=gpSelect;window.gpDirection=gpDirection;window.gpDismiss=gpDismiss;window.gpDeletePlan=gpDeletePlan;
 window.gpSetPreset=gpSetPreset;window.gpClearPreset=gpClearPreset;window.gpPlanTemplate=gpPlanTemplate;window.gpImport=gpImport;
+
+/* ===== ความพร้อมของระบบ (top of the report page) ===== */
+var rdServer={key:'',review:null,plans:null,preset:null},rdOpen=null,rdShown='',rdTimer=null,rdBusy=false;
+function rdReaders(){
+  /* Only a loaded registry (or saved heartbeat settings) can say what is bound. */
+  var gates=allGateNums().filter(function(g){return warehouseRfidEnabledForGate(g)&&rfidGateIsBound(g);});
+  if(!rfidBoundGateMap&&!gates.length)return null;
+  return gates.map(function(g){return {gate:g,online:fx9600IsOnline(g)};});
+}
+function rdLprGates(){
+  var seen={};
+  Object.keys(S.boxes||{}).forEach(function(t){(S.boxes[t].history||[]).forEach(function(h){if(h.dir==='lpr'&&h.gateNo!=null)seen[Number(h.gateNo)]=true;});});
+  return Object.keys(seen).map(Number);
+}
+/* Questions only the server can answer, asked for the unattended systems. */
+function rdLoadServer(){
+  var sys=currentSystem(),readers=rdReaders();
+  if(!window.Systems.unattended(sys)||!readers||rdBusy)return;
+  rdBusy=true;
+  var gates=readers.map(function(r){return r.gate;}),out=gates.filter(function(g){return gateDirOf(g)!=='in';});
+  var review=Promise.all(gates.map(function(g){return gpApi('/api/rfid/pending/'+g).then(function(d){return (d.tags||[]).length;});}))
+    .then(function(n){return n.reduce(function(a,b){return a+b;},0);}).catch(function(){return 'error';});
+  var plans=gpApi('/api/ship-plans').then(function(d){return (d.plans||[]).filter(function(p){return p.status==='waiting'&&p.planDate===d.today;}).length;}).catch(function(){return 'error';});
+  var preset=Promise.all(out.map(function(g){return gpApi('/api/rfid/gates/'+g+'/auto-session').then(function(d){return !!(d.session&&d.session.direction==='out'&&d.session.customer);});}))
+    .then(function(list){return list.some(Boolean);}).catch(function(){return false;});
+  Promise.all([review,plans,preset]).then(function(r){rdBusy=false;rdServer={key:sys,review:r[0],plans:r[1],preset:r[2]};renderReadiness();});
+}
+function renderReadiness(){
+  var host=$('#readinessPanel');if(!host||!window.Readiness)return;
+  var sys=currentSystem(),all=Object.values(S.boxes||{});
+  if(!rdTimer)rdTimer=setInterval(function(){if($('#tab-overview').classList.contains('active')){rdLoadServer();renderReadiness();}},10000);
+  if(rdServer.key!==sys){rdServer={key:sys,review:null,plans:null,preset:null};rdLoadServer();}
+  else if(rdServer.review===null)rdLoadServer();
+  var count=function(status){return all.filter(function(b){return b.status===status;}).length;};
+  var result=window.Readiness.assess({
+    needsLpr:sys!=='rfidgate',needsPda:!window.Systems.valid(sys)||sys==='full',unattended:window.Systems.unattended(sys),
+    readers:rdReaders(),lprGates:rdLprGates(),
+    pda:pdaDeviceLoaded?pdaDeviceRegistry.map(function(d){return {name:d.name||'PDA',online:d.online===true};}):null,
+    boxes:{ready:all.filter(function(b){return b.status==='warehouse'&&b.labeled!==false;}).length,hold:count('hold'),damage:count('damage'),lost:count('lost'),overdue:all.filter(isOverdue).length},
+    customers:Object.keys(S.customers||{}).length,
+    review:rdServer.review,plans:rdServer.plans,preset:rdServer.preset
+  });
+  var open=rdOpen===null?result.level!=='ok':rdOpen;
+  var html='<details class="rd rd-'+result.level+'"'+(open?' open':'')+'><summary onclick="rdOpen=!this.parentNode.open"><span class="rd-dot"></span><span>'+esc(result.title)+'</span></summary><div class="rd-groups">'
+    +result.groups.map(function(g){return '<div class="rd-group"><h4>'+esc(g.title)+'</h4>'+g.items.map(function(i){
+      var tag=i.go?'button':'div';
+      return '<'+tag+(i.go?' type="button" data-go="'+esc(i.go)+'" data-arg="'+esc(String(i.arg))+'" onclick="rdGo(this.dataset.go,this.dataset.arg)"':'')+' class="rd-item rd-'+i.level+'"><span class="rd-dot"></span><span>'+esc(i.text)+'</span>'+(i.go?'<span class="rd-go">›</span>':'')+'</'+tag+'>';
+    }).join('')+'</div>';}).join('')+'</div></details>';
+  /* Redraw only on a change, so focus and the open state survive refreshes. */
+  if(html===rdShown&&host.firstChild)return;
+  rdShown=html;host.innerHTML=html;
+}
+function rdGo(go,arg){
+  if(go==='bind'){if(arg)manageRfidGate(Number(arg));else goSetup('wh');}
+  else if(go==='lpr')openLprManagementModal();
+  else if(go==='pda')openPdaConnectModal();
+  else if(go==='cust')goSetup('cust');
+  else if(go==='inventory')goInventory(arg?{status:arg,label:({warehouse:'พร้อมส่งออก',lost:'สูญหาย',damage:'ชำรุด',hold:'พักใช้งาน'})[arg]}:{});
+  else if(go==='overdue'){var el=$('#ovOverdueWidget');if(el)el.scrollIntoView({behavior:'smooth',block:'start'});}
+  else if(go==='gate'){if(window.Systems.allowsTab(currentSystem(),'gate'))switchTab('gate');else switchTab('gateout');}
+}
+window.rdGo=rdGo;window.renderReadiness=renderReadiness;
 
 /* ===== เลือกระบบ ===== */
 function currentSystem(){
@@ -15092,6 +15173,7 @@ window.manageRfidGate=manageRfidGate;
 var pdaDeviceRegistry=[];
 var pdaDeviceRefreshTimer=null;
 var pdaDeviceShown='';
+var pdaDeviceLoaded=false;
 var pdaDeviceEndpointUnavailable=false;
 function refreshPdaDeviceRegistry(){
   if(pdaDeviceEndpointUnavailable||typeof apiFetch!=='function'||!authHeaders().Authorization)return;
@@ -15102,6 +15184,8 @@ function refreshPdaDeviceRegistry(){
     if(!body)return;
     pdaDeviceRegistry=Array.isArray(body&&body.devices)?body.devices:[];
     refreshPdaDetail();
+    var firstLoad=!pdaDeviceLoaded;pdaDeviceLoaded=true;
+    if(firstLoad||$('#tab-overview').classList.contains('active'))renderReadiness();
     /* Redraw the cards only when something on them changed. */
     var shown=JSON.stringify(pdaDeviceRegistry.map(function(d){return [d.deviceId,d.name,d.online,d.warehouse,d.gate];}));
     if(shown===pdaDeviceShown)return;
@@ -15215,6 +15299,7 @@ function renderOverview(){
   var all=Object.values(S.boxes);
   renderOverviewTrend();
   renderOverviewOperations(all);
+  renderReadiness();
 
   // สถานะกล่องหลัก (ในคลัง/ออกอยู่/หาย/hold/damage) — ตัวกรองของตัวเอง แยกจาก
   // "ความเคลื่อนไหว" ด้านล่าง กรองว่านับเฉพาะกล่องที่ขยับล่าสุด (lastSeenAt) อยู่
