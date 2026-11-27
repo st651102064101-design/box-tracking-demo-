@@ -36,7 +36,7 @@ export default function LoginPage() {
   const [quickUser, setQuickUser] = useState('');
   /* "signin" is the normal form; "forgot" asks for the email; "newpass" is
      opened from the email link and sets the new password. */
-  const [mode, setMode] = useState<'signin' | 'forgot' | 'newpass'>('signin');
+  const [mode, setMode] = useState<'signin' | 'forgot' | 'sent' | 'newpass'>('signin');
   const [resetEmail, setResetEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [newPassword2, setNewPassword2] = useState('');
@@ -58,17 +58,15 @@ export default function LoginPage() {
     setBusy(true);
     try {
       await sendResetLink(resetEmail.trim());
-      setNotice({ key: 'login.submit.signIn' });
       setError('');
-      setMode('signin');
+      setFieldErrors({});
+      setMode('sent');
       setBusy(false);
-      setResetSent(true);
     } catch (err) {
       setError(isThai ? 'ส่งลิงก์ไม่สำเร็จ ตรวจอีเมลแล้วลองอีกครั้ง' : 'Could not send the link. Check the email and try again.');
       setBusy(false);
     }
   }
-  const [resetSent, setResetSent] = useState(false);
 
   async function setNewPasswordNow(e: React.FormEvent) {
     e.preventDefault();
@@ -86,8 +84,6 @@ export default function LoginPage() {
       setNewPassword('');
       setNewPassword2('');
       setBusy(false);
-      setResetSent(false);
-      setNotice(null);
       setError('');
       setDone(true);
     } catch (err) {
@@ -325,6 +321,21 @@ export default function LoginPage() {
             </button>
           </form>
         )}
+        {mode === 'sent' && (
+          <div className="space-y-4 text-center">
+            <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-emerald-100 text-2xl text-emerald-700">✉</div>
+            <div>
+              <p className="text-base font-semibold text-ink">{isThai ? 'ส่งลิงก์แล้ว' : 'Link sent'}</p>
+              <p className="mt-1 text-sm text-ink-2/80">
+                {isThai ? 'เปิดอีเมล ' : 'Open the email '}<span className="font-semibold">{resetEmail}</span>{isThai ? ' แล้วกดลิงก์เพื่อตั้งรหัสผ่านใหม่' : ' and click the link to set a new password.'}
+              </p>
+              <p className="mt-2 text-xs text-ink-2/60">{isThai ? 'ไม่เจออีเมล? ดูในโฟลเดอร์สแปม' : "Can't find it? Check your spam folder."}</p>
+            </div>
+            <button type="button" onClick={() => { setMode('signin'); setResetEmail(''); }} className="w-full rounded-xl bg-ink py-3 text-sm font-semibold text-white transition hover:opacity-90">
+              {isThai ? 'กลับไปเข้าสู่ระบบ' : 'Back to sign in'}
+            </button>
+          </div>
+        )}
         {mode === 'newpass' && (
           <form onSubmit={setNewPasswordNow} className="space-y-3">
             <p className="text-sm text-ink-2/80">{isThai ? 'ตั้งรหัสผ่านใหม่สำหรับบัญชีนี้' : 'Set a new password for this account.'}</p>
@@ -340,7 +351,6 @@ export default function LoginPage() {
           </form>
         )}
         {done && <p role="status" className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">{isThai ? 'ตั้งรหัสผ่านใหม่แล้ว เข้าสู่ระบบได้เลย' : 'Password set. You can sign in now.'}</p>}
-        {resetSent && mode === 'signin' && <p role="status" className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">{isThai ? 'ส่งลิงก์แล้ว ตรวจกล่องจดหมายของคุณ' : 'Link sent. Check your inbox.'}</p>}
 
         {process.env.NODE_ENV !== 'production' && (
           <p className="mt-6 text-center text-xs text-ink-2/50">
