@@ -3040,10 +3040,10 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
     <input type="hidden" id="outGate">
     <div id="outGateHint"></div>
     <div class="grid g3">
-      <div class="field cust-field"><label>ลูกค้า / ปลายทาง <span class="req">*</span></label><div id="doCustomerTiles" class="cust-tiles" role="radiogroup" aria-label="ลูกค้า / ปลายทาง"></div><select id="doCustomer" style="display:none;"></select><div id="doCustomerHint" style="display:none;"></div></div>
-      <div class="field out-rfid-context-extra"><label>ทะเบียนรถ <span class="req go-manual-only">*</span> <span class="muted small go-rfid-only">(ถ้ามีจาก LPR)</span></label><input id="outPlate" list="dl-plate" placeholder="82-1234 กทม" autocomplete="off"></div>
-      <div class="field out-rfid-context-extra"><label>ชื่อคนขับ <span class="req">*</span></label><input id="outDriver" list="dl-driver" placeholder="นายสมชาย ใจดี" autocomplete="off"></div>
-      <div class="field out-rfid-context-extra"><label>เบอร์โทรคนขับ <span class="req">*</span></label><input id="outDriverTel" type="tel" inputmode="tel" list="dl-tel" placeholder="08x-xxx-xxxx" maxlength="15" autocomplete="off"></div>
+      <div class="field cust-field"><label>ลูกค้า / ปลายทาง</label><div id="doCustomerTiles" class="cust-tiles" role="radiogroup" aria-label="ลูกค้า / ปลายทาง"></div><select id="doCustomer" style="display:none;"></select><div id="doCustomerHint" style="display:none;"></div></div>
+      <div class="field out-rfid-context-extra"><label>ทะเบียนรถ <span class="muted small go-rfid-only">(ถ้ามีจาก LPR)</span></label><input id="outPlate" list="dl-plate" placeholder="82-1234 กทม" autocomplete="off"><div class="field-err" id="err-outPlate" role="alert" hidden></div></div>
+      <div class="field out-rfid-context-extra"><label>ชื่อคนขับ</label><input id="outDriver" list="dl-driver" placeholder="นายสมชาย ใจดี" autocomplete="off"><div class="field-err" id="err-outDriver" role="alert" hidden></div></div>
+      <div class="field out-rfid-context-extra"><label>เบอร์โทรคนขับ</label><input id="outDriverTel" type="tel" inputmode="tel" list="dl-tel" placeholder="08x-xxx-xxxx" maxlength="15" autocomplete="off"><div class="field-err" id="err-outDriverTel" role="alert" hidden></div></div>
       <div class="field go-opt out-rfid-context-extra"><label>เลขที่ DO (สร้างอัตโนมัติ)</label>
         <div class="auto-tag-row">
           <input id="doNo" readonly>
@@ -3141,8 +3141,10 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
   #gateOutManualConfig .field input,#gateOutManualConfig .field select{min-height:56px;font-size:18px;}
   #gateOutManualConfig .field label{font-size:15px;font-weight:700;}
   #doCustomer{display:none!important;}
-  .cust-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;}
-  .cust-tile{min-height:60px;padding:12px 14px;border-radius:16px;border:1.5px solid var(--line);background:color-mix(in srgb,var(--ink) 5%,transparent);color:var(--ink);font-size:17px;font-weight:700;text-align:left;cursor:pointer;}
+  .cust-tiles{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;scrollbar-width:thin;}
+  .field-err{margin-top:6px;color:var(--neg);font-size:14px;font-weight:600;}
+  .field-err[hidden]{display:none;}
+  .cust-tile{flex:0 0 auto;min-width:180px;min-height:60px;padding:12px 14px;border-radius:16px;border:1.5px solid var(--line);background:color-mix(in srgb,var(--ink) 5%,transparent);color:var(--ink);font-size:17px;font-weight:700;text-align:left;cursor:pointer;}
   .cust-tile.on{border-color:#22c55e;background:color-mix(in srgb,#22c55e 18%,transparent);box-shadow:0 0 0 2px color-mix(in srgb,#22c55e 35%,transparent);}
   .cust-tile:focus-visible{outline:3px solid #22c55e;outline-offset:2px;}
   </style>
@@ -6537,7 +6539,7 @@ function refreshRfidLprTimingNotes(){
 window.refreshRfidLprTimingNotes=refreshRfidLprTimingNotes;
 /* ช่องสแกนมองเห็นเสมอ แต่ยังพิมพ์ไม่ได้จนกว่าข้อมูลที่จำเป็นจะครบ และบอกว่าขาดอะไร */
 var GATE_OUT_REQUIRED=[['doCustomer','ลูกค้า'],['outPlate','ทะเบียนรถ'],['outDriver','ชื่อคนขับ'],['outDriverTel','เบอร์โทรคนขับ']];
-function gateOutMissing(){return GATE_OUT_REQUIRED.filter(function(f){return !val(f[0]).trim();});}
+function gateOutMissing(){return GATE_OUT_REQUIRED.filter(function(f){var v=val(f[0]).trim();return !v||(GO_RULES[f[0]]&&GO_RULES[f[0]](v));});}
 function refreshGateOutManualVisibility(){
   var card=$('#gateOutBox'),hint=$('#gateOutBoxPrereq');
   if(!card)return;
@@ -6554,6 +6556,29 @@ function refreshGateOutManualVisibility(){
   }
 }
 function focusGateOutField(id){var el=$('#'+id);if(el){el.scrollIntoView({block:'center',behavior:'smooth'});el.focus({preventScroll:true});}}
+/* Outbound form: check each field when the operator leaves it, say what is
+   wrong under that field, and keep the scan row hidden until all pass. */
+var GO_RULES={
+  outPlate:function(v){return v?'':'กรอกทะเบียนรถ';},
+  outDriver:function(v){return v?'':'กรอกชื่อคนขับ';},
+  outDriverTel:function(v){var n=v.replace(/\D/g,'');return n.length>=9&&n.length<=10?'':'เบอร์โทรต้องมี 9–10 หลัก';}
+};
+function checkGateOutField(id){
+  var el=$('#'+id),err=$('#err-'+id);if(!el||!err||!GO_RULES[id])return true;
+  var msg=GO_RULES[id](String(el.value||'').trim());
+  err.textContent=msg;err.hidden=!msg;el.setAttribute('aria-invalid',msg?'true':'false');
+  return !msg;
+}
+(function(){
+  var plate=document.getElementById('outPlate'),tel=document.getElementById('outDriverTel');
+  if(plate)plate.addEventListener('input',function(){var a=plate.selectionStart,b=plate.value.toUpperCase();if(b!==plate.value){plate.value=b;plate.setSelectionRange(a,a);}});
+  if(tel)tel.addEventListener('input',function(){var d=tel.value.replace(/\D/g,'').slice(0,10);tel.value=d.slice(0,3)+(d.length>3?'-'+d.slice(3,6):'')+(d.length>6?'-'+d.slice(6,10):'');});
+  ['outPlate','outDriver','outDriverTel'].forEach(function(id){
+    var el=document.getElementById(id);if(!el)return;
+    el.addEventListener('blur',function(){checkGateOutField(id);});
+    el.addEventListener('input',function(){var err=document.getElementById('err-'+id);if(err&&!err.hidden)checkGateOutField(id);});
+  });
+})();
 /* Big tap targets for the outbound form: customers as tiles, fields tall enough
    for a gloved thumb. The select stays in the DOM and keeps the value. */
 function renderCustTiles(){
