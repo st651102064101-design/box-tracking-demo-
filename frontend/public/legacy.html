@@ -23906,7 +23906,8 @@ document.addEventListener('change',function(e){
       acceptNode:function(n){ return (n.parentNode && !isSkippable(n.parentNode)) ? 1 : 2; }
     });
     var list=[], c; while((c=w.nextNode())) list.push(c);
-    list.forEach(fn);
+    /* one bad node must not stop the rest of the page from being translated */
+    list.forEach(function(n){ try { fn(n); } catch(e) {} });
   }
 
   var ATTRS = ["placeholder","title"];
@@ -23934,14 +23935,25 @@ document.addEventListener('change',function(e){
   var mo = new MutationObserver(function(muts){
     if(lang !== "en" || busy) return;
     busy = true;
-    for(var i=0;i<muts.length;i++){
-      var m = muts[i];
-      if(m.type === "characterData"){ translateTextNode(m.target); }
-      else { for(var j=0;j<m.addedNodes.length;j++){ var n=m.addedNodes[j];
-        if(n.nodeType===1) translateTree(n); else if(n.nodeType===3) translateTextNode(n); } }
-    }
-    busy = false;
+    /* busy must always be cleared, or the translator stops for good after one error */
+    try {
+      for(var i=0;i<muts.length;i++){
+        var m = muts[i];
+        if(m.type === "characterData"){ translateTextNode(m.target); }
+        else { for(var j=0;j<m.addedNodes.length;j++){ var n=m.addedNodes[j];
+          if(n.nodeType===1) translateTree(n); else if(n.nodeType===3) translateTextNode(n); } }
+      }
+    } catch(e) { /* keep the page usable; the sweep below catches up */ }
+    finally { busy = false; }
   });
+  /* Safety net: app code sometimes writes text before the observer is attached to
+     it. A light sweep while English is on catches anything left in Thai. */
+  setInterval(function(){
+    if(lang !== "en" || busy) return;
+    busy = true;
+    try { translateTree(document.body); } catch(e) {}
+    finally { busy = false; }
+  }, 1500);
 
   function applyLang(next){
     lang = (next === "en") ? "en" : "th";
