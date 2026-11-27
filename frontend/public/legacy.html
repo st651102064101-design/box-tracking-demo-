@@ -9514,23 +9514,33 @@ function whGateRfidZebraGuide(g){
   var previous=whGateRfidReaders.filter(function(x){return x&&x.webhookUrl&&/^https?:\/\//i.test(String(x.webhookUrl));})[0];
   var url=r&&r.webhookUrl?r.webhookUrl:(previous?String(previous.webhookUrl).replace(/\/fx9600\/[^/]+\/webhook(?:\?.*)?$/i,'/fx9600/'+encodeURIComponent(g)+'/webhook'):apiWebhookUrl('/api/rfid/fx9600/'+encodeURIComponent(g)+'/webhook'));
   var endpoint='box-tracking-gate-'+g;
-  var row=function(k,v,copy){return '<tr><th style="text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);width:42%;color:var(--muted);font-weight:600;">'+k+'</th><td style="padding:9px 10px;border-bottom:1px solid var(--line);word-break:break-all;">'+v+(copy?'<button type="button" class="btn ghost sm" style="margin-left:8px;padding:4px 8px;font-size:12px;" onclick="navigator.clipboard.writeText('+JSON.stringify(copy)+').then(function(){toast(\'คัดลอกแล้ว\',\'\',\'info\')}).catch(function(){})">คัดลอก</button>':'')+'</td></tr>';};
-  var table='<table style="width:100%;border-collapse:collapse;font-size:13px;background:var(--surface2);border:1px solid var(--line);border-radius:10px;overflow:hidden;">'
-    +row('Endpoint Type','<b>HTTP POST</b>')
-    +row('Endpoint Name','<span class="mono">'+esc(endpoint)+'</span>',endpoint)
-    +row('Endpoint Description','Box Tracking System · DB Gate '+esc(String(g)))
-    +row('URL','<span class="mono">'+esc(url)+'</span>',url)
-    +row('Heartbeat / Reporting Interval','<b class="mono">'+(Number(r&&r.heartbeatIntervalSeconds)||1)+' seconds</b>')
-    +row('Authentication Type','<b>BASIC</b>')
-    +row('User Name','<span class="mono">fx9600</span>','fx9600')
-    +row('Password','<b class="mono">BoxTrace-FX9600-2026</b>')
-    +row('HTTP Post Proxy','ปิด (ไม่ติ๊ก)')
-    +row('Proxy Server / Proxy Port','เว้นว่าง')
-    +row('Proxy Tunnel Authentication','NONE · User Name / Password เว้นว่าง')
-    +row('Certificates','ค่า Default; URL ปัจจุบันเป็น HTTP จึงไม่ต้องเลือก certificate')
-    +'</table>';
-  openModal('<div class="mhead"><h3>ตั้งค่า Zebra FX9600 · DB Gate '+esc(String(g))+'</h3><button class="x" data-close>×</button></div><div class="mbody"><div class="banner warn" style="margin:0 0 14px;"><b>สำคัญ:</b> เลขใน URL คือ DB Gate ID '+esc(String(g))+' โดยตรง ห้ามแทนด้วยเลขลำดับคลังหรือชื่อประตู</div>'+table+'<p class="muted small" style="margin:14px 0 0;">ไปที่ Zebra: Communication → Zebra IoT Connector → Configuration → Add Endpoint แล้วกรอกตามตาราง จากนั้น Save และตั้ง Operating Mode / Reporting Interval ตามค่า heartbeat ของ Reader ในระบบ</p></div><div class="mfoot"><div class="spacer"></div><button class="btn accent" data-close>เข้าใจแล้ว</button></div>');
+  var user='fx9600';
+  var password='BoxTrace-FX9600-2026';
+  var heartbeat=Number(r&&r.heartbeatIntervalSeconds)||1;
+  /* One value per card, in the order the Zebra screen asks for them. Each has a
+     large copy button; the password stays hidden until asked for. */
+  var card=function(n,label,value,opts){
+    opts=opts||{};
+    var shown=opts.secret?'••••••••••':value;
+    var reveal=opts.secret?'<button type="button" class="btn ghost" style="min-height:44px;" onclick="(function(b){var sp=b.parentElement.querySelector(\'.wzv\');var on=sp.dataset.show==="1";sp.dataset.show=on?"0":"1";sp.textContent=on?\'••••••••••\':\''+esc(value)+'\';b.textContent=on?\'แสดง\':\'ซ่อน\';})(this)">แสดง</button>':'';
+    return '<div style="border:1px solid var(--line);border-radius:14px;padding:14px;margin-top:10px;">'
+      +'<div style="display:flex;gap:12px;align-items:flex-start;"><span style="flex:0 0 auto;width:30px;height:30px;border-radius:50%;background:var(--accentSoft,#eef);display:grid;place-items:center;font-weight:800;">'+n+'</span>'
+      +'<div style="min-width:0;flex:1;"><div class="muted small">'+esc(label)+'</div>'
+      +'<div class="mono wzv" data-show="0" style="font-size:17px;font-weight:700;word-break:break-all;margin-top:4px;">'+esc(shown)+'</div></div></div>'
+      +'<div style="display:flex;gap:8px;margin-top:12px;">'+reveal
+      +'<button type="button" class="btn accent" style="flex:1;justify-content:center;min-height:48px;font-size:16px;" onclick="navigator.clipboard&&navigator.clipboard.writeText(\''+esc(value).replace(/\'/g,"\\'")+'\').then(function(){toast(\'คัดลอกแล้ว\',\'\',\'info\');}).catch(function(){})">คัดลอก</button></div></div>';
+  };
+  var steps=card(1,'Endpoint Name',endpoint)+card(2,'URL (เลข DB Gate คือ '+g+')',url)+card(3,'User Name',user)+card(4,'Password',password,{secret:true});
+  var fixed=[['Endpoint Type','HTTP POST'],['Authentication','BASIC'],['Proxy','ปิด'],['Certificates','ค่า Default (URL เป็น HTTP)']].map(function(x){return '<div style="display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--line);"><span class="muted">'+esc(x[0])+'</span><b>'+esc(x[1])+'</b></div>';}).join('');
+  openModal('<div class="mhead"><h3>ตั้งค่า Zebra FX9600 · DB Gate '+esc(String(g))+'</h3><button class="x" data-close>×</button></div>'
+    +'<div class="mbody"><div class="banner warn" style="margin:0 0 6px;"><b>สำคัญ:</b> เลข '+esc(String(g))+' ใน URL คือ DB Gate ID โดยตรง</div>'
+    +'<p class="muted small" style="margin:10px 0 0;">กรอกตามลำดับ 1–4 ใน Zebra IoT Connector → Add Endpoint</p>'
+    +steps
+    +'<div style="border:1px solid var(--line);border-radius:14px;padding:14px;margin-top:12px;"><div class="muted small">ช่วงเวลารายงาน (Reporting Interval)</div><div style="font-size:17px;font-weight:700;margin-top:4px;">'+heartbeat+' วินาที</div><div class="muted small" style="margin-top:4px;">ตั้งค่าเดียวกันใน Operating Mode / Reporting Interval</div></div>'
+    +'<details class="wh-more" style="margin-top:14px;"><summary>ค่าที่ตั้งไว้แล้ว (ไม่ต้องแก้)</summary><div style="margin-top:8px;">'+fixed+'</div></details>'
+    +'</div><div class="mfoot"><div class="spacer"></div><button class="btn accent" data-close>เข้าใจแล้ว</button></div>');
 }
+
 function whGateRfidDelete(id){confirmA('ยกเลิกการผูก FX9600?','การตั้งค่าใน Zebra Console จะไม่ถูกเปลี่ยน','ยกเลิกการผูก',true).then(function(ok){if(!ok)return;whRfidApi('/api/rfid/fx9600/readers/'+encodeURIComponent(id),{method:'DELETE'}).then(function(){toast('ยกเลิกการผูกแล้ว',id,'ok');var w=S.warehouses[editingWh];if(w)loadWhGateRfidCrud(w);}).catch(function(e){toast('ยกเลิกไม่สำเร็จ',e.message,'err');});});}
 window.whGateRfidForm=whGateRfidForm;window.whGateRfidZebraGuide=whGateRfidZebraGuide;window.whGateRfidDelete=whGateRfidDelete;
 function toggleRfidReader(btn){
