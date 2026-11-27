@@ -24,7 +24,7 @@
       var on = (s.pda || []).filter(function (d) { return d.online; });
       var asleepOpt = (s.pda || []).filter(function (d) { return d.sleeping; });
       if (on.length) out.push(item('ok', 'PDA ออนไลน์ ' + on.length + ' เครื่อง: ' + on.map(function (d) { return d.name; }).join(', '), 'pdaList'));
-      if (asleepOpt.length) out.push(item('wait', 'PDA พักจอ: ' + asleepOpt.map(function (d) { return d.name; }).join(', '), 'pdaList'));
+      if (asleepOpt.length) out.push(item('sleep', 'PDA พักจอ: ' + asleepOpt.map(function (d) { return d.name; }).join(', '), 'pdaList'));
     } else if (s.needsPda) {
       if (!s.pda) out.push(item('wait', 'กำลังตรวจเครื่อง PDA'));
       else if (!s.pda.length) out.push(item('warn', 'ยังไม่มีเครื่อง PDA เชื่อมต่อ', 'pda'));
@@ -32,7 +32,7 @@
         var off = s.pda.filter(function (d) { return !d.online && !d.sleeping; });
         var asleep = s.pda.filter(function (d) { return d.sleeping; });
         if (off.length) out.push(item('warn', 'PDA ออฟไลน์: ' + off.map(function (d) { return d.name; }).join(', '), 'pdaList'));
-        if (asleep.length) out.push(item('wait', 'PDA พักจอ: ' + asleep.map(function (d) { return d.name; }).join(', '), 'pdaList'));
+        if (asleep.length) out.push(item('sleep', 'PDA พักจอ: ' + asleep.map(function (d) { return d.name; }).join(', '), 'pdaList'));
         var on2 = s.pda.filter(function (d) { return d.online; });
         if (on2.length) out.push(item('ok', 'PDA ออนไลน์ ' + on2.length + ' เครื่อง: ' + on2.map(function (d) { return d.name; }).join(', '), 'pdaList'));
       }

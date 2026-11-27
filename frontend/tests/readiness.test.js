@@ -43,7 +43,7 @@ describe('system readiness', () => {
   it('warns about handhelds only in the system that has them', () => {
     expect(texts(run({ pda: [] }), 'warn')).toEqual(['ยังไม่มีเครื่อง PDA เชื่อมต่อ']);
     expect(texts(run({ pda: [{ name: 'TC52', online: false }] }), 'warn')).toEqual(['PDA ออฟไลน์: TC52']);
-    expect(texts(run({ pda: [{ name: 'TC52', online: false, sleeping: true }] }), 'wait')).toEqual(['PDA พักจอ: TC52']);
+    expect(texts(run({ pda: [{ name: 'TC52', online: false, sleeping: true }] }), 'sleep')).toEqual(['PDA พักจอ: TC52']);
     expect(run({ pda: null, needsPda: false }).level).toBe('ok');
   });
 
