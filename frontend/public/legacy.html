@@ -3094,6 +3094,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
       <p class="wg-scan-s">ยิงหรือพิมพ์รหัส บาร์โค้ด ของกล่อง แล้วกด Enter — ระบบจับคู่กับ DO/ประตูด้านบนอัตโนมัติ</p>
       <div id="gateOutBoxPrereq" class="go-need" role="status" style="display:none;"></div>
       <div id="gateOutRfidStatus" style="display:none;margin-bottom:14px;"></div>
+      <button type="button" class="btn accent" id="gateOutConfirmBtn" onclick="confirmGateOutFields()" style="display:none;width:100%;justify-content:center;min-height:56px;font-size:18px;margin:4px 0 12px;">ยืนยันข้อมูลรถ ›</button>
       <div class="pad" id="gateOutManualPad">
         <div class="scanout-input-wrap"><input id="scanOut" placeholder="แตะแล้วยิงบาร์โค้ด เช่น CRT-04" autocomplete="off"><button type="button" class="mobile-camera-scan" id="btnScanOutCamera" aria-label="เปิดกล้องสแกนบาร์โค้ด" title="เปิดกล้องสแกนบาร์โค้ด"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"></rect><path d="M8 5l1.2-2h5.6L16 5M8 12h.01M12 12h.01M16 12h.01"></path></svg></span></button></div>
         <button class="scanbtn" id="btnScanOut">สแกน</button>
@@ -6540,6 +6541,16 @@ window.refreshRfidLprTimingNotes=refreshRfidLprTimingNotes;
 /* ช่องสแกนมองเห็นเสมอ แต่ยังพิมพ์ไม่ได้จนกว่าข้อมูลที่จำเป็นจะครบ และบอกว่าขาดอะไร */
 var GATE_OUT_REQUIRED=[['doCustomer','ลูกค้า'],['outPlate','ทะเบียนรถ'],['outDriver','ชื่อคนขับ'],['outDriverTel','เบอร์โทรคนขับ']];
 function gateOutMissing(){return GATE_OUT_REQUIRED.filter(function(f){var v=val(f[0]).trim();return !v||(GO_RULES[f[0]]&&GO_RULES[f[0]](v));});}
+var gateOutConfirmed=false;
+/* The operator presses confirm once the form is complete; every field is
+   checked then, and the first problem is shown and focused. */
+function confirmGateOutFields(){
+  var bad=['outPlate','outDriver','outDriverTel'].filter(function(id){return !checkGateOutField(id);});
+  if(!val('doCustomer')){var sel=$('#doCustomerTiles');if(sel)sel.scrollIntoView({block:'center',behavior:'smooth'});toast('เลือกลูกค้าก่อน','กดลูกค้าในรายการด้านบน','warn');return;}
+  if(bad.length){focusGateOutField(bad[0]);return;}
+  gateOutConfirmed=true;refreshGateOutManualVisibility();
+  var scan=$('#scanOut');if(scan)scan.focus({preventScroll:true});
+}
 function refreshGateOutManualVisibility(){
   var card=$('#gateOutBox'),hint=$('#gateOutBoxPrereq');
   if(!card)return;
@@ -6548,11 +6559,15 @@ function refreshGateOutManualVisibility(){
   var missing=gateOutEntryMode==='manual'?gateOutMissing():[];
   /* Until the operator fields are filled the scan row is not shown at all;
      the form above is where the missing fields are. */
-  var pad=$('#gateOutManualPad');if(pad)pad.style.display=missing.length?'none':'';
-  card.classList.toggle('go-waiting',!!missing.length);
+  /* Editing a field after confirming takes the confirmation back. */
+  if(missing.length)gateOutConfirmed=false;
+  var ready=!missing.length&&gateOutConfirmed;
+  var pad=$('#gateOutManualPad');if(pad)pad.style.display=ready?'':'none';
+  var cbtn=$('#gateOutConfirmBtn');if(cbtn)cbtn.style.display=(!missing.length&&!gateOutConfirmed)?'':'none';
+  card.classList.toggle('go-waiting',!ready);
   if(hint){
-    hint.style.display=missing.length?'':'none';
-    hint.innerHTML=missing.length?'<span>กรอกให้ครบก่อนสแกน — '+missing.map(function(f){return f[1];}).join(' · ')+'</span>':'';
+    hint.style.display=ready?'none':'';
+    hint.innerHTML=missing.length?'<span>กรอกให้ครบก่อนสแกน — '+missing.map(function(f){return f[1];}).join(' · ')+'</span>':(gateOutConfirmed?'':'<span>กดยืนยันข้อมูลรถก่อนสแกน</span>');
   }
 }
 function focusGateOutField(id){var el=$('#'+id);if(el){el.scrollIntoView({block:'center',behavior:'smooth'});el.focus({preventScroll:true});}}
@@ -6576,7 +6591,7 @@ function checkGateOutField(id){
   ['outPlate','outDriver','outDriverTel'].forEach(function(id){
     var el=document.getElementById(id);if(!el)return;
     el.addEventListener('blur',function(){checkGateOutField(id);});
-    el.addEventListener('input',function(){var err=document.getElementById('err-'+id);if(err&&!err.hidden)checkGateOutField(id);});
+    el.addEventListener('input',function(){var err=document.getElementById('err-'+id);if(err&&!err.hidden)checkGateOutField(id);refreshGateOutManualVisibility();});
   });
 })();
 /* Big tap targets for the outbound form: customers as tiles, fields tall enough
