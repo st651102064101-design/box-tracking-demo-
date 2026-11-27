@@ -75,3 +75,21 @@ html[data-theme="dark"] .skeleton-table-head,
 html:not([data-theme="light"]):not([data-theme="dark"]) .skeleton-table-head{background:#1c1c1e}
 html[data-theme="dark"] .skeleton-table-row,
 html:not([data-theme="light"]):not([data-theme="dark"]) .skeleton-table-row{border-bottom-color:#2a2a2c}
+
+/* Login page in dark mode: same choice as the main app (ตามระบบ / มืด). */
+html[data-theme="dark"] main.bg-\[\#f5f5f7\]{background-color:#000;}
+html[data-theme="dark"] main .bg-white{background-color:#1c1c1e;box-shadow:0 24px 70px rgba(0,0,0,.6);}
+html[data-theme="dark"] main .text-ink{color:#f5f5f7;}
+html[data-theme="dark"] main .text-ink-2\/70,
+html[data-theme="dark"] main .text-ink-2\/60,
+html[data-theme="dark"] main .text-ink-2\/50{color:#a1a1a6;}
+html[data-theme="dark"] main .bg-ink{background-color:#f5f5f7;color:#1d1d1f;}
+html[data-theme="dark"] main .bg-ink,
+html[data-theme="dark"] main .bg-ink *{color:#1d1d1f;}
+html[data-theme="dark"] main .border-black\/10{border-color:rgba(255,255,255,.12);}
+html[data-theme="dark"] main .bg-black\/\[0\.02\]{background-color:rgba(255,255,255,.04);}
+html[data-theme="dark"] main input{background-color:#2c2c2e;color:#f5f5f7;border-color:rgba(255,255,255,.12);}
+html[data-theme="dark"] main .bg-red-50{background-color:rgba(255,69,58,.15);}
+html[data-theme="dark"] main .text-red-600{color:#ff6961;}
+html[data-theme="dark"] main .bg-amber-50{background-color:rgba(255,214,10,.12);}
+html[data-theme="dark"] main .text-amber-900{color:#ffd60a;}
