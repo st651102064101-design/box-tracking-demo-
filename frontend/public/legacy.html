@@ -3040,7 +3040,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
     <input type="hidden" id="outGate">
     <div id="outGateHint"></div>
     <div class="grid g3">
-      <div class="field"><label>ลูกค้า / ปลายทาง <span class="req">*</span></label><select id="doCustomer"></select><div id="doCustomerHint" style="display:none;"></div></div>
+      <div class="field cust-field"><label>ลูกค้า / ปลายทาง <span class="req">*</span></label><div id="doCustomerTiles" class="cust-tiles" role="radiogroup" aria-label="ลูกค้า / ปลายทาง"></div><select id="doCustomer" style="display:none;"></select><div id="doCustomerHint" style="display:none;"></div></div>
       <div class="field out-rfid-context-extra"><label>ทะเบียนรถ <span class="req go-manual-only">*</span> <span class="muted small go-rfid-only">(ถ้ามีจาก LPR)</span></label><input id="outPlate" list="dl-plate" placeholder="82-1234 กทม" autocomplete="off"></div>
       <div class="field out-rfid-context-extra"><label>ชื่อคนขับ <span class="req">*</span></label><input id="outDriver" list="dl-driver" placeholder="นายสมชาย ใจดี" autocomplete="off"></div>
       <div class="field out-rfid-context-extra"><label>เบอร์โทรคนขับ <span class="req">*</span></label><input id="outDriverTel" type="tel" inputmode="tel" list="dl-tel" placeholder="08x-xxx-xxxx" maxlength="15" autocomplete="off"></div>
@@ -3138,6 +3138,13 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
   .gp-step.now{color:var(--ink);box-shadow:inset 0 0 0 2px #f59e0b;}.gp-step.now span{background:#f59e0b;color:#2a1700;}
   @media (max-width:640px){.gp-steps{grid-template-columns:1fr;}.gp-ready{flex-direction:column;align-items:flex-start;}}
   #gpStatus[hidden],#gpPassagesCard[hidden]{display:none!important;}
+  #gateOutManualConfig .field input,#gateOutManualConfig .field select{min-height:56px;font-size:18px;}
+  #gateOutManualConfig .field label{font-size:15px;font-weight:700;}
+  #doCustomer{display:none!important;}
+  .cust-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;}
+  .cust-tile{min-height:60px;padding:12px 14px;border-radius:16px;border:1.5px solid var(--line);background:color-mix(in srgb,var(--ink) 5%,transparent);color:var(--ink);font-size:17px;font-weight:700;text-align:left;cursor:pointer;}
+  .cust-tile.on{border-color:#22c55e;background:color-mix(in srgb,#22c55e 18%,transparent);box-shadow:0 0 0 2px color-mix(in srgb,#22c55e 35%,transparent);}
+  .cust-tile:focus-visible{outline:3px solid #22c55e;outline-offset:2px;}
   </style>
   <div id="gpWarn"></div>
   <div class="gp-tiles" id="gpStatus"></div>
@@ -6547,6 +6554,25 @@ function refreshGateOutManualVisibility(){
   }
 }
 function focusGateOutField(id){var el=$('#'+id);if(el){el.scrollIntoView({block:'center',behavior:'smooth'});el.focus({preventScroll:true});}}
+/* Big tap targets for the outbound form: customers as tiles, fields tall enough
+   for a gloved thumb. The select stays in the DOM and keeps the value. */
+function renderCustTiles(){
+  var host=$('#doCustomerTiles'),sel=$('#doCustomer');if(!host||!sel)return;
+  var opts=[].slice.call(sel.options).filter(function(o){return o.value;});
+  var html=opts.length?opts.map(function(o){var on=o.value===sel.value;return '<button type="button" role="radio" aria-checked="'+on+'" class="cust-tile'+(on?' on':'')+'" data-v="'+esc(o.value)+'">'+esc(o.textContent.trim())+'</button>';}).join(''):'<div class="muted small">ยังไม่มีลูกค้า</div>';
+  if(host.dataset.html!==html){host.dataset.html=html;host.innerHTML=html;}
+  else [].forEach.call(host.querySelectorAll('.cust-tile'),function(b){var on=b.dataset.v===sel.value;b.classList.toggle('on',on);b.setAttribute('aria-checked',on);});
+}
+function pickCustTile(v){var sel=$('#doCustomer');if(!sel)return;sel.value=v;sel.dispatchEvent(new Event('change',{bubbles:true}));renderCustTiles();}
+(function(){
+  document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('#doCustomerTiles .cust-tile');if(b)pickCustTile(b.dataset.v);});
+  var sel=document.getElementById('doCustomer');if(sel){new MutationObserver(renderCustTiles).observe(sel,{childList:true,subtree:true});sel.addEventListener('change',renderCustTiles);}
+  /* Enter moves to the next field, so the driver never has to reach for the screen. */
+  [['outPlate','outDriver'],['outDriver','outDriverTel']].forEach(function(pair){
+    var from=document.getElementById(pair[0]);if(!from)return;
+    from.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();var to=document.getElementById(pair[1]);if(to)to.focus();}});
+  });
+})();
 function toggleGateOutMore(){
   var card=$('#gateOutManualConfig'),btn=$('#goMoreBtn');if(!card)return;
   var open=card.classList.toggle('show-opt');
