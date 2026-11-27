@@ -13,6 +13,7 @@
   /** A device as GET /api/devices returns it → the window's texts (unescaped). */
   function view(d, ctx) {
     var online = d.online === true;
+    var state = d.state === 'sleeping' || d.state === 'online' ? d.state : (online ? 'online' : 'offline');
     var post = [];
     if (d.warehouse) {
       var wh = (ctx && ctx.warehouseName) || d.warehouse;
@@ -23,6 +24,7 @@
     return {
       title: d.name || 'PDA Scanner',
       online: online,
+      state: state,
       user: !who ? 'ยังไม่มีผู้เข้างาน' : d.employeeName && d.employeeId ? d.employeeName + ' (' + d.employeeId + ')' : who,
       post: post.join(' · ') || '—',
       seen: ago(d.lastSeenAt, (ctx && ctx.now) || Date.now()),
@@ -30,7 +32,7 @@
       ip: d.ipAddress || '—',
       rfid: flag(d.hasIntegratedRfid),
       zebra: flag(d.usesZebraSdk),
-      hint: online ? '' : 'เปิดแอปบนเครื่องค้างไว้ และให้เครื่องอยู่ Wi-Fi เดียวกับเซิร์ฟเวอร์',
+      hint: state === 'online' ? '' : state === 'sleeping' ? 'หน้าจอเครื่องดับหรือถูกล็อก กดปุ่มเปิดจอเพื่อกลับมาใช้งาน' : 'เปิดแอปบนเครื่องค้างไว้ และให้เครื่องอยู่ Wi-Fi เดียวกับเซิร์ฟเวอร์',
     };
   }
 

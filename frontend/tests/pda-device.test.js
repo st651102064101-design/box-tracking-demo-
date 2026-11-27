@@ -55,3 +55,17 @@ describe('PDA connect address', () => {
     }
   });
 });
+
+describe('sleeping screen', () => {
+  it('shows a sleeping handheld as sleeping with a hint to wake it', () => {
+    const v = view({ name: 'Zebra TC52', online: false, state: 'sleeping', lastSeenAt: '2026-11-26T07:59:52Z' }, { now });
+    expect(v.state).toBe('sleeping');
+    expect(v.online).toBe(false);
+    expect(v.hint).toContain('กดปุ่มเปิดจอ');
+  });
+
+  it('keeps old responses without a state working', () => {
+    expect(view({ name: 'x', online: true, lastSeenAt: '2026-11-26T07:59:52Z' }, { now }).state).toBe('online');
+    expect(view({ name: 'x', online: false, lastSeenAt: '2026-11-26T07:59:52Z' }, { now }).state).toBe('offline');
+  });
+});

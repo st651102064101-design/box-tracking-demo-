@@ -58,3 +58,22 @@ describe('PDA presence', () => {
     expect((await request(ctx.app).post('/api/devices/heartbeat').send({ name: 'x' })).status).toBe(401);
   });
 });
+
+describe('PDA screen state', () => {
+  it('shows a sleeping handheld as sleeping, not offline, and clears it on the next report', async () => {
+    await beat({ deviceId: 'PDA-SLEEP', name: 'sleepy', heartbeatSeconds: 5 });
+    await beat({ deviceId: 'PDA-SLEEP', name: 'sleepy', heartbeatSeconds: 5, sleeping: true });
+    let dev = (await list()).find((d: { deviceId: string }) => d.deviceId === 'PDA-SLEEP');
+    expect(dev).toEqual(expect.objectContaining({ state: 'sleeping', online: false }));
+    await beat({ deviceId: 'PDA-SLEEP', name: 'sleepy', heartbeatSeconds: 5 });
+    dev = (await list()).find((d: { deviceId: string }) => d.deviceId === 'PDA-SLEEP');
+    expect(dev).toEqual(expect.objectContaining({ state: 'online', online: true }));
+  });
+
+  it('gives up on a sleeping handheld after the sleep window', async () => {
+    const { deviceState } = await import('../src/routes/devices.js');
+    const d = { deviceId: 'x', name: 'x', kind: 'pda', warehouse: '', gate: '', sleeping: true, lastSeenAt: new Date(0).toISOString() } as const;
+    expect(deviceState(d as never, 5 * 60_000)).toBe('sleeping');
+    expect(deviceState(d as never, 11 * 60_000)).toBe('offline');
+  });
+});
