@@ -3,7 +3,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { and, desc, eq, isNull } from 'drizzle-orm';
 import { getDb } from '../db/client.js';
-import { customers, shipPlans } from '../db/schema.js';
+import { customers, rfidReaders, shipPlans } from '../db/schema.js';
 import { requireAuth, requirePermission } from '../middleware/auth.js';
 import { asyncHandler, httpError } from '../middleware/error.js';
 import { normalizePlate, today } from '../services/shipPlan.js';
@@ -15,6 +15,8 @@ shipPlansRouter.use(requireAuth);
 const text = z.union([z.string(), z.number()]).transform((v) => String(v).trim()).optional();
 const bodySchema = z.object({
   rows: z.array(z.object({ plate: text, customer: text, doNo: text, po: text, date: text })).max(2000),
+  /** The gate the list is loaded at; it must have its FX9600 bound. */
+  gateNo: z.number().int().positive().optional(),
 });
 
 /** Accepts yyyy-mm-dd or dd/mm/yyyy; returns yyyy-mm-dd, or null when it is no date. */
@@ -34,8 +36,12 @@ shipPlansRouter.get('/', asyncHandler(async (_req, res) => {
 }));
 
 shipPlansRouter.post('/', requirePermission('gate.out'), asyncHandler(async (req, res) => {
-  const { rows } = bodySchema.parse(req.body);
+  const { rows, gateNo } = bodySchema.parse(req.body);
   const db = getDb();
+  if (gateNo !== undefined) {
+    const [reader] = await db.select({ id: rfidReaders.id }).from(rfidReaders).where(eq(rfidReaders.gateNo, gateNo)).limit(1);
+    if (!reader) throw httpError(409, `Gate ${gateNo} ยังไม่ได้ผูกเครื่องอ่าน FX9600 นำเข้ารายการไม่ได้`, 'gate_not_bound');
+  }
   const known = await db.select().from(customers).where(isNull(customers.deletedAt));
   const errors: { row: number; message: string }[] = [];
   const good: (typeof shipPlans.$inferInsert)[] = [];

@@ -8244,7 +8244,7 @@ function gpImport(file){
     }catch(e){say('bad','อ่านไฟล์ไม่ได้');return;}
     if(!rows){say('bad','ไฟล์ต้องมีหัวคอลัมน์ “ทะเบียนรถ” และ “ลูกค้า”');return;}
     if(!rows.length){say('warn','ไฟล์ไม่มีรายการ');return;}
-    gpApi('/api/ship-plans','POST',{rows:rows}).then(function(d){
+    gpApi('/api/ship-plans','POST',{rows:rows,gateNo:gpGateNo()}).then(function(d){
       var bad=(d.errors||[]).map(function(e){return 'แถว '+(e.row+1)+': '+esc(e.message);});
       say(bad.length?'warn':'ok','นำเข้าแล้ว '+Number(d.added)+' รายการ'+(bad.length?'<br>ข้าม '+bad.length+' แถว<br>'+bad.slice(0,8).join('<br>'):''));
       gpLoad();

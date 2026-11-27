@@ -197,3 +197,12 @@ describe('customer preset needs a bound FX9600', () => {
     expect(res.body.code ?? res.body.error ?? JSON.stringify(res.body)).toContain('gate_not_bound');
   });
 });
+
+describe('importing at an unbound gate', () => {
+  it('refuses the shipping list when the gate has no FX9600 bound', async () => {
+    const res = await w.api().post('/api/ship-plans').set(w.as).send({ rows: [{ plate: '90-0001', customer: 'C1' }], gateNo: GATE.screen });
+    expect(res.status).toBe(409);
+    expect(JSON.stringify(res.body)).toContain('gate_not_bound');
+    expect(await planOf('90-0001')).toEqual([]);
+  });
+});
