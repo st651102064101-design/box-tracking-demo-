@@ -102,6 +102,7 @@
     [/^ตั้งประตูให้ตรงระบบ$/, 'Set the gate to match the system'],
     [/^พร้อมใช้งาน$/, 'Ready'],
     [/^ผูกเครื่อง$/, 'Bind'],
+    [/^รับสัญญาณจากเครื่อง$/, 'Receive signal from the reader'],
     [/^ตรวจเครื่อง$/, 'Check reader'],
     [/^แก้การตั้งค่า$/, 'Fix settings'],
     [/^ยังไม่ผูก FX9600 กับประตูใดเลย · มี (\d+) ประตู$/, 'No FX9600 bound yet · gates: $1'],

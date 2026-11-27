@@ -2396,7 +2396,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
 <script src="/pda-device.js?v=20261127-1"></script>
 <script src="/overdue.js?v=20261126"></script>
 <script src="/systems.js?v=20261127-5"></script>
-<script src="/gate-view.js?v=20261127-6"></script>
+<script src="/gate-view.js?v=20261127-7"></script>
 <script src="/readiness.js?v=20261127-2"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -13384,8 +13384,15 @@ function loadRfidGateBindings(){
     if(typeof renderOverviewOperations==='function'&&$('#ovHardwareHealth'))renderOverviewOperations(Object.values(S.boxes||{}));
   });
 }
-function rfidGateUnavailableHtml(g){var bound=rfidGateIsBound(g);return '<div class="banner warn"><b>'+btT('RFID ใช้งานไม่ได้ที่ประตูนี้')+'</b> '+btT('— ประตู')+' '+esc(g||'-')+' '+btT(bound?'ยังไม่ได้รับ heartbeat ล่าสุดจากเครื่องอ่าน RFID':'ยังไม่ได้ผูกเครื่องอ่าน RFID ที่เปิดใช้งานอยู่')+'</div>'
-  +(currentSystem()==='rfidgate'&&g?'<button type="button" class="btn pos" style="width:100%;justify-content:center;margin-top:12px;" onclick="manageRfidGate('+Number(g)+')">'+(bound?'ตรวจเครื่อง FX9600':'ผูกเครื่อง FX9600 กับประตู '+Number(g))+' ›</button>':'');}
+function rfidGateUnavailableHtml(g){
+  var bound=rfidGateIsBound(g),online=bound&&fx9600IsOnline(g);
+  var why=!bound?'ผูกเครื่อง FX9600 กับประตูนี้ก่อน':'เครื่อง FX9600 ไม่ตอบสนอง ตรวจเครื่องอ่านก่อน';
+  var steps=[{label:'ผูกเครื่อง FX9600',state:bound?'done':'now'},{label:'รับสัญญาณจากเครื่อง',state:!bound?'todo':online?'done':'now'},{label:'พร้อมใช้งาน',state:online?'done':'todo'}];
+  var can=currentSystem()==='rfidgate'&&g;
+  return '<div class="gp-ready warn"><div><div class="gp-ready-title">ประตู '+esc(g||'-')+' ยังไม่พร้อม</div><div class="gp-ready-why">'+esc(why)+'</div></div>'
+    +(can?'<button type="button" class="btn sm accent" onclick="manageRfidGate('+Number(g)+')">'+(bound?'ตรวจเครื่อง':'ผูกเครื่อง')+' ›</button>':'')+'</div>'
+    +'<ol class="gp-steps">'+steps.map(function(st,i){return '<li class="gp-step '+st.state+'"><span>'+(st.state==='done'?'✓':(i+1))+'</span>'+esc(st.label)+'</li>';}).join('')+'</ol>';
+}
 function fx9600LastSeen(g){return S.gateWebhookLastSeen&&S.gateWebhookLastSeen[String(g)]||'';}
 function fx9600OfflineAfterMs(g){var sec=Number(S.gateHeartbeatIntervalSeconds&&S.gateHeartbeatIntervalSeconds[String(g)])||1;return Math.max(90000,sec*5000);}
 function fx9600IsOnline(g){var ts=Date.parse(fx9600LastSeen(g));return !!ts&&(Date.now()-ts)<=fx9600OfflineAfterMs(g);}
