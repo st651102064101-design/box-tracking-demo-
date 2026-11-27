@@ -11,8 +11,12 @@ const html = read('legacy.html');
 const reduced = ['rfidgate', 'gate1', 'gate2', 'gate3'];
 
 describe('parts a system does not have', () => {
-  it('has no handheld, stock import, direct shipping or shelf moves outside the full system', () => {
-    for (const f of ['pda', 'stockImport', 'stockShip', 'relocate']) {
+  it('offers the handheld in every system', () => {
+    expect([...reduced, 'full'].filter((id) => !S.can(id, 'pda'))).toEqual([]);
+  });
+
+  it('has no stock import, direct shipping or shelf moves outside the full system', () => {
+    for (const f of ['stockImport', 'stockShip', 'relocate']) {
       expect(reduced.filter((id) => S.can(id, f)), f).toEqual([]);
       expect(S.can('full', f)).toBe(true);
     }

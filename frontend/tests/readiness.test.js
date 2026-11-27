@@ -46,6 +46,13 @@ describe('system readiness', () => {
     expect(run({ pda: null, needsPda: false }).level).toBe('ok');
   });
 
+  it('does not nag about handhelds where they are only a helper', () => {
+    for (const pda of [null, [], [{ name: 'TC52', online: false }]]) {
+      expect(run({ pda, pdaOptional: true }).level, JSON.stringify(pda)).toBe('ok');
+    }
+    expect(texts(run({ pda: [{ name: 'TC52', online: true }], pdaOptional: true }), 'ok')).toContain('PDA ออนไลน์ 1 เครื่อง');
+  });
+
   it('counts the boxes that need attention', () => {
     const r = run({ boxes: { ready: 0, hold: 1, damage: 2, lost: 3, overdue: 4 }, review: 5 });
     expect(texts(r, 'bad')).toEqual(['ไม่มีกล่องพร้อมส่ง']);

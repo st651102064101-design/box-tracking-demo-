@@ -9,7 +9,7 @@
       labels: { overview: 'รายงาน' },
       stabs: ['btype', 'box', 'wh', 'cust'],
       settings: ['data'],
-      without: ['manualReceive', 'stockImport', 'stockShip', 'relocate', 'pda'],
+      without: ['manualReceive', 'stockImport', 'stockShip', 'relocate'],
     };
     Object.keys(extra).forEach(function (key) { system[key] = extra[key]; });
     return system;
@@ -28,7 +28,7 @@
       tabs: ['overview', 'gateout', 'gatein', 'inventory', 'setup'],
       labels: { overview: 'รายงาน' },
       /* Ways around the gates, and shelf handling. */
-      without: ['manualReceive', 'stockImport', 'stockShip', 'relocate', 'pda', 'plateReport'],
+      without: ['manualReceive', 'stockImport', 'stockShip', 'relocate', 'plateReport'],
       stabs: ['btype', 'box', 'wh', 'cust'],
       settings: ['data'],
       modes: { in: ['rfid'], out: ['manual', 'excel'] },

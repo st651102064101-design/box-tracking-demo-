@@ -2395,9 +2395,9 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
 <script src="/legacy-sync.js"></script>
 <script src="/pda-device.js?v=20261126-2"></script>
 <script src="/overdue.js?v=20261126"></script>
-<script src="/systems.js?v=20261127-4"></script>
+<script src="/systems.js?v=20261127-5"></script>
 <script src="/gate-view.js?v=20261127-4"></script>
-<script src="/readiness.js?v=20261127-4"></script>
+<script src="/readiness.js?v=20261127-5"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
@@ -8283,7 +8283,7 @@ function renderReadiness(){
   else if(rdServer.review===null)rdLoadServer();
   var count=function(status){return all.filter(function(b){return b.status===status;}).length;};
   var result=window.Readiness.assess({
-    needsLpr:sys!=='rfidgate',needsPda:window.Systems.can(sys,'pda'),unattended:window.Systems.unattended(sys),
+    needsLpr:sys!=='rfidgate',needsPda:window.Systems.can(sys,'pda'),pdaOptional:window.Systems.valid(sys)&&sys!=='full',unattended:window.Systems.unattended(sys),
     readers:rdReaders(),lprGates:rdLprGates(),
     pda:pdaDeviceLoaded?pdaDeviceRegistry.map(function(d){return {name:d.name||'PDA',online:d.online===true};}):null,
     boxes:{ready:all.filter(function(b){return b.status==='warehouse'&&b.labeled!==false;}).length,hold:count('hold'),damage:count('damage'),lost:count('lost'),overdue:all.filter(isOverdue).length},

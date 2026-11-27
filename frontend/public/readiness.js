@@ -19,7 +19,11 @@
       if (!readers.length && !s.lprGates.length) out.push(item('warn', 'ยังไม่เคยได้รับข้อมูลจากกล้อง LPR', 'lpr'));
       else if (!mute.length) out.push(item('ok', 'LPR เคยส่งข้อมูลแล้ว', 'lpr'));
     }
-    if (s.needsPda) {
+    if (s.needsPda && s.pdaOptional) {
+      /* A helper, not a requirement: only say what is there. */
+      var on = (s.pda || []).filter(function (d) { return d.online; });
+      if (on.length) out.push(item('ok', 'PDA ออนไลน์ ' + on.length + ' เครื่อง', 'pda'));
+    } else if (s.needsPda) {
       if (!s.pda) out.push(item('wait', 'กำลังตรวจเครื่อง PDA'));
       else if (!s.pda.length) out.push(item('warn', 'ยังไม่มีเครื่อง PDA เชื่อมต่อ', 'pda'));
       else {
