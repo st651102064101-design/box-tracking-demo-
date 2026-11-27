@@ -74,3 +74,32 @@ describe('gate lock', () => {
     expect(G.lockReason(true, true)).toBe('');
   });
 });
+
+describe('gate readiness steps', () => {
+  const gate3 = { type: 'in', mode: 'antenna' };
+  it('an unbound gate is on step 1 and says to bind', () => {
+    const r = G.readiness('gate3', gate3, false, false);
+    expect(r.ready).toBe(false);
+    expect(r.steps.map((s) => s.state)).toEqual(['now', 'todo', 'todo']);
+    expect(r.action).toBe('ผูกเครื่อง');
+    expect(r.reason).toContain('ผูกเครื่อง FX9600');
+  });
+  it('a bound but silent reader is on step 1 and says to check it', () => {
+    const r = G.readiness('gate3', gate3, true, false);
+    expect(r.steps[0].state).toBe('now');
+    expect(r.action).toBe('ตรวจเครื่อง');
+  });
+  it('a bound, answering gate with the wrong setup is on step 2', () => {
+    const r = G.readiness('gate3', { type: 'both', mode: 'antenna' }, true, true);
+    expect(r.ready).toBe(false);
+    expect(r.steps.map((s) => s.state)).toEqual(['done', 'now', 'todo']);
+    expect(r.action).toBe('แก้การตั้งค่า');
+  });
+  it('a fully set up gate is ready with nothing to do', () => {
+    const r = G.readiness('gate3', gate3, true, true);
+    expect(r.ready).toBe(true);
+    expect(r.steps.map((s) => s.state)).toEqual(['done', 'done', 'done']);
+    expect(r.action).toBe('');
+    expect(r.reason).toBe('');
+  });
+});

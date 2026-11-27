@@ -14,6 +14,27 @@
     return online ? '' : 'offline';
   }
 
+  /** The gate's readiness as three steps, and the one card that says where it stands. */
+  function readiness(system, info, bound, online) {
+    var problem = mismatch(system, info);
+    var lock = lockReason(bound, online);
+    var linked = !lock;
+    var ready = linked && !problem;
+    var reason = lock === 'unbound' ? 'ผูกเครื่อง FX9600 กับประตูนี้ก่อน'
+      : lock === 'offline' ? 'เครื่อง FX9600 ไม่ตอบสนอง ตรวจเครื่องอ่านก่อน'
+      : problem;
+    return {
+      ready: ready,
+      reason: ready ? '' : reason,
+      action: ready ? '' : lock === 'unbound' ? 'ผูกเครื่อง' : lock === 'offline' ? 'ตรวจเครื่อง' : 'แก้การตั้งค่า',
+      steps: [
+        { label: 'ผูกเครื่อง FX9600', state: linked ? 'done' : 'now' },
+        { label: 'ตั้งประตูให้ตรงระบบ', state: !linked ? 'todo' : problem ? 'now' : 'done' },
+        { label: 'พร้อมใช้งาน', state: ready ? 'done' : 'todo' },
+      ],
+    };
+  }
+
   /** The latest movements through a gate, newest first. */
   function passages(events, gate, limit) {
     return (events || []).filter(function (e) {
@@ -73,6 +94,16 @@
 
   /* English for the page translator: whole texts of the gate page. */
   var en = [
+    [/^ประตู (.+) พร้อมใช้งาน$/, 'Gate $1 ready'],
+    [/^ประตู (.+) ยังไม่พร้อม$/, 'Gate $1 not ready'],
+    [/^ผูกเครื่อง FX9600 กับประตูนี้ก่อน$/, 'Bind an FX9600 to this gate first'],
+    [/^เครื่อง FX9600 ไม่ตอบสนอง ตรวจเครื่องอ่านก่อน$/, 'FX9600 is not responding; check the reader first'],
+    [/^ผูกเครื่อง FX9600$/, 'Bind FX9600'],
+    [/^ตั้งประตูให้ตรงระบบ$/, 'Set the gate to match the system'],
+    [/^พร้อมใช้งาน$/, 'Ready'],
+    [/^ผูกเครื่อง$/, 'Bind'],
+    [/^ตรวจเครื่อง$/, 'Check reader'],
+    [/^แก้การตั้งค่า$/, 'Fix settings'],
     [/^ยังไม่ผูก FX9600 กับประตูใดเลย · มี (\d+) ประตู$/, 'No FX9600 bound yet · gates: $1'],
     [/^ผูกเครื่อง FX9600 ›$/, 'Bind an FX9600 ›'],
     [/^ดูประตูที่ยังไม่ผูก \((\d+)\)$/, 'Show unbound gates ($1)'],
@@ -163,5 +194,5 @@
     [/^แถว (\d+): ไม่มีทะเบียนรถ$/, 'Row $1: no license plate'],
     [/^แถว (\d+): วันที่ไม่ถูกต้อง (.*)$/, 'Row $1: invalid date $2'],
   ];
-  window.GateView = { mismatch: mismatch, lockReason: lockReason, passages: passages, planRows: planRows, presetView: presetView, warehouseLabel: warehouseLabel, en: en };
+  window.GateView = { mismatch: mismatch, lockReason: lockReason, readiness: readiness, passages: passages, planRows: planRows, presetView: presetView, warehouseLabel: warehouseLabel, en: en };
 })();

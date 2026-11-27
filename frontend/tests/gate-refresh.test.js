@@ -30,12 +30,12 @@ function page() {
     currentSystem: () => 'gate1', gpGateNo: () => 1, gpRenderPreset() {}, gpLoad() { loads += 1; },
     allGateNums: () => [1], gateWh: () => 'W', whName: () => 'wh', gpInfo: () => ({ type: 'both', mode: 'antenna' }),
     rfidGateIsBound: () => false, fx9600IsOnline: () => false, fx9600SeenText: () => '',
-    esc: String, fmtTs: String, custName: String, typeName: String,
+    esc: (v) => String(v), fmtTs: String, custName: String, typeName: String,
   };
   vm.createContext(ctx);
   vm.runInContext(read('systems.js'), ctx);
   vm.runInContext(read('gate-view.js'), ctx);
-  vm.runInContext([lift('gpHtml'), lift('renderGatePage')].join('\n'), ctx);
+  vm.runInContext([lift('gpHtml'), lift('gpReadyHtml'), lift('renderGatePage')].join('\n'), ctx);
   return { ctx, writes, loads: () => loads };
 }
 

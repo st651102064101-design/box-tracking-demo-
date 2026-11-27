@@ -2396,7 +2396,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
 <script src="/pda-device.js?v=20261127-1"></script>
 <script src="/overdue.js?v=20261126"></script>
 <script src="/systems.js?v=20261127-5"></script>
-<script src="/gate-view.js?v=20261127-5"></script>
+<script src="/gate-view.js?v=20261127-6"></script>
 <script src="/readiness.js?v=20261127-5"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -3125,6 +3125,20 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
     <div><div class="eyebrow" id="gpSystem">ประตู</div><h1 class="gp-title">ประตูสแกน</h1></div>
     <label class="gp-pick">ประตู<select id="gpGate" onchange="gpSelect(this.value)"></select></label>
   </div>
+  <style>
+  .gp-ready{display:flex;gap:16px;align-items:center;justify-content:space-between;padding:18px 20px;border-radius:18px;border:1px solid var(--line);}
+  .gp-ready.warn{background:color-mix(in srgb,#f59e0b 12%,transparent);border-color:color-mix(in srgb,#f59e0b 35%,transparent);}
+  .gp-ready.ok{background:color-mix(in srgb,#22c55e 12%,transparent);border-color:color-mix(in srgb,#22c55e 35%,transparent);}
+  .gp-ready-title{font-size:20px;font-weight:800;}
+  .gp-ready-why{margin-top:4px;color:var(--muted);font-size:14px;}
+  .gp-steps{list-style:none;margin:12px 0 0;padding:0;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+  .gp-step{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:14px;background:color-mix(in srgb,var(--ink) 6%,transparent);color:var(--muted);font-weight:700;font-size:14px;}
+  .gp-step span{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:color-mix(in srgb,var(--ink) 12%,transparent);font-size:12px;flex:0 0 auto;}
+  .gp-step.done{color:#22c55e;}.gp-step.done span{background:#22c55e;color:#06210f;}
+  .gp-step.now{color:var(--ink);box-shadow:inset 0 0 0 2px #f59e0b;}.gp-step.now span{background:#f59e0b;color:#2a1700;}
+  @media (max-width:640px){.gp-steps{grid-template-columns:1fr;}.gp-ready{flex-direction:column;align-items:flex-start;}}
+  #gpStatus[hidden],#gpPassagesCard[hidden]{display:none!important;}
+  </style>
   <div id="gpWarn"></div>
   <div class="gp-tiles" id="gpStatus"></div>
   <div class="gp-dirs" id="gpDirections"></div>
@@ -3142,7 +3156,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
     <div class="gp-sub">2 · ลูกค้าที่ตั้งไว้ที่ประตูนี้ (ใช้เมื่อป้ายรถไม่อยู่ในรายการ)</div>
     <div id="gpPreset"></div>
   </div>
-  <div class="gp-card"><h3>ผ่านประตูล่าสุด</h3><div id="gpPassages"></div></div>
+  <div class="gp-card" id="gpPassagesCard"><h3>ผ่านประตูล่าสุด</h3><div id="gpPassages"></div></div>
 </section>
 
 <section class="tab" id="tab-gatein">
@@ -8108,6 +8122,10 @@ function gpFail(e){toast('ทำรายการไม่สำเร็จ',e
    content makes it flicker. Compared with what was last written, because the
    translator may have changed the text on screen since. */
 function gpHtml(el,html){if(el.gpWritten===html)return;el.gpWritten=html;el.innerHTML=html;}
+function gpReadyHtml(g,R){
+  var steps=R.steps.map(function(st,i){return '<li class="gp-step '+st.state+'"><span>'+(st.state==='done'?'✓':(i+1))+'</span>'+esc(st.label)+'</li>';}).join('');
+  return '<div class="gp-ready '+(R.ready?'ok':'warn')+'"><div><div class="gp-ready-title">ประตู '+esc(g)+' '+(R.ready?'พร้อมใช้งาน':'ยังไม่พร้อม')+'</div>'+(R.reason?'<div class="gp-ready-why">'+esc(R.reason)+'</div>':'')+'</div>'+(R.action?'<button class="btn sm accent" onclick="manageRfidGate('+esc(g)+')">'+esc(R.action)+' ›</button>':'')+'</div><ol class="gp-steps">'+steps+'</ol>';
+}
 function renderGatePage(){
   if(!$('#tab-gate').classList.contains('active'))return;
   var sys=currentSystem(),g=gpGateNo(),sel=$('#gpGate');
@@ -8116,8 +8134,8 @@ function renderGatePage(){
   gpHtml(sel,allGateNums().map(function(n){return '<option value="'+n+'"'+(n===g?' selected':'')+'>ประตู '+n+' · '+esc(whName(gateWh(n)))+'</option>';}).join(''));
   var info=gpInfo(g),problem=window.GateView.mismatch(sys,info),auto=window.Systems.unattended(sys);
   var bound=rfidGateIsBound(g),online=bound&&fx9600IsOnline(g),lock=window.GateView.lockReason(bound,online),ready=!lock;
-  gpHtml($('#gpWarn'),(problem?'<div class="banner warn" style="margin-bottom:14px;"><b>ประตู '+g+' ยังตั้งค่าไม่ตรงกับระบบนี้</b> '+esc(problem)+' <button class="btn sm accent" onclick="manageRfidGate('+g+')">แก้การตั้งค่า ›</button></div>':'')
-    +(lock?'<div class="banner warn" style="margin-bottom:14px;"><b>ยังใช้ประตูนี้ไม่ได้</b> '+(lock==='unbound'?'ผูกเครื่อง FX9600 กับประตูนี้ก่อน':'เครื่อง FX9600 ไม่ตอบสนอง ตรวจเครื่องอ่านก่อน')+' <button class="btn sm accent" onclick="manageRfidGate('+g+')">'+(lock==='unbound'?'ผูกเครื่อง':'ตรวจเครื่อง')+' ›</button></div>':''));
+  var R=window.GateView.readiness(sys,info,bound,online),ready=R.ready;
+  gpHtml($('#gpWarn'),gpReadyHtml(g,R));
   var seen=null;
   Object.keys(S.boxes||{}).forEach(function(t){(S.boxes[t].history||[]).forEach(function(h){
     if(h.dir==='lpr'&&Number(h.gateNo)===g&&(!seen||Date.parse(h.ts)>Date.parse(seen.ts)))seen=h;});});
@@ -8132,7 +8150,7 @@ function renderGatePage(){
   var rows=window.GateView.passages(S.events,g,10);
   gpHtml($('#gpPassages'),rows.length?rows.map(function(e){return '<div class="gp-row"><b class="mono">'+esc(e.tag)+'</b><span class="pill '+(e.dir==='out'?'teal':'ok')+'">'+(e.dir==='out'?'ออก':'เข้า')+'</span><span class="muted small">'+esc([e.customer?custName(e.customer):'',e.plate].filter(Boolean).join(' · '))+'</span><span class="small">'+esc(fmtTs(e.ts))+'</span></div>';}).join(''):'<div class="muted small">ยังไม่มีกล่องผ่านประตูนี้</div>');
   var outbound=auto&&info.type!=='in';
-  $('#gpOutbound').hidden=!outbound||!ready;$('#gpReview').hidden=!auto||!ready;
+  $('#gpOutbound').hidden=!outbound||!ready;$('#gpReview').hidden=!auto||!ready;$('#gpStatus').hidden=!ready;$('#gpPassagesCard').hidden=!ready;
   if(gpShownFor!==sys+':'+g){
     gpShownFor=sys+':'+g;
     if(gpPre.gate!==g){gpPre={gate:g,data:null,editing:false,customer:'',ttl:'28800',sig:''};}
