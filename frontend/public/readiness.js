@@ -80,5 +80,42 @@
       : level === 'warn' ? 'ทำงานได้ · มี ' + problems + ' เรื่องต้องดู' : 'ยังไม่พร้อม · มี ' + problems + ' เรื่องต้องแก้';
     return { level: level, title: title, problems: problems, groups: groups };
   }
-  window.Readiness = { assess: assess };
+  /* English for the page translator: whole-text patterns, so nothing is half translated. */
+  var en = [
+    [/^พร้อมทำงาน$/, 'Ready to work'],
+    [/^กำลังตรวจความพร้อม…$/, 'Checking readiness…'],
+    [/^ทำงานได้ · มี (\d+) เรื่องต้องดู$/, 'Working · to review: $1'],
+    [/^ยังไม่พร้อม · มี (\d+) เรื่องต้องแก้$/, 'Not ready · to fix: $1'],
+    [/^อุปกรณ์$/, 'Devices'],
+    [/^กล่อง$/, 'Boxes'],
+    [/^การส่งออก$/, 'Shipping'],
+    [/^กำลังตรวจเครื่องอ่าน FX9600$/, 'Checking FX9600 readers'],
+    [/^ยังไม่ผูก FX9600 กับประตูใดเลย$/, 'No FX9600 is bound to any gate'],
+    [/^FX9600 ประตู (\d+) ไม่ตอบสนอง$/, 'FX9600 at gate $1 is not responding'],
+    [/^FX9600 พร้อม (\d+) ประตู$/, 'FX9600 ready at gates: $1'],
+    [/^LPR ประตู (\d+) ยังไม่เคยส่งข้อมูล$/, 'LPR at gate $1 has never reported'],
+    [/^ยังไม่เคยได้รับข้อมูลจากกล้อง LPR$/, 'No data from any LPR camera yet'],
+    [/^LPR เคยส่งข้อมูลแล้ว$/, 'LPR has reported'],
+    [/^กำลังตรวจเครื่อง PDA$/, 'Checking PDA devices'],
+    [/^ยังไม่มีเครื่อง PDA เชื่อมต่อ$/, 'No PDA connected yet'],
+    [/^PDA ออฟไลน์: (.+)$/, 'PDA offline: $1'],
+    [/^PDA ออนไลน์ (\d+) เครื่อง$/, 'PDAs online: $1'],
+    [/^พร้อมส่ง (\d+) ใบ$/, 'Ready to ship: $1'],
+    [/^ไม่มีกล่องพร้อมส่ง$/, 'No box ready to ship'],
+    [/^กำลังตรวจรายการต้องตรวจ$/, 'Checking the review queue'],
+    [/^ตรวจรายการต้องตรวจไม่ได้$/, 'Could not check the review queue'],
+    [/^ต้องตรวจที่ประตู (\d+) ใบ$/, 'To review at gates: $1'],
+    [/^ค้างคืนเกินกำหนด (\d+) ใบ$/, 'Overdue returns: $1'],
+    [/^สูญหาย (\d+) ใบ$/, 'Lost: $1'],
+    [/^พักใช้งาน\/ชำรุด (\d+) ใบ$/, 'On hold or damaged: $1'],
+    [/^ยังไม่มีลูกค้า$/, 'No customers yet'],
+    [/^ลูกค้าพร้อมเลือก (\d+) ราย$/, 'Customers to choose from: $1'],
+    [/^ตรวจรายการส่งของไม่ได้$/, 'Could not check the shipping list'],
+    [/^กำลังตรวจรายการส่งของ$/, 'Checking the shipping list'],
+    [/^รายการรอรถวันนี้ (\d+) รายการ$/, 'Jobs waiting for a truck today: $1'],
+    [/^กำลังตรวจลูกค้าที่ตั้งไว้ที่ประตู$/, 'Checking the customer set at the gate'],
+    [/^ตั้งลูกค้าไว้ที่ประตูแล้ว$/, 'A customer is set at the gate'],
+    [/^ขาออกอัตโนมัติยังไม่รู้ว่าส่งให้ใคร$/, 'Automatic outbound has no customer yet'],
+  ];
+  window.Readiness = { assess: assess, en: en };
 })();

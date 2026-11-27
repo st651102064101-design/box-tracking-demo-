@@ -2379,7 +2379,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
 <script src="/overdue.js?v=20261126"></script>
 <script src="/systems.js?v=20261127"></script>
 <script src="/gate-view.js?v=20261127"></script>
-<script src="/readiness.js?v=20261127"></script>
+<script src="/readiness.js?v=20261127-2"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
@@ -23448,6 +23448,8 @@ document.addEventListener('change',function(e){
     [/^(\d+) กล่อง$/, "$1 boxes"],
     [/^(\d+) บทบาท$/, "$1 roles"]
   );
+  /* The readiness panel's sentences come with their own translations, which win. */
+  var PANEL = (window.Readiness && window.Readiness.en) || [];
   var EXACT_KEYS = Object.keys(EXACT).sort(function(a,b){return b.length-a.length;});
   var FRAG_KEYS  = Object.keys(FRAG).sort(function(a,b){return b.length-a.length;});
 
@@ -23462,6 +23464,7 @@ document.addEventListener('change',function(e){
     if(!s) return s;
     var t = s.trim();
     if(!t) return s;
+    for(var p=0;p<PANEL.length;p++){ if(PANEL[p][0].test(t)) return s.replace(t, t.replace(PANEL[p][0], PANEL[p][1])); }
     if(EXACT.hasOwnProperty(t)) return s.replace(t, EXACT[t]);
     var out = s, hit = false;
     for(var r=0;r<RE.length;r++){

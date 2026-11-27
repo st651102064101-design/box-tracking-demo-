@@ -4,7 +4,7 @@ import { describe, it, expect } from 'vitest';
 
 const sandbox = { window: {} };
 vm.runInNewContext(readFileSync(new URL('../public/readiness.js', import.meta.url), 'utf8'), sandbox);
-const { assess } = sandbox.window.Readiness;
+const { assess, en } = sandbox.window.Readiness;
 
 const good = () => ({
   needsLpr: true, needsPda: true, unattended: true,
@@ -63,5 +63,34 @@ describe('system readiness', () => {
   it('says so when a check itself failed', () => {
     expect(texts(run({ plans: 'error' }), 'warn')).toEqual(['ตรวจรายการส่งของไม่ได้']);
     expect(texts(run({ review: 'error' }), 'warn')).toEqual(['ตรวจรายการต้องตรวจไม่ได้']);
+  });
+});
+
+describe('the panel in English', () => {
+  /* The page translator tries these patterns on each whole text node. */
+  const translate = (text) => en.reduce((out, [pattern, to]) => out.replace(pattern, to), text);
+
+  it('leaves no Thai in any text the panel can show', () => {
+    const cases = [
+      {},
+      { readers: null, pda: null, review: null, plans: null },
+      { readers: [], lprGates: [], pda: [], customers: 0 },
+      { readers: [{ gate: 1, online: false }], lprGates: [], pda: [{ name: 'TC52', online: false }], review: 'error', plans: 'error' },
+      { boxes: { ready: 0, hold: 1, damage: 2, lost: 3, overdue: 4 }, review: 5, plans: 0 },
+      { plans: 0, preset: null },
+      { plans: 0, preset: true },
+      { boxes: { ready: 7, hold: 0, damage: 0, lost: 1, overdue: 0 } },
+    ];
+    for (const change of cases) {
+      const r = run(change);
+      const all = [r.title, ...r.groups.flatMap((g) => [g.title, ...g.items.map((i) => i.text)])];
+      for (const text of all) expect(translate(text), text).not.toMatch(/[\u0E00-\u0E7F]/);
+    }
+  });
+
+  it('keeps the numbers and names', () => {
+    expect(translate('พร้อมส่ง 7 ใบ')).toBe('Ready to ship: 7');
+    expect(translate('PDA ออฟไลน์: Zebra TC52')).toBe('PDA offline: Zebra TC52');
+    expect(translate('FX9600 ประตู 4 ไม่ตอบสนอง')).toBe('FX9600 at gate 4 is not responding');
   });
 });
