@@ -225,7 +225,7 @@ export default function LoginPage() {
             password" instead of making them retype a username every time.
             "ไม่ใช่ฉัน" swaps back to a blank field without losing quickUser,
             so it's just as fast to switch to someone else. */}
-        {showQuickLogin && (
+        {mode === 'signin' && showQuickLogin && (
           <div className="mb-3 flex items-center gap-3 rounded-xl border border-black/10 bg-black/[0.02] px-3 py-2.5">
             <div className="grid h-9 w-9 flex-none place-items-center rounded-full bg-ink text-sm font-bold text-white">
               {quickUser.charAt(0).toUpperCase()}
