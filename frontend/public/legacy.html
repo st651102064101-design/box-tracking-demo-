@@ -3153,6 +3153,11 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
   .wh-tab{min-height:44px;padding:8px 18px;border:0;border-radius:11px;background:transparent;color:var(--muted);font-weight:700;font-size:15px;cursor:pointer;}
   .wh-tab.active{background:var(--panel,#222);color:var(--ink);box-shadow:0 1px 4px rgba(0,0,0,.25);}
   .whTab[hidden]{display:none !important;}
+  .gate-range{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .gr-box{min-width:0;}
+  .gr-ctl{display:flex;align-items:center;gap:6px;margin-top:4px;}
+  .gr-ctl input{min-height:56px;font-size:22px;font-weight:800;text-align:center;flex:1;min-width:0;}
+  .gr-step{width:52px;height:56px;border-radius:14px;border:1px solid var(--line);background:var(--surface2,transparent);color:var(--ink);font-size:24px;font-weight:700;cursor:pointer;}
   details.wh-more{border:1px solid var(--line);border-radius:14px;padding:10px 14px;}
   details.wh-more summary{cursor:pointer;font-weight:700;min-height:40px;display:flex;align-items:center;}
   #whFormCard input,#whFormCard select{min-height:52px;font-size:17px;}
@@ -3733,7 +3738,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
         <div class="whTab" data-whtab="info" style="display:contents;">
         <div id="whBindSummary" class="muted small" style="grid-column:1/-1;"></div>
         <div class="field"><label>ชื่อคลัง </label><input id="whName" placeholder="คลัง 1 — บางปู"></div>
-        <div class="field" style="grid-column:span 2;"><label>ประตู (กรอกครั้งเดียว เช่น 1-5)</label><input id="whGateRange" placeholder="1-5" inputmode="numeric" autocomplete="off"><input type="hidden" id="whGateFrom"><input type="hidden" id="whGateTo"><div id="whGateRangeHint" class="muted small" style="margin-top:5px;"></div></div>
+        <div class="field" style="grid-column:span 2;"><label>ช่วงประตู</label><div class="gate-range"><div class="gr-box"><span class="muted small">ประตูแรก</span><div class="gr-ctl"><button type="button" class="gr-step" onclick="whStepGate('whGateFrom',-1)" aria-label="ลดประตูแรก">−</button><input id="whGateFrom" type="number" min="1" inputmode="numeric" placeholder="1"><button type="button" class="gr-step" onclick="whStepGate('whGateFrom',1)" aria-label="เพิ่มประตูแรก">+</button></div></div><div class="gr-box"><span class="muted small">ประตูสุดท้าย</span><div class="gr-ctl"><button type="button" class="gr-step" onclick="whStepGate('whGateTo',-1)" aria-label="ลดประตูสุดท้าย">−</button><input id="whGateTo" type="number" min="1" inputmode="numeric" placeholder="5"><button type="button" class="gr-step" onclick="whStepGate('whGateTo',1)" aria-label="เพิ่มประตูสุดท้าย">+</button></div></div></div><div id="whGateRangeHint" class="muted small" style="margin-top:6px;"></div></div>
         </div>
         <div class="whTab" data-whtab="gates" hidden style="display:contents;">
         <div class="field"><label>ประเภทประตู (ตั้งทุกประตูพร้อมกัน)</label>
@@ -6586,22 +6591,10 @@ var gateOutConfirmed=false;
 /* The operator presses confirm once the form is complete; every field is
    checked then, and the first problem is shown and focused. */
 /* Live hints for the gate range, and how many of its gates are bound yet. */
-function whParseRange(text){
-  var m=String(text||'').replace(/\s/g,'').match(/^(\d+)(?:[-–](\d+))?$/);
-  if(!m)return null;var from=Number(m[1]),to=m[2]?Number(m[2]):from;
-  return {from:from,to:to};
-}
-function whRangeInput(){
-  var box=document.getElementById('whGateRange');if(!box)return;
-  var p=whParseRange(box.value);
-  setv('whGateFrom',p?p.from:'');setv('whGateTo',p?p.to:'');
-  whUpdateRangeHint();
-}
-(function(){var box=document.getElementById('whGateRange');if(box)box.addEventListener('input',whRangeInput);})();
+function whStepGate(id,delta){var el=document.getElementById(id);if(!el)return;var v=Math.max(1,(Number(el.value)||0)+delta);el.value=String(v);el.dispatchEvent(new Event('input',{bubbles:true}));}
+(function(){['whGateFrom','whGateTo'].forEach(function(id){var el=document.getElementById(id);if(el)el.addEventListener('input',function(){whUpdateRangeHint();});});})();
 function whUpdateRangeHint(){
   var from=Number(val('whGateFrom')),to=Number(val('whGateTo'));
-  var box=document.getElementById('whGateRange');
-  if(box&&document.activeElement!==box){box.value=(from>0&&to>=from)?(from===to?String(from):from+'-'+to):'';}
   var hint=$('#whGateRangeHint');
   if(hint){hint.textContent=(from>0&&to>=from)?'จะมี '+(to-from+1)+' ประตู (ประตู '+from+' ถึง '+to+')':(from||to?'สิ้นสุดต้องมากกว่าหรือเท่ากับประตูแรก':'');}
   var sum=$('#whBindSummary');
