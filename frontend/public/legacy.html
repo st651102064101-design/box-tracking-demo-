@@ -9509,6 +9509,8 @@ function whGateRfidForm(g){
   $('#wrgSave').onclick=function(){var btn=$('#wrgSave'),role1=val('wrgPort1Role'),role2=val('wrgPort2Role');if(role1===role2){toast('ตั้งค่าเสาไม่ถูกต้อง','Port 1 และ Port 2 ต้องอยู่คนละฝั่ง','err');return;}btn.disabled=true;btn.textContent='กำลังบันทึก...';var readerId=val('wrgId').trim();var body={name:val('wrgName').trim(),host:val('wrgHost').trim(),gateNo:Number(g),webhookUrl:url,transmitPower:Number(r&&r.transmitPower)||3,antennaCount:2,heartbeatIntervalSeconds:Number(r&&r.heartbeatIntervalSeconds)||1};whRfidApi('/api/rfid/fx9600/readers/'+encodeURIComponent(readerId),{method:'PUT',body:JSON.stringify(body)}).then(function(){return whRfidApi('/api/rfid/fx9600/readers/'+encodeURIComponent(readerId)+'/antenna-mappings',{method:'PUT',body:JSON.stringify({mappings:[{antennaPort:1,gateNo:Number(g),antennaRole:role1},{antennaPort:2,gateNo:Number(g),antennaRole:role2}]})});}).then(function(){closeModal();toast('บันทึกการผูกแล้ว','Port 1 = '+(role1==='outer'?'OUT':'IN')+' · Port 2 = '+(role2==='outer'?'OUT':'IN'),'ok');var w=S.warehouses[editingWh];if(w)loadWhGateRfidCrud(w);}).catch(function(e){btn.disabled=false;btn.textContent='บันทึกการผูก';toast('บันทึกไม่สำเร็จ',e.message,'err');});};
   var heartbeatField=document.createElement('div');heartbeatField.className='field';heartbeatField.style.marginTop='12px';heartbeatField.innerHTML='<label>Heartbeat / Reporting Interval (วินาที)</label><input id="wrgHeartbeat" type="number" min="1" max="60" step="1" value="'+heartbeat+'"><div class="muted small">ต้องตั้งค่าเดียวกันใน Zebra IoT Connector</div>';var wrgAdvanced=$('#wrgAdvanced');if(wrgAdvanced)wrgAdvanced.appendChild(heartbeatField);var wrgSave=$('#wrgSave');if(wrgSave)wrgSave.addEventListener('click',function(){var v=Number(val('wrgHeartbeat'));if(Number.isInteger(v)&&v>=1&&v<=60)r.heartbeatIntervalSeconds=v;});
 }
+function wzReveal(btn){var card=btn.closest('.wz-card');var sp=card.querySelector('.wzv');var on=sp.dataset.show==='1';sp.dataset.show=on?'0':'1';sp.textContent=on?'••••••••••':card.dataset.secret;btn.textContent=on?'แสดง':'ซ่อน';}
+window.wzReveal=wzReveal;
 function whGateRfidZebraGuide(g){
   var r=whGateRfidReaders.filter(function(x){return Number(x.gateNo)===Number(g);})[0]||null;
   var previous=whGateRfidReaders.filter(function(x){return x&&x.webhookUrl&&/^https?:\/\//i.test(String(x.webhookUrl));})[0];
@@ -9522,8 +9524,8 @@ function whGateRfidZebraGuide(g){
   var card=function(n,label,value,opts){
     opts=opts||{};
     var shown=opts.secret?'••••••••••':value;
-    var reveal=opts.secret?'<button type="button" class="btn ghost" style="min-height:44px;" onclick="(function(b){var sp=b.parentElement.querySelector(\'.wzv\');var on=sp.dataset.show==="1";sp.dataset.show=on?"0":"1";sp.textContent=on?\'••••••••••\':\''+esc(value)+'\';b.textContent=on?\'แสดง\':\'ซ่อน\';})(this)">แสดง</button>':'';
-    return '<div style="border:1px solid var(--line);border-radius:14px;padding:14px;margin-top:10px;">'
+    var reveal=opts.secret?'<button type="button" class="btn ghost" style="min-height:44px;" onclick="wzReveal(this)">แสดง</button>':'';
+    return '<div class="wz-card" data-secret="'+esc(value)+'" style="border:1px solid var(--line);border-radius:14px;padding:14px;margin-top:10px;">'
       +'<div style="display:flex;gap:12px;align-items:flex-start;"><span style="flex:0 0 auto;width:30px;height:30px;border-radius:50%;background:var(--accentSoft,#eef);display:grid;place-items:center;font-weight:800;">'+n+'</span>'
       +'<div style="min-width:0;flex:1;"><div class="muted small">'+esc(label)+'</div>'
       +'<div class="mono wzv" data-show="0" style="font-size:17px;font-weight:700;word-break:break-all;margin-top:4px;">'+esc(shown)+'</div></div></div>'
