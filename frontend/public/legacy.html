@@ -6544,13 +6544,13 @@ function refreshGateOutManualVisibility(){
   /* Only the barcode/manual workflow needs the operator identity fields up
      front. RFID + LPR has its own device-driven readiness flow. */
   var missing=gateOutEntryMode==='manual'?gateOutMissing():[];
-  ['scanOut','btnScanOut','btnScanOutCamera'].forEach(function(id){var el=$('#'+id);if(el)el.disabled=!!missing.length;});
+  /* Until the operator fields are filled the scan row is not shown at all;
+     the form above is where the missing fields are. */
+  var pad=$('#gateOutManualPad');if(pad)pad.style.display=missing.length?'none':'';
   card.classList.toggle('go-waiting',!!missing.length);
   if(hint){
     hint.style.display=missing.length?'':'none';
-    hint.innerHTML=missing.length?'<span>กรอกให้ครบก่อนสแกน</span>'+missing.map(function(f){
-      return '<button type="button" onclick="focusGateOutField(\''+f[0]+'\')">'+f[1]+'</button>';
-    }).join(''):'';
+    hint.innerHTML=missing.length?'<span>กรอกให้ครบก่อนสแกน — '+missing.map(function(f){return f[1];}).join(' · ')+'</span>':'';
   }
 }
 function focusGateOutField(id){var el=$('#'+id);if(el){el.scrollIntoView({block:'center',behavior:'smooth'});el.focus({preventScroll:true});}}
