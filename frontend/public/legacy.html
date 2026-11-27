@@ -6589,6 +6589,10 @@ function refreshGateOutManualVisibility(){
   var pad=$('#gateOutManualPad');if(pad)pad.style.display=ready?'':'none';
   var cbtn=$('#gateOutConfirmBtn');if(cbtn)cbtn.style.display=(manual&&!missing.length&&!gateOutConfirmed)?'':'none';
   card.classList.toggle('go-waiting',!ready);
+  /* The scan card appears only at step 2; step 1 is the form alone. */
+  card.style.display=(manual&&!gateOutConfirmed)?'none':'';
+  /* The confirm button belongs with the form, not inside the scan card. */
+  (function(){var b=$('#gateOutConfirmBtn'),f=$('#gateOutFormFields');if(b&&f&&f.parentNode&&b.previousElementSibling!==f)f.parentNode.insertBefore(b,f.nextSibling);})();
   if(hint){
     /* The step bar and the field messages already say what is missing. */
     hint.style.display='none';
