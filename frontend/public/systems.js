@@ -61,6 +61,7 @@
     [/^ภาพรวม คลังกล่อง ติดตาม ตั้งค่า$/, 'Overview, inventory, tracking, setup'],
     [/^ทุกวิธีรับและส่ง$/, 'Every way to receive and ship'],
     [/^ประตู$/, 'Gate'],
+    [/^รายงาน$/, 'Reports'],
   ];
   window.Systems = {
     en: en,

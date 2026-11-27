@@ -28,6 +28,10 @@ describe('systems in English', () => {
     for (const text of pickerTexts.filter((t) => t !== 'ส่งออก')) expect(translate(text), text).not.toMatch(THAI);
   });
 
+  it('translates the renamed report menu', () => {
+    expect(translate(Systems.label('gate1', 'overview'))).toBe('Reports');
+  });
+
   it('translates the switch button tooltip', () => {
     expect(translate('เปลี่ยนระบบ')).toBe('Switch system');
   });
