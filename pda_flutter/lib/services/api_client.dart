@@ -485,6 +485,23 @@ class ApiClient {
         body: jsonEncode({'otp': otp})));
   }
 
+  /// POST /api/pda/pin-reset-approved — the employee's card and a supervisor's
+  /// card, scanned on this handheld, plus the new PIN. No email involved.
+  Future<void> resetPinApproved({
+    required String employeeCard,
+    required String supervisorCard,
+    required String pin,
+  }) async {
+    await _send(() => http.post(
+        _u('/api/pda/pin-reset-approved'),
+        headers: _headers,
+        body: jsonEncode({
+          'employeeCard': employeeCard,
+          'supervisorCard': supervisorCard,
+          'pin': pin,
+        })));
+  }
+
   /// POST /api/employees/:id/pin/confirm-reset { otp, pin } — the OTP that
   /// arrived by email, plus the new PIN to set once it checks out.
   Future<void> confirmPinReset(String employeeId,
