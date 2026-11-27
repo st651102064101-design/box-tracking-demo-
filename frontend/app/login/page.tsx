@@ -329,8 +329,15 @@ export default function LoginPage() {
               <p className="mt-1 text-sm text-ink-2/80">
                 {isThai ? 'เปิดอีเมล ' : 'Open the email '}<span className="font-semibold">{resetEmail}</span>{isThai ? ' แล้วกดลิงก์เพื่อตั้งรหัสผ่านใหม่' : ' and click the link to set a new password.'}
               </p>
+              <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900">{isThai ? 'กดลิงก์ในเบราว์เซอร์และเครื่องเดียวกับที่ขอ ถ้าเปิดบนเครื่องอื่นต้องขอลิงก์ใหม่' : 'Open the link in the same browser and device you requested it on. On another device, request a new link.'}</p>
               <p className="mt-2 text-xs text-ink-2/60">{isThai ? 'ไม่ได้รับภายใน 1 นาที? ตรวจโฟลเดอร์สแปม หรือติดต่อผู้ดูแลระบบ' : "Not received within a minute? Check spam, or contact the system admin."}</p>
             </div>
+            <a href={`mailto:?subject=${encodeURIComponent(isThai ? 'ลิงก์ตั้งรหัสผ่านใหม่' : 'Password reset link')}`} className="block w-full rounded-xl border border-black/10 py-3 text-center text-sm font-semibold text-ink transition hover:bg-black/5">
+              {isThai ? 'เปิดแอปอีเมล' : 'Open mail app'}
+            </a>
+            <button type="button" onClick={() => { setError(''); setMode('forgot'); }} className="block w-full text-center text-xs font-medium text-ink-2/70 hover:text-ink">
+              {isThai ? 'ขอลิงก์ใหม่' : 'Request a new link'}
+            </button>
             <button type="button" onClick={() => { setMode('signin'); setResetEmail(''); }} className="w-full rounded-xl bg-ink py-3 text-sm font-semibold text-white transition hover:opacity-90">
               {isThai ? 'กลับไปเข้าสู่ระบบ' : 'Back to sign in'}
             </button>
