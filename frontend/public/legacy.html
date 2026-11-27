@@ -14684,6 +14684,9 @@ window.trackBox=trackBox;
 $('#btnScanTrack').onclick=function(){trackBox();};
 /* ผลค้นหาสะสมไปเรื่อยๆ ทุกครั้งที่ยิง — พอขึ้นชุดใหม่จึงต้องมีวิธีล้างของเดิมทิ้ง
    ก่อน ไม่งั้นกล่องของสองชุดจะปนกันจนอ่านไม่ออกว่าอันไหนเป็นของรอบนี้ */
+/* Clear only means something once there is text or results to clear. */
+function syncTrackClear(){var b=document.getElementById('btnClearTrack');if(!b)return;var has=!!(val('scanTrack')||trackTags.length);b.style.display=has?'':'none';}
+(function(){var i=document.getElementById('scanTrack');if(i)i.addEventListener('input',syncTrackClear);})();
 $('#btnClearTrack').onclick=function(){
   if(!trackTags.length&&!val('scanTrack')){setv('scanTrack','');$('#scanTrack').focus();return;}
   var n=trackTags.length;
@@ -14694,6 +14697,7 @@ $('#btnClearTrack').onclick=function(){
 $('#scanTrack').addEventListener('keydown',function(e){if(e.key==='Enter')trackBox();});
 autoScanBind($('#scanTrack'),trackBox);
 function renderTrack(){
+  syncTrackClear();
   var el=$('#trackResult');if(!el)return;
   trackTags=trackTags.filter(function(t){return S.boxes[t];}); /* drop any tag whose box was deleted */
   if(!trackTags.length){el.innerHTML='';return;}
