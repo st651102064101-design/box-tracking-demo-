@@ -8,6 +8,12 @@
     return '';
   }
 
+  /** Why a gate cannot take work yet: '' when it can, otherwise 'unbound' or 'offline'. */
+  function lockReason(bound, online) {
+    if (!bound) return 'unbound';
+    return online ? '' : 'offline';
+  }
+
   /** The latest movements through a gate, newest first. */
   function passages(events, gate, limit) {
     return (events || []).filter(function (e) {
@@ -157,5 +163,5 @@
     [/^แถว (\d+): ไม่มีทะเบียนรถ$/, 'Row $1: no license plate'],
     [/^แถว (\d+): วันที่ไม่ถูกต้อง (.*)$/, 'Row $1: invalid date $2'],
   ];
-  window.GateView = { mismatch: mismatch, passages: passages, planRows: planRows, presetView: presetView, warehouseLabel: warehouseLabel, en: en };
+  window.GateView = { mismatch: mismatch, lockReason: lockReason, passages: passages, planRows: planRows, presetView: presetView, warehouseLabel: warehouseLabel, en: en };
 })();

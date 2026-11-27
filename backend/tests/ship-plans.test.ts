@@ -189,3 +189,11 @@ describe('a customer set at the gate stays usable', () => {
     expect((await read()).session).toBeNull();
   });
 });
+
+describe('customer preset needs a bound FX9600', () => {
+  it('refuses a preset at a gate with no reader bound', async () => {
+    const res = await w.api().put(`/api/rfid/gates/${GATE.screen}/auto-session`).set(w.as).send({ customer: 'C1', direction: 'out', preset: true, ttlSeconds: 1800 });
+    expect(res.status).toBe(409);
+    expect(res.body.code ?? res.body.error ?? JSON.stringify(res.body)).toContain('gate_not_bound');
+  });
+});

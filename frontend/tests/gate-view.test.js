@@ -66,3 +66,11 @@ describe('gate page data', () => {
     expect(G.planRows([])).toBeNull();
   });
 });
+
+describe('gate lock', () => {
+  it('locks a gate whose FX9600 is not bound, and one that is bound but silent', () => {
+    expect(G.lockReason(false, false)).toBe('unbound');
+    expect(G.lockReason(true, false)).toBe('offline');
+    expect(G.lockReason(true, true)).toBe('');
+  });
+});

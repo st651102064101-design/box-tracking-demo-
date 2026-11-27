@@ -2396,7 +2396,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
 <script src="/pda-device.js?v=20261127-1"></script>
 <script src="/overdue.js?v=20261126"></script>
 <script src="/systems.js?v=20261127-5"></script>
-<script src="/gate-view.js?v=20261127-4"></script>
+<script src="/gate-view.js?v=20261127-5"></script>
 <script src="/readiness.js?v=20261127-5"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -8115,8 +8115,9 @@ function renderGatePage(){
   if(!g){gpHtml($('#gpWarn'),'<div class="banner warn">ยังไม่มีประตูในระบบ <button class="btn sm accent" onclick="goSetup(\'wh\')">เพิ่มประตู</button></div>');return;}
   gpHtml(sel,allGateNums().map(function(n){return '<option value="'+n+'"'+(n===g?' selected':'')+'>ประตู '+n+' · '+esc(whName(gateWh(n)))+'</option>';}).join(''));
   var info=gpInfo(g),problem=window.GateView.mismatch(sys,info),auto=window.Systems.unattended(sys);
-  gpHtml($('#gpWarn'),problem?'<div class="banner warn" style="margin-bottom:14px;"><b>ประตู '+g+' ยังตั้งค่าไม่ตรงกับระบบนี้</b> '+esc(problem)+' <button class="btn sm accent" onclick="manageRfidGate('+g+')">แก้การตั้งค่า ›</button></div>':'');
-  var bound=rfidGateIsBound(g),online=bound&&fx9600IsOnline(g);
+  var bound=rfidGateIsBound(g),online=bound&&fx9600IsOnline(g),lock=window.GateView.lockReason(bound,online),ready=!lock;
+  gpHtml($('#gpWarn'),(problem?'<div class="banner warn" style="margin-bottom:14px;"><b>ประตู '+g+' ยังตั้งค่าไม่ตรงกับระบบนี้</b> '+esc(problem)+' <button class="btn sm accent" onclick="manageRfidGate('+g+')">แก้การตั้งค่า ›</button></div>':'')
+    +(lock?'<div class="banner warn" style="margin-bottom:14px;"><b>ยังใช้ประตูนี้ไม่ได้</b> '+(lock==='unbound'?'ผูกเครื่อง FX9600 กับประตูนี้ก่อน':'เครื่อง FX9600 ไม่ตอบสนอง ตรวจเครื่องอ่านก่อน')+' <button class="btn sm accent" onclick="manageRfidGate('+g+')">'+(lock==='unbound'?'ผูกเครื่อง':'ตรวจเครื่อง')+' ›</button></div>':''));
   var seen=null;
   Object.keys(S.boxes||{}).forEach(function(t){(S.boxes[t].history||[]).forEach(function(h){
     if(h.dir==='lpr'&&Number(h.gateNo)===g&&(!seen||Date.parse(h.ts)>Date.parse(seen.ts)))seen=h;});});
@@ -8125,13 +8126,13 @@ function renderGatePage(){
     '<div class="gp-tile"><small>ทิศทาง</small><b>'+way+'</b><small>'+(auto?'ทำงานเองโดยไม่ต้องมีคนเฝ้า':'เจ้าหน้าที่กดเลือกทิศก่อนรถผ่าน')+'</small></div>'
     +'<div class="gp-tile"><small>เครื่องอ่าน FX9600</small><b style="color:'+(online?'#22c55e':'var(--neg)')+';">● '+(online?'พร้อมใช้งาน':bound?'ไม่ตอบสนอง':'ยังไม่ผูก')+'</b>'+(online?'<small>'+esc(fx9600SeenText(g))+'</small>':'<button class="btn sm ghost" onclick="manageRfidGate('+g+')">'+(bound?'ตรวจเครื่อง':'ผูกเครื่อง')+' ›</button>')+'</div>'
     +'<div class="gp-tile"><small>กล้องป้ายทะเบียน (LPR)</small><b>'+(seen?esc(seen.plateNumber):'—')+'</b><small>'+(seen?'อ่านล่าสุด '+esc(fmtTs(seen.ts)):'ยังไม่เคยอ่านป้ายคู่กับกล่องที่ประตูนี้')+'</small></div>');
-  gpHtml($('#gpDirections'),auto?'':
+  gpHtml($('#gpDirections'),(auto||!ready)?'':
     (info.type!=='out'?'<button type="button" class="gp-dir" onclick="gpDirection(\'in\')">⬇ ขาเข้า</button>':'')
     +(info.type!=='in'?'<button type="button" class="gp-dir out" onclick="gpDirection(\'out\')">⬆ ขาออก</button>':''));
   var rows=window.GateView.passages(S.events,g,10);
   gpHtml($('#gpPassages'),rows.length?rows.map(function(e){return '<div class="gp-row"><b class="mono">'+esc(e.tag)+'</b><span class="pill '+(e.dir==='out'?'teal':'ok')+'">'+(e.dir==='out'?'ออก':'เข้า')+'</span><span class="muted small">'+esc([e.customer?custName(e.customer):'',e.plate].filter(Boolean).join(' · '))+'</span><span class="small">'+esc(fmtTs(e.ts))+'</span></div>';}).join(''):'<div class="muted small">ยังไม่มีกล่องผ่านประตูนี้</div>');
   var outbound=auto&&info.type!=='in';
-  $('#gpOutbound').hidden=!outbound;$('#gpReview').hidden=!auto;
+  $('#gpOutbound').hidden=!outbound||!ready;$('#gpReview').hidden=!auto||!ready;
   if(gpShownFor!==sys+':'+g){
     gpShownFor=sys+':'+g;
     if(gpPre.gate!==g){gpPre={gate:g,data:null,editing:false,customer:'',ttl:'28800',sig:''};}

@@ -426,6 +426,11 @@ rfidRouter.put(
     const [knownGate] = await getDb().select().from(gates).where(eq(gates.gateNo, gate)).limit(1);
     if (!knownGate) throw httpError(404, `ไม่พบ Gate ${gate} ในคลัง`, 'gate_not_found');
     const preset = req.body?.preset === true;
+    /* A customer preset only means something at a gate whose FX9600 is bound. */
+    if (preset) {
+      const [reader] = await getDb().select({ id: rfidReaders.id }).from(rfidReaders).where(eq(rfidReaders.gateNo, gate)).limit(1);
+      if (!reader) throw httpError(409, `Gate ${gate} ยังไม่ได้ผูกเครื่องอ่าน FX9600 ตั้งลูกค้าประจำประตูไม่ได้`, 'gate_not_bound');
+    }
     const permanent = preset && req.body?.permanent === true;
     const current = (await getDb().select().from(rfidGateAutoSessions).where(eq(rfidGateAutoSessions.gateNo, gate)).limit(1))[0];
     /* A customer set by hand wins over a screen that syncs by itself. */

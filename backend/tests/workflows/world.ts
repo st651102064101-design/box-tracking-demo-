@@ -80,6 +80,9 @@ export async function makeWorld() {
   if (res.status !== 200) throw new Error(`world: ${JSON.stringify(res.body)}`);
 
   await getDb().insert(rfidReaders).values({
+    id: 'R-OUT', name: 'gate out', host: 'h', gateNo: GATE.out, webhookUrl: 'http://x', transmitPower: '3', antennaCount: 2,
+  });
+  await getDb().insert(rfidReaders).values({
     id: 'R-ANT', name: 'antenna gate', host: 'h', gateNo: GATE.antenna, webhookUrl: 'http://x', transmitPower: '3', antennaCount: 2,
   });
   await getDb().insert(rfidAntennaGateMappings).values([
