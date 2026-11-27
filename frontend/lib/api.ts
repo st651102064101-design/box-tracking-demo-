@@ -101,3 +101,12 @@ export function completeFirstSetup(input: FirstSetupInput) {
     body: JSON.stringify(input),
   });
 }
+
+/** POST /api/auth/password-reset/firebase — finishes "ลืมรหัสผ่าน?" after the
+ *  email link was opened. The ID token proves the email; the server does the rest. */
+export function resetPasswordWithFirebase(idToken: string, password: string) {
+  return request<{ ok: true }>('/auth/password-reset/firebase', {
+    method: 'POST',
+    body: JSON.stringify({ idToken, password }),
+  });
+}

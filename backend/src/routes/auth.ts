@@ -17,6 +17,9 @@ import { asyncHandler, httpError } from '../middleware/error.js';
 import { isWorking } from '../lib/session.js';
 import { isOwnUserAccount, selfEmployeeIds } from '../services/selfRules.js';
 import { requireAuth, requirePermission, requireRole } from '../middleware/auth.js';
+import { env } from '../env.js';
+import { verifyFirebaseIdToken } from '../services/firebaseIdToken.js';
+import { z } from 'zod';
 
 export const authRouter = Router();
 
@@ -241,6 +244,37 @@ authRouter.get(
       permissions: role.permissions,
       selfEmployeeIds: await selfEmployeeIds(req.user!),
     });
+  }),
+);
+
+
+/* POST /api/auth/password-reset/firebase — "ลืมรหัสผ่าน?".
+   The browser proves the email with a Firebase email link and sends the ID token
+   here with the new password. Only a verified email that belongs to an account
+   may change that account's password; nothing else is revealed. */
+const firebaseResetSchema = z.object({
+  idToken: z.string().min(20).max(8192),
+  password: z.string().min(10, 'รหัสผ่านต้องมีอย่างน้อย 10 ตัวอักษร').regex(/[a-z]/, 'ต้องมีตัวพิมพ์เล็ก').regex(/[A-Z]/, 'ต้องมีตัวพิมพ์ใหญ่').regex(/[0-9]/, 'ต้องมีตัวเลข'),
+});
+const RESET_FAILED = 'ลิงก์ไม่ถูกต้องหรือหมดอายุ ขอลิงก์ใหม่อีกครั้ง';
+authRouter.post(
+  '/password-reset/firebase',
+  asyncHandler(async (req, res) => {
+    const input = firebaseResetSchema.parse(req.body);
+    let claims;
+    try {
+      claims = await verifyFirebaseIdToken(input.idToken, env.firebaseProjectId);
+    } catch {
+      throw httpError(400, RESET_FAILED, 'reset_link_invalid');
+    }
+    const email = String(claims.email ?? '').trim().toLowerCase();
+    if (!email || claims.email_verified !== true) throw httpError(400, RESET_FAILED, 'reset_link_invalid');
+    const db = getDb();
+    const [row] = await db.select().from(users).where(sql`lower(${users.email}) = ${email}`).limit(1);
+    if (!row) throw httpError(400, RESET_FAILED, 'reset_link_invalid');
+    const passwordHash = await hashPassword(input.password);
+    await db.update(users).set({ passwordHash, mustChangePassword: false, passwordResetOtpHash: null, passwordResetExpiresAt: null }).where(eq(users.id, row.id));
+    res.json({ ok: true });
   }),
 );
 

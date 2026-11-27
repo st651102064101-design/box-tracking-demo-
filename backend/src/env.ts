@@ -16,6 +16,8 @@ if (nodeEnv === 'production') {
 /** Centralised, typed access to environment configuration. */
 export const env = {
   port: Number(process.env.PORT ?? 4000),
+  /** Firebase project used for email-link password reset. Public id, not a secret. */
+  firebaseProjectId: process.env.FIREBASE_PROJECT_ID ?? 'smarttrace-login',
   corsOrigin: (process.env.CORS_ORIGIN ?? 'http://localhost:3000')
     .split(',')
     .map((s) => s.trim())

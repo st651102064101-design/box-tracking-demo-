@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { ApiError, login, setToken, getBranding, type SystemBranding } from '@/lib/api';
 import { LanguageToggle, useI18n, type TranslationKey } from '@/lib/i18n';
+import { isResetLinkPage, savedResetEmail, sendResetLink, tokenFromResetLink } from '@/lib/firebaseAuth';
+import { resetPasswordWithFirebase } from '@/lib/api';
 
 type FieldName = 'username' | 'password';
 
@@ -32,6 +34,68 @@ export default function LoginPage() {
   // flow — both are "you already told us who you are, just confirm with
   // your password" cases, so they share the same compact UI below).
   const [quickUser, setQuickUser] = useState('');
+  /* "signin" is the normal form; "forgot" asks for the email; "newpass" is
+     opened from the email link and sets the new password. */
+  const [mode, setMode] = useState<'signin' | 'forgot' | 'newpass'>('signin');
+  const [resetEmail, setResetEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newPassword2, setNewPassword2] = useState('');
+  const isThai = locale === 'th';
+  useEffect(() => {
+    try {
+      if (isResetLinkPage()) {
+        setMode('newpass');
+        setResetEmail(savedResetEmail());
+      }
+    } catch {
+      /* Firebase not reachable: stay on the normal sign-in form */
+    }
+  }, []);
+
+  async function sendLink(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+    setBusy(true);
+    try {
+      await sendResetLink(resetEmail.trim());
+      setNotice({ key: 'login.submit.signIn' });
+      setError('');
+      setMode('signin');
+      setBusy(false);
+      setResetSent(true);
+    } catch (err) {
+      setError(isThai ? 'ส่งลิงก์ไม่สำเร็จ ตรวจอีเมลแล้วลองอีกครั้ง' : 'Could not send the link. Check the email and try again.');
+      setBusy(false);
+    }
+  }
+  const [resetSent, setResetSent] = useState(false);
+
+  async function setNewPasswordNow(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+    if (newPassword !== newPassword2) {
+      setError(isThai ? 'รหัสผ่านสองช่องไม่ตรงกัน' : 'The two passwords do not match.');
+      return;
+    }
+    setBusy(true);
+    try {
+      const idToken = await tokenFromResetLink(resetEmail.trim());
+      await resetPasswordWithFirebase(idToken, newPassword);
+      window.history.replaceState({}, '', '/login');
+      setMode('signin');
+      setNewPassword('');
+      setNewPassword2('');
+      setBusy(false);
+      setResetSent(false);
+      setNotice(null);
+      setError('');
+      setDone(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : (isThai ? 'ตั้งรหัสผ่านไม่สำเร็จ' : 'Could not set the password.'));
+      setBusy(false);
+    }
+  }
+  const [done, setDone] = useState(false);
   // true once the person picks "ไม่ใช่ฉัน" and wants the plain username field back.
   const [useOtherAccount, setUseOtherAccount] = useState(false);
 
@@ -184,7 +248,7 @@ export default function LoginPage() {
           </div>
         )}
 
-        <form onSubmit={submit} className="space-y-3">
+        {mode === 'signin' && <form onSubmit={submit} className="space-y-3">
           {!showQuickLogin && (
             <Field
               id="username"
@@ -221,6 +285,13 @@ export default function LoginPage() {
             autoFocus={showQuickLogin}
             autoComplete="current-password"
           />
+          <button
+            type="button"
+            onClick={() => { setError(''); setMode('forgot'); }}
+            className="-mt-1 block text-xs font-medium text-ink-2/60 hover:text-ink"
+          >
+            {isThai ? 'ลืมรหัสผ่าน?' : 'Forgot password?'}
+          </button>
 
           {notice && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">{t(notice.key)}</p>}
           {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
@@ -232,7 +303,44 @@ export default function LoginPage() {
           >
             {busy ? t('common.processing') : t('login.submit.signIn')}
           </button>
-        </form>
+        </form>}
+        {mode === 'forgot' && (
+          <form onSubmit={sendLink} className="space-y-3">
+            <p className="text-sm text-ink-2/80">{isThai ? 'กรอกอีเมลของบัญชี เราจะส่งลิงก์ให้ตั้งรหัสผ่านใหม่' : 'Enter the account email. We will send a link to set a new password.'}</p>
+            <input
+              type="email"
+              required
+              value={resetEmail}
+              onChange={(e) => setResetEmail(e.target.value)}
+              placeholder="name@company.com"
+              autoComplete="email"
+              className="w-full rounded-xl border border-black/10 bg-white px-3 py-2.5 text-sm text-ink"
+            />
+            {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
+            <button type="submit" disabled={busy} className="w-full rounded-xl bg-ink py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50">
+              {busy ? t('common.processing') : (isThai ? 'ส่งลิงก์' : 'Send link')}
+            </button>
+            <button type="button" onClick={() => { setError(''); setMode('signin'); }} className="block w-full text-center text-xs font-medium text-ink-2/60 hover:text-ink">
+              {isThai ? 'กลับไปเข้าสู่ระบบ' : 'Back to sign in'}
+            </button>
+          </form>
+        )}
+        {mode === 'newpass' && (
+          <form onSubmit={setNewPasswordNow} className="space-y-3">
+            <p className="text-sm text-ink-2/80">{isThai ? 'ตั้งรหัสผ่านใหม่สำหรับบัญชีนี้' : 'Set a new password for this account.'}</p>
+            {!resetEmail && (
+              <input type="email" required value={resetEmail} onChange={(e) => setResetEmail(e.target.value)} placeholder="name@company.com" className="w-full rounded-xl border border-black/10 bg-white px-3 py-2.5 text-sm text-ink" />
+            )}
+            <input type="password" required minLength={10} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder={isThai ? 'รหัสผ่านใหม่ (อย่างน้อย 10 ตัว มีพิมพ์เล็ก พิมพ์ใหญ่ และตัวเลข)' : 'New password (10+ chars, lower, UPPER and a digit)'} autoComplete="new-password" className="w-full rounded-xl border border-black/10 bg-white px-3 py-2.5 text-sm text-ink" />
+            <input type="password" required value={newPassword2} onChange={(e) => setNewPassword2(e.target.value)} placeholder={isThai ? 'พิมพ์รหัสผ่านใหม่อีกครั้ง' : 'Repeat the new password'} autoComplete="new-password" className="w-full rounded-xl border border-black/10 bg-white px-3 py-2.5 text-sm text-ink" />
+            {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
+            <button type="submit" disabled={busy} className="w-full rounded-xl bg-ink py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50">
+              {busy ? t('common.processing') : (isThai ? 'บันทึกรหัสผ่านใหม่' : 'Save new password')}
+            </button>
+          </form>
+        )}
+        {done && <p role="status" className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">{isThai ? 'ตั้งรหัสผ่านใหม่แล้ว เข้าสู่ระบบได้เลย' : 'Password set. You can sign in now.'}</p>}
+        {resetSent && mode === 'signin' && <p role="status" className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">{isThai ? 'ส่งลิงก์แล้ว ตรวจกล่องจดหมายของคุณ' : 'Link sent. Check your inbox.'}</p>}
 
         {process.env.NODE_ENV !== 'production' && (
           <p className="mt-6 text-center text-xs text-ink-2/50">
