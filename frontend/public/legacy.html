@@ -6592,7 +6592,11 @@ var gateOutConfirmed=false;
    checked then, and the first problem is shown and focused. */
 /* Live hints for the gate range, and how many of its gates are bound yet. */
 function whStepGate(id,delta){var el=document.getElementById(id);if(!el)return;var v=Math.max(1,(Number(el.value)||0)+delta);el.value=String(v);el.dispatchEvent(new Event('input',{bubbles:true}));}
-(function(){['whGateFrom','whGateTo'].forEach(function(id){var el=document.getElementById(id);if(el)el.addEventListener('input',function(){whUpdateRangeHint();});});})();
+(function(){
+  var f=document.getElementById('whGateFrom'),t=document.getElementById('whGateTo');
+  if(f)f.addEventListener('input',function(){var a=Number(f.value),b=Number(t&&t.value);if(a>0&&b&&b<a&&t){t.value=String(a);}whUpdateRangeHint();});
+  if(t)t.addEventListener('input',function(){whUpdateRangeHint();});
+})();
 function whUpdateRangeHint(){
   var from=Number(val('whGateFrom')),to=Number(val('whGateTo'));
   var hint=$('#whGateRangeHint');
@@ -9396,6 +9400,7 @@ $('#btnAddWh').onclick=function(){
   if(!validateForm(VALIDATION_SCHEMAS.warehouse,$('#whFormCard')))return;
   var id=val('whId'),nm=val('whName');var from=num('whGateFrom'),to=num('whGateTo');
   var gt=val('whGateType')||'both';
+  if(!from||!to||to<from)return fieldError('whGateTo','ประตูสุดท้ายต้องมากกว่าหรือเท่ากับประตูแรก');
   /* Gates that leave this warehouse keep their FX9600 bindings but no longer
      belong to any warehouse, so say so before saving. */
   if(editingWh&&S.warehouses[editingWh]){
