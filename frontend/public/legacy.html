@@ -3029,6 +3029,14 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
     </div>
     <p class="wg-cap">ตั้งค่าก่อนยิง — ข้อมูลชุดนี้จะผูกกับทุกกล่องที่ออกในรอบนี้ ใช้ย้อนรอยภายหลังได้</p>
     <div class="wg-body">
+    <ol class="gp-steps" id="gateOutSteps" style="margin:0 0 16px;">
+      <li class="gp-step" id="gateOutStep1"><span>1</span>ข้อมูลรถ</li>
+      <li class="gp-step" id="gateOutStep2"><span>2</span>ยิงกล่อง</li>
+    </ol>
+    <div id="gateOutSummary" style="display:none;align-items:center;gap:12px;justify-content:space-between;flex-wrap:wrap;background:color-mix(in srgb,#22c55e 12%,transparent);border:1px solid color-mix(in srgb,#22c55e 35%,transparent);border-radius:14px;padding:12px 16px;margin-bottom:14px;">
+      <div style="min-width:0;"><div class="muted small">ข้อมูลรถที่ยืนยันแล้ว</div><div id="gateOutSummaryText" style="font-weight:700;font-size:17px;word-break:break-word;"></div></div>
+      <button type="button" class="btn ghost" onclick="gateOutEdit()">แก้ข้อมูลรถ</button>
+    </div>
     <div id="outGateBar" style="display:flex;align-items:center;gap:10px;background:var(--accentSoft);border:.5px solid var(--accent);border-radius:14px;padding:12px 16px;margin-bottom:18px;">
       <span style="font-size:18px;"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V4a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v17M4 21h16"/><circle cx="13.2" cy="12" r=".9" fill="currentColor" stroke="none"/></svg></span></span>
       <div style="flex:1;">
@@ -3039,6 +3047,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
     </div>
     <input type="hidden" id="outGate">
     <div id="outGateHint"></div>
+    <div id="gateOutFormFields">
     <div class="grid g3">
       <div class="field cust-field"><label>ลูกค้า / ปลายทาง</label><div id="doCustomerTiles" class="cust-tiles" role="radiogroup" aria-label="ลูกค้า / ปลายทาง"></div><select id="doCustomer" style="display:none;"></select><div id="doCustomerHint" style="display:none;"></div></div>
       <div class="field out-rfid-context-extra"><label>ทะเบียนรถ <span class="muted small go-rfid-only">(ถ้ามีจาก LPR)</span></label><input id="outPlate" list="dl-plate" placeholder="82-1234 กทม" autocomplete="off"><div class="field-err" id="err-outPlate" role="alert" hidden></div></div>
@@ -3063,6 +3072,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
     <button type="button" class="btn ghost sm out-rfid-context-extra" id="goMoreBtn" aria-expanded="false" onclick="toggleGateOutMore()">+ DO · PO · ประเภทรถ</button>
     <div id="doLookupHint" style="margin-top:14px;"></div>
     <div id="outVehicleQuick"></div>
+    </div>
     </div>
   </div>
   </div>
@@ -6544,6 +6554,7 @@ function gateOutMissing(){return GATE_OUT_REQUIRED.filter(function(f){var v=val(
 var gateOutConfirmed=false;
 /* The operator presses confirm once the form is complete; every field is
    checked then, and the first problem is shown and focused. */
+function gateOutEdit(){gateOutConfirmed=false;refreshGateOutManualVisibility();var p=$('#outPlate');if(p)p.focus();}
 function confirmGateOutFields(){
   var bad=['outPlate','outDriver','outDriverTel'].filter(function(id){return !checkGateOutField(id);});
   if(!val('doCustomer')){var sel=$('#doCustomerTiles');if(sel)sel.scrollIntoView({block:'center',behavior:'smooth'});toast('เลือกลูกค้าก่อน','กดลูกค้าในรายการด้านบน','warn');return;}
@@ -6561,9 +6572,18 @@ function refreshGateOutManualVisibility(){
      the form above is where the missing fields are. */
   /* Editing a field after confirming takes the confirmation back. */
   if(missing.length)gateOutConfirmed=false;
-  var ready=!missing.length&&gateOutConfirmed;
+  var manual=gateOutEntryMode==='manual';
+  var ready=!manual||(!missing.length&&gateOutConfirmed);
+  /* Step 1 is the form; once confirmed it folds into a summary and step 2 scans. */
+  var form=$('#gateOutFormFields');if(form)form.style.display=(manual&&gateOutConfirmed)?'none':'';
+  var sum=$('#gateOutSummary');
+  if(sum){sum.style.display=(manual&&gateOutConfirmed)?'flex':'none';if(gateOutConfirmed){var c=val('doCustomer');var cn=c?custName(c):'';$('#gateOutSummaryText').textContent=[val('outPlate').trim(),val('outDriver').trim(),cn].filter(Boolean).join(' · ');}}
+  var steps=$('#gateOutSteps');if(steps)steps.style.display=manual?'':'none';
+  var s1=$('#gateOutStep1'),s2=$('#gateOutStep2');
+  if(s1)s1.className='gp-step '+(gateOutConfirmed?'done':'now');
+  if(s2)s2.className='gp-step '+(gateOutConfirmed?'now':'todo');
   var pad=$('#gateOutManualPad');if(pad)pad.style.display=ready?'':'none';
-  var cbtn=$('#gateOutConfirmBtn');if(cbtn)cbtn.style.display=(!missing.length&&!gateOutConfirmed)?'':'none';
+  var cbtn=$('#gateOutConfirmBtn');if(cbtn)cbtn.style.display=(manual&&!missing.length&&!gateOutConfirmed)?'':'none';
   card.classList.toggle('go-waiting',!ready);
   if(hint){
     hint.style.display=ready?'none':'';
