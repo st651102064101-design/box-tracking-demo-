@@ -3048,11 +3048,12 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
     <input type="hidden" id="outGate">
     <div id="outGateHint"></div>
     <div id="gateOutFormFields">
-    <div class="grid g3">
-      <div class="field cust-field"><label>ลูกค้า / ปลายทาง</label><div id="doCustomerTiles" class="cust-combo"></div><select id="doCustomer" style="display:none;"></select><div id="doCustomerHint" style="display:none;"></div></div>
+    <div class="gateout-stack">
+      <div id="outVehicleQuick"></div>
       <div class="field out-rfid-context-extra"><label>ทะเบียนรถ <span class="muted small go-rfid-only">(ถ้ามีจาก LPR)</span></label><input id="outPlate" list="dl-plate" placeholder="82-1234 กทม" autocomplete="off"><div class="field-err" id="err-outPlate" role="alert" hidden></div></div>
       <div class="field out-rfid-context-extra"><label>ชื่อคนขับ</label><input id="outDriver" list="dl-driver" placeholder="นายสมชาย ใจดี" autocomplete="off"><div class="field-err" id="err-outDriver" role="alert" hidden></div></div>
       <div class="field out-rfid-context-extra"><label>เบอร์โทรคนขับ</label><input id="outDriverTel" type="tel" inputmode="tel" list="dl-tel" placeholder="08x-xxx-xxxx" maxlength="15" autocomplete="off"><div class="field-err" id="err-outDriverTel" role="alert" hidden></div></div>
+      <div class="field cust-field"><label>ลูกค้า / ปลายทาง</label><div id="doCustomerTiles" class="cust-combo"></div><select id="doCustomer" style="display:none;"></select><div id="doCustomerHint" style="display:none;"></div></div>
       <div class="field go-opt out-rfid-context-extra"><label>เลขที่ DO (สร้างอัตโนมัติ)</label>
         <div class="auto-tag-row">
           <input id="doNo" readonly>
@@ -3071,7 +3072,6 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
     </div>
     <button type="button" class="btn ghost sm out-rfid-context-extra" id="goMoreBtn" aria-expanded="false" onclick="toggleGateOutMore()">+ DO · PO · ประเภทรถ</button>
     <div id="doLookupHint" style="margin-top:14px;"></div>
-    <div id="outVehicleQuick"></div>
     </div>
     </div>
   </div>
@@ -3152,6 +3152,8 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
   #gateOutManualConfig .field input,#gateOutManualConfig .field select{min-height:56px;font-size:18px;}
   #gateOutManualConfig .field label{font-size:15px;font-weight:700;}
   #doCustomer{display:none!important;}
+  .gateout-stack{display:flex;flex-direction:column;gap:16px;}
+  .gateout-stack .field{width:100%;}
   .cust-combo{position:relative;}
   .cust-combo input{min-height:56px;font-size:18px;width:100%;}
   .cust-list{position:absolute;left:0;right:0;top:100%;z-index:20;margin-top:6px;max-height:300px;overflow-y:auto;border-radius:14px;border:1px solid var(--line);background:var(--panel,#161616);box-shadow:0 12px 30px rgba(0,0,0,.35);padding:6px;}
