@@ -2404,8 +2404,8 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
 <body>
 <script>
 /* apply saved theme + nav layout immediately (before paint) to avoid a flash of the wrong shell */
-(function(){try{var t=localStorage.getItem('smarttrace_theme');
-  if(!t)t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';
+(function(){try{var m=localStorage.getItem('smarttrace_theme');
+  var t=(m==='light'||m==='dark')?m:((window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');
   document.documentElement.setAttribute('data-theme',t);}catch(e){}
   try{var l=localStorage.getItem('smarttrace_layout')||'top';
   var eff=(l==='sidebar'&&window.innerWidth>=900)?'sidebar':'top';
@@ -17743,17 +17743,35 @@ function renderAll(){
 }
 
 /* ===== THEME TOGGLE (dark / light) ===== */
-function currentTheme(){return document.documentElement.getAttribute('data-theme')||'light';}
-function applyTheme(t){
-  document.documentElement.setAttribute('data-theme',t);
-  try{localStorage.setItem('smarttrace_theme',t);}catch(e){}
-  var btn=$('#btnTheme');if(btn){btn.innerHTML=t==='dark'?IC('sun','tick'):IC('moon','tick');btn.title=t==='dark'?'สลับเป็นโหมดสว่าง':'สลับเป็นโหมดมืด';}
+/* Three choices: ตามระบบ (default, follows the OS), สว่าง, มืด.
+   The page's theme is always resolved to light or dark; the choice is kept
+   separately, so "ตามระบบ" keeps following the OS until it is changed. */
+function themeMode(){var m=null;try{m=localStorage.getItem('smarttrace_theme');}catch(e){}return (m==='light'||m==='dark')?m:'system';}
+function resolveTheme(mode){
+  if(mode==='light'||mode==='dark')return mode;
+  return (window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';
 }
-function toggleTheme(){applyTheme(currentTheme()==='dark'?'light':'dark');
-  if(typeof uiPrefSet==='function')uiPrefSet('theme',currentTheme());
-  toast('เปลี่ยนธีมแล้ว',currentTheme()==='dark'?'โหมดมืด':'โหมดสว่าง','info');}
+function currentTheme(){return document.documentElement.getAttribute('data-theme')||'light';}
+var THEME_LABEL={system:'ตามระบบ',light:'สว่าง',dark:'มืด'};
+function applyTheme(mode){
+  var eff=resolveTheme(mode);
+  document.documentElement.setAttribute('data-theme',eff);
+  try{if(mode==='system')localStorage.removeItem('smarttrace_theme');else localStorage.setItem('smarttrace_theme',mode);}catch(e){}
+  var btn=$('#btnTheme');
+  if(btn){btn.innerHTML=eff==='dark'?IC('sun','tick'):IC('moon','tick');
+    btn.title='โหมด: '+THEME_LABEL[mode]+(mode==='system'?' (ตอนนี้'+(eff==='dark'?'มืด':'สว่าง')+')':'')+' · กดเพื่อเปลี่ยน';}
+}
+function toggleTheme(){
+  var order=['system','light','dark'];var next=order[(order.indexOf(themeMode())+1)%3];
+  applyTheme(next);
+  if(typeof uiPrefSet==='function')uiPrefSet('theme',next);
+  toast('โหมดการแสดงผล',THEME_LABEL[next],'info');}
 window.toggleTheme=toggleTheme;
-applyTheme(currentTheme()); /* sync the icon with whatever the early inline script set */
+/* While "ตามระบบ" is chosen, follow the OS as it changes. */
+if(window.matchMedia){var _themeQ=window.matchMedia('(prefers-color-scheme:dark)');
+  var _onOs=function(){if(themeMode()==='system')applyTheme('system');};
+  if(_themeQ.addEventListener)_themeQ.addEventListener('change',_onOs);else if(_themeQ.addListener)_themeQ.addListener(_onOs);}
+applyTheme(themeMode()); /* sync the icon and the choice with what is stored */
 $('#btnTheme').onclick=toggleTheme;
 
 /* ===== NAV LAYOUT (top bar vs. left sidebar) =====
