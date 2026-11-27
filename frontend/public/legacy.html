@@ -3733,8 +3733,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
         <div class="whTab" data-whtab="info" style="display:contents;">
         <div id="whBindSummary" class="muted small" style="grid-column:1/-1;"></div>
         <div class="field"><label>ชื่อคลัง </label><input id="whName" placeholder="คลัง 1 — บางปู"></div>
-        <div class="field"><label>ประตูแรก</label><input id="whGateFrom" type="number" min="1" placeholder="1" inputmode="numeric"></div>
-        <div class="field"><label>ประตูสุดท้าย</label><input id="whGateTo" type="number" min="1" placeholder="5" inputmode="numeric"><div id="whGateRangeHint" class="muted small" style="margin-top:5px;"></div></div>
+        <div class="field" style="grid-column:span 2;"><label>ประตู (กรอกครั้งเดียว เช่น 1-5)</label><input id="whGateRange" placeholder="1-5" inputmode="numeric" autocomplete="off"><input type="hidden" id="whGateFrom"><input type="hidden" id="whGateTo"><div id="whGateRangeHint" class="muted small" style="margin-top:5px;"></div></div>
         </div>
         <div class="whTab" data-whtab="gates" hidden style="display:contents;">
         <div class="field"><label>ประเภทประตู (ตั้งทุกประตูพร้อมกัน)</label>
@@ -3766,6 +3765,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
         </div>
         </div>
         <div class="whTab" data-whtab="info" style="display:contents;">
+        <details class="wh-more" style="grid-column:1/-1;"><summary>พื้นที่ / ที่ตั้ง <span class="muted small" style="font-weight:500;margin-left:auto;">ไม่บังคับ</span></summary>
         <div class="field" style="grid-column:span 2;"><label>พื้นที่ / ที่ตั้ง <span class="muted small">(ไม่บังคับ)</span></label>
           <!-- โหมด "พิมพ์เอง" กับ "เลือกบนแผนที่" แยกกันชัดเจน — เดิม #whArea พิมพ์ได้อิสระ
                อยู่ตลอดเวลาแม้ตอนแผนที่เปิดอยู่ (ปุ่ม "เลือกบนแผนที่" แค่โชว์/ซ่อนแผนที่ ไม่ได้
@@ -3795,6 +3795,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
             <div class="tag" style="margin-top:5px;">คลิกบนแผนที่เพื่อปักหมุด — ระบบจะกรอกที่ตั้งให้อัตโนมัติ</div>
           </div>
         </div>
+        </details>
         <div class="field"><label>สถานะ</label>
           <div class="inv-view-sw" data-target="whStatus">
             <button type="button" class="ivs-btn active" data-val="active" onclick="setStatusToggle('whStatus','active')">ใช้งาน</button>
@@ -6583,8 +6584,22 @@ var gateOutConfirmed=false;
 /* The operator presses confirm once the form is complete; every field is
    checked then, and the first problem is shown and focused. */
 /* Live hints for the gate range, and how many of its gates are bound yet. */
+function whParseRange(text){
+  var m=String(text||'').replace(/\s/g,'').match(/^(\d+)(?:[-–](\d+))?$/);
+  if(!m)return null;var from=Number(m[1]),to=m[2]?Number(m[2]):from;
+  return {from:from,to:to};
+}
+function whRangeInput(){
+  var box=document.getElementById('whGateRange');if(!box)return;
+  var p=whParseRange(box.value);
+  setv('whGateFrom',p?p.from:'');setv('whGateTo',p?p.to:'');
+  whUpdateRangeHint();
+}
+(function(){var box=document.getElementById('whGateRange');if(box)box.addEventListener('input',whRangeInput);})();
 function whUpdateRangeHint(){
   var from=Number(val('whGateFrom')),to=Number(val('whGateTo'));
+  var box=document.getElementById('whGateRange');
+  if(box&&document.activeElement!==box){box.value=(from>0&&to>=from)?(from===to?String(from):from+'-'+to):'';}
   var hint=$('#whGateRangeHint');
   if(hint){hint.textContent=(from>0&&to>=from)?'จะมี '+(to-from+1)+' ประตู (ประตู '+from+' ถึง '+to+')':(from||to?'สิ้นสุดต้องมากกว่าหรือเท่ากับประตูแรก':'');}
   var sum=$('#whBindSummary');
@@ -6595,7 +6610,7 @@ function whUpdateRangeHint(){
     sum.innerHTML=bound===list.length?'<span style="color:#22c55e;font-weight:700;">✓ ผูกเครื่องครบ '+list.length+' ประตูแล้ว</span>':'ผูกเครื่องแล้ว '+bound+' จาก '+list.length+' ประตู · <button type="button" class="btn ghost sm" style="min-height:36px;" onclick="setWhTab(\'gates\')">ไปที่แท็บประตู ›</button>';
   }
 }
-(function(){['whGateFrom','whGateTo'].forEach(function(id){var el=document.getElementById(id);if(el)el.addEventListener('input',whUpdateRangeHint);});})();
+
 /* Values filled in by the editor (not typed) never fire input, so keep the hint in step while the form is open. */
 setInterval(function(){var f=document.getElementById('whFormCard');if(f&&f.offsetParent)whUpdateRangeHint();},500);
 function setWhTab(tab){
@@ -9386,6 +9401,13 @@ $('#btnAddWh').onclick=function(){
   if(!validateForm(VALIDATION_SCHEMAS.warehouse,$('#whFormCard')))return;
   var id=val('whId'),nm=val('whName');var from=num('whGateFrom'),to=num('whGateTo');
   var gt=val('whGateType')||'both';
+  /* Gates that leave this warehouse keep their FX9600 bindings but no longer
+     belong to any warehouse, so say so before saving. */
+  if(editingWh&&S.warehouses[editingWh]){
+    var oldGates=(S.warehouses[editingWh].gates||[]).map(Number);
+    var dropped=oldGates.filter(function(g){return !(g>=from&&g<=to)&&rfidGateIsBound(g);});
+    if(dropped.length&&!window.confirm('ประตู '+dropped.join(', ')+' มีเครื่อง FX9600 ผูกอยู่ ถ้าบันทึก ประตูนี้จะไม่อยู่ในคลังนี้แล้ว และต้องย้ายที่แท็บประตู\n\nบันทึกต่อไหม?'))return;
+  }
   if(!id||!nm)return toast('กรอกข้อมูลไม่ครบ','ต้องมีรหัสและชื่อคลัง','err');
   /* รหัสเป็น key สำหรับระบบ ส่วนชื่อคือข้อความที่พนักงานเห็นในทุกหน้าจอ
      ห้ามปล่อยให้ทั้งสองค่าเท่ากัน เพราะตารางตำแหน่งจะเหลือแต่ WH-001 ซึ่ง
