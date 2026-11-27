@@ -15672,7 +15672,7 @@ function renderGatePlateSummary(direction,filterId,targetId,descId){
   /* Default view: the two totals and one button. The customer table and its
      filters open on request. */
   if(!ui.open){
-    target.innerHTML='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between;padding:0 18px;"><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;"><span class="pill ok">พบป้าย '+nf(tot.found)+' กล่อง</span><span class="pill bad">ไม่พบป้าย '+nf(tot.missing)+' กล่อง</span></div><button type="button" class="btn ghost sm" onclick="gatePlateToggle(\''+direction+'\')">ดูรายละเอียดตามลูกค้า ›</button></div>';
+    target.innerHTML='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:0 18px;"><span class="pill ok">พบป้าย '+nf(tot.found)+' กล่อง</span><span class="pill bad">ไม่พบป้าย '+nf(tot.missing)+' กล่อง</span></div><div style="padding:14px 18px 0;"><button type="button" class="btn ghost" style="width:100%;justify-content:center;min-height:48px;" onclick="gatePlateToggle(\''+direction+'\')">ดูรายละเอียดตามลูกค้า ›</button></div>';
     return;
   }
   var filtered=rows.filter(function(r){return direction==='out'||ui.status==='all'||(ui.status==='found'&&r.found>0)||(ui.status==='missing'&&r.missing>0);});
