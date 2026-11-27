@@ -688,7 +688,11 @@ class _ScanScreenState extends State<ScanScreen>
         children: [
           FieldLabel(loc.t('ลูกค้าปลายทาง *')),
           if (tiles)
-            for (final customer in c.customerList) _customerTile(c, customer)
+            for (final customer in [
+              ...c.customerList.where((m) => m['id'] == c.gateCustomer),
+              ...c.customerList.where((m) => m['id'] != c.gateCustomer),
+            ])
+              _customerTile(c, customer)
           else
             Semantics(
               button: true,
@@ -813,6 +817,15 @@ class _ScanScreenState extends State<ScanScreen>
                               color: C.ink)),
                       Text(id,
                           style: TextStyle(fontSize: 12.5, color: C.muted)),
+                      if (id == c.gateCustomer)
+                        Text(
+                            context
+                                .watch<LocaleController>()
+                                .t('ลูกค้าของประตูนี้'),
+                            style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: C.menuBlue)),
                     ],
                   ),
                 ),

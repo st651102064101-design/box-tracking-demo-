@@ -43,14 +43,20 @@ class ApiClient {
   ApiClient({required this.baseUrl, this.token});
 
   Future<void> observeRadar(List<Map<String, dynamic>> observations) async {
-    await _send(() => http.post(_u('/api/rfid/radar/observe'), headers: _headers,
-        body: jsonEncode({'observations': observations})));
+    await _send(() => http.post(_u('/api/rfid/radar/observe'),
+        headers: _headers, body: jsonEncode({'observations': observations})));
   }
 
-  Future<Map<String, dynamic>> radarProfile(String epc, String model, int power, {String readerProfile = 'radar'}) async {
-    final uri = _u('/api/rfid/radar/profile').replace(queryParameters:
-        {'epc': epc, 'model': model, 'powerPercent': '$power', 'readerProfile': readerProfile});
-    return Map<String, dynamic>.from(await _send(() => http.get(uri, headers: _headers)) as Map);
+  Future<Map<String, dynamic>> radarProfile(String epc, String model, int power,
+      {String readerProfile = 'radar'}) async {
+    final uri = _u('/api/rfid/radar/profile').replace(queryParameters: {
+      'epc': epc,
+      'model': model,
+      'powerPercent': '$power',
+      'readerProfile': readerProfile
+    });
+    return Map<String, dynamic>.from(
+        await _send(() => http.get(uri, headers: _headers)) as Map);
   }
 
   Uri _u(String path) {
@@ -199,6 +205,18 @@ class ApiClient {
       () => http.get(_u('/api/state/pda'), headers: _headers),
       pdaState: true,
     ) as Map<String, dynamic>;
+  }
+
+  /// GET /api/rfid/gates/:gate/auto-session -> the customer the web set for
+  /// outbound loads at this gate, or null.
+  Future<String?> getGateCustomer(String gate) async {
+    final body = await _send(() => http
+        .get(_u('/api/rfid/gates/${Uri.encodeComponent(gate)}/auto-session'),
+            headers: _headers)
+        .timeout(_timeout));
+    final session = body is Map ? body['session'] : null;
+    if (session is! Map || session['direction'] != 'out') return null;
+    return session['customer']?.toString();
   }
 
   /// PUT /api/state -> replace whole state (used by the demo seed)

@@ -295,6 +295,9 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
 
   // out form
   String outCustomer = '';
+
+  /// The customer set for this gate on the web; offered first when shipping.
+  String gateCustomer = '';
   String outPlate = '';
   String outDriver = '';
   String outVehicleType = '';
@@ -675,7 +678,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
         employeeId: emp?.id,
         employeeName: emp?.name,
         heartbeatSeconds: _heartbeatSeconds,
-              );
+      );
       _markLiveFromPresence();
       final ip = _cachedLanIp ?? await readLanIp();
       if (ip != null && ip != _cachedLanIp) {
@@ -691,7 +694,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
           employeeId: emp?.id,
           employeeName: emp?.name,
           heartbeatSeconds: _heartbeatSeconds,
-                );
+        );
       }
     } catch (_) {
       // Presence must never interrupt a scan workflow; the next 25-second
@@ -1449,6 +1452,24 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     _clearForms();
     notifyListeners();
     _connectReader();
+    gateCustomer = '';
+    if (m == 'out') unawaited(_suggestGateCustomer());
+  }
+
+  /// Preselects the gate's customer. Only a suggestion: a choice already made
+  /// stays, and a failed lookup leaves the form as it was.
+  Future<void> _suggestGateCustomer() async {
+    final asked = gate;
+    try {
+      final id = await api.getGateCustomer(asked);
+      if (id == null || gate != asked || mode != 'out') return;
+      if (!customerList.any((c) => c['id']?.toString() == id)) return;
+      gateCustomer = id;
+      if (outCustomer.isEmpty) outCustomer = id;
+      notifyListeners();
+    } catch (_) {
+      // Offline or an older server: the operator picks as before.
+    }
   }
 
   void goScanIn() => setMode('in');
@@ -2424,7 +2445,9 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
 
   String? registeredBoxForRfidRead(RfidTagRead read) {
     final codes = [read.epc, read.tid ?? '']
-        .map((v) => v.trim().toLowerCase()).where((v) => v.isNotEmpty).toSet();
+        .map((v) => v.trim().toLowerCase())
+        .where((v) => v.isNotEmpty)
+        .toSet();
     if (codes.isEmpty || S == null) return null;
     if (!identical(_rfidBindingSnapshot, S)) {
       _rfidBindingSnapshot = S;
@@ -2444,7 +2467,10 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     }
     for (final code in codes) {
       final decoded = epcToAscii(code);
-      for (final candidate in [code, if (decoded != null) decoded.toLowerCase()]) {
+      for (final candidate in [
+        code,
+        if (decoded != null) decoded.toLowerCase()
+      ]) {
         final direct = _rfidBoxCodes[candidate];
         if (direct != null) return direct;
         final match = _rfidBoxCodes[candidate.replaceFirst(RegExp(r'^0+'), '')];
@@ -2457,11 +2483,13 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Stream<List<RfidTagRead>> get registeredRfidBatches => rfid.tagBatches
-      .map((batch) => batch.where((read) => registeredBoxForRfidRead(read) != null).toList())
+      .map((batch) => batch
+          .where((read) => registeredBoxForRfidRead(read) != null)
+          .toList())
       .where((batch) => batch.isNotEmpty);
 
-  Stream<RfidTagRead> get registeredRfidReads => registeredRfidBatches
-      .expand((batch) => batch);
+  Stream<RfidTagRead> get registeredRfidReads =>
+      registeredRfidBatches.expand((batch) => batch);
 
   void _onReaderBatch(List<RfidTagRead> batch) {
     if (!hasIntegratedRfid || _effectiveInputMode != ScanInputMode.rfid) return;
@@ -2471,8 +2499,10 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
       if (minRssi != null && r.rssi != null && r.rssi! < minRssi) continue;
       final tag = registeredBoxForRfidRead(r);
       if (tag != null) {
-        if (screen == Screen.scan && putawayTask == null) radarTelemetry.observe(tag, r);
-        if (delivered.add(tag) && !(screen == Screen.scan && queue.contains(tag))) _onReaderTag(tag);
+        if (screen == Screen.scan && putawayTask == null)
+          radarTelemetry.observe(tag, r);
+        if (delivered.add(tag) &&
+            !(screen == Screen.scan && queue.contains(tag))) _onReaderTag(tag);
       }
     }
   }
@@ -2627,8 +2657,11 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// Cleared by the screen itself whenever it resets (mode switch, screen
   /// leave, batch submitted).
   final List<String> transferRfidHits = [];
-  late final RadarTelemetry radarTelemetry = RadarTelemetry(api: api, rfid: rfid,
-      model: () => prefs.deviceModel, power: () => prefs.rfidPowerPercent);
+  late final RadarTelemetry radarTelemetry = RadarTelemetry(
+      api: api,
+      rfid: rfid,
+      model: () => prefs.deviceModel,
+      power: () => prefs.rfidPowerPercent);
 
   void _onReaderTrigger(bool pressed) {
     if (!pressed) {

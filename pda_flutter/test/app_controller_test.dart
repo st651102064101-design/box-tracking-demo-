@@ -22,6 +22,12 @@ class FakeApi extends ApiClient {
   final List<Map<String, dynamic>> heartbeats = [];
   Map<String, dynamic>? myDevice;
 
+  /// The customer the web set at a gate, by gate number.
+  final Map<String, String> gateCustomers = {};
+
+  @override
+  Future<String?> getGateCustomer(String gate) async => gateCustomers[gate];
+
   /// When set, the next gate call throws this instead of succeeding.
   Object? throwOnGate;
 

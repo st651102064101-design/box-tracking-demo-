@@ -46,6 +46,7 @@ class LocaleController extends ChangeNotifier {
     'เปลี่ยนลูกค้า / ข้อมูลรถ': 'Change customer / vehicle',
     'ข้อมูลรถ (ไม่บังคับ)': 'Vehicle details (optional)',
     'ยืนยันรับเข้า': 'Confirm gate in',
+    'ลูกค้าของประตูนี้': 'This gate’s customer',
     'ระบบที่ใช้งาน': 'System',
     'รับ-ส่ง': 'Receive & ship',
     'รับเข้า และ จ่ายออก': 'Gate in and gate out',

@@ -10,6 +10,7 @@ import 'package:smarttrace_pda/services/i18n.dart';
 import 'package:smarttrace_pda/widgets/system_picker.dart';
 
 import 'app_controller_test.dart' show FakeApi, makeController;
+import 'two_customers.dart';
 
 Future<AppController> _controller() async {
   final c = await makeController(FakeApi());
@@ -140,6 +141,26 @@ void main() {
     await _show(tester, c, const ScanScreen());
 
     expect(c.gateFormStep, isTrue);
+    c.dispose();
+  });
+
+  testWidgets('the customer of this gate comes first and says so',
+      (tester) async {
+    final api = twoCustomers();
+    final c = await makeController(api);
+    c.confirmPost('WH-1', 3);
+    c.setReceiveShipOnly(true);
+    final last = c.customerList.last['id'] as String;
+    api.gateCustomers[c.gate] = last;
+    c.goScanOut();
+    await _show(tester, c, const ScanScreen());
+    await tester.pump();
+
+    expect(find.text('ลูกค้าของประตูนี้'), findsOneWidget);
+    final preset = tester.getTopLeft(find.byKey(Key('customer-$last'))).dy;
+    final first = c.customerList.first['id'];
+    expect(preset,
+        lessThan(tester.getTopLeft(find.byKey(Key('customer-$first'))).dy));
     c.dispose();
   });
 }
