@@ -12,6 +12,7 @@ import { boxesRouter } from './routes/boxes.js';
 import { rfidRouter } from './routes/rfid.js';
 import { mastersRouter } from './routes/masters.js';
 import { employeePinRouter } from './routes/pin.js';
+import { supervisorPinResetRouter } from './routes/supervisorPinReset.js';
 import { cycleCountsRouter } from './routes/cycle-counts.js';
 import { reportsRouter } from './routes/reports.js';
 import { streamRouter } from './routes/stream.js';
@@ -136,6 +137,8 @@ export function createApp() {
   app.use('/api/fx9600', fx9600Limiter, fx9600Router);
   app.use('/api/masters', mastersRouter);
   app.use('/api/employees', employeePinRouter);
+  app.use('/api/pda/pin-reset-approved', authLimiter);
+  app.use('/api/pda', supervisorPinResetRouter);
   app.use('/api/cycle-counts', cycleCountsRouter);
   app.use('/api/reports', reportsRouter);
   app.use('/api/devices', devicesRouter);
