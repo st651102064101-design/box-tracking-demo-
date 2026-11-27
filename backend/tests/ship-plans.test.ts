@@ -129,3 +129,63 @@ describe('the customer set at a gate', () => {
     expect(await read()).toBeNull();
   });
 });
+
+describe('a customer set at the gate stays usable', () => {
+  const put = (body: object) => w.api().put(`/api/rfid/gates/${GATE.out}/auto-session`).set(w.as).send({ direction: 'out', ...body });
+  const read = async () => (await w.api().get(`/api/rfid/gates/${GATE.out}/auto-session`).set(w.as)).body;
+  const clear = (query = '') => w.api().delete(`/api/rfid/gates/${GATE.out}/auto-session${query}`).set(w.as);
+  beforeEach(async () => { await clear('?preset=1'); });
+
+  it('serves the next truck too, whatever its plate', async () => {
+    await w.stocked('K-1'); await w.stocked('K-2');
+    await put({ customer: 'C1', preset: true, ttlSeconds: 7200 });
+    await w.camera(GATE.out, '81-0001');
+    await w.read(GATE.out, ['K-1']);
+    await w.camera(GATE.out, '81-0001');
+    clock += 120_000; vi.setSystemTime(clock);
+    await w.read(GATE.out, ['K-2']);
+    const res = await w.camera(GATE.out, '82-0002');
+    expect(res.body.action).toBe('open_gate');
+    expect(await customerOf('K-1')).toEqual(['out', 'C1']);
+    expect(await customerOf('K-2')).toEqual(['out', 'C1']);
+  });
+
+  it('reports when it started and how long it lasts', async () => {
+    await put({ customer: 'C1', preset: true, ttlSeconds: 7200 });
+    const body = await read();
+    expect(body.session).toMatchObject({ customer: 'C1', permanent: false, ttlSeconds: 7200 });
+    expect(Date.parse(body.session.expiresAt) - Date.parse(body.session.startedAt)).toBe(7_200_000);
+    expect(Date.parse(body.now)).toBe(clock);
+  });
+
+  it('remembers the last one after it runs out', async () => {
+    await put({ customer: 'C2', preset: true, ttlSeconds: 60 });
+    clock += 120_000; vi.setSystemTime(clock);
+    const body = await read();
+    expect(body.session).toBeNull();
+    expect(body.expired).toMatchObject({ customer: 'C2', ttlSeconds: 60 });
+  });
+
+  it('can be permanent', async () => {
+    await put({ customer: 'C1', preset: true, permanent: true });
+    const { session } = await read();
+    expect(session).toMatchObject({ customer: 'C1', permanent: true, ttlSeconds: null });
+    expect(new Date(session.expiresAt).getUTCFullYear()).toBe(9999);
+  });
+
+  it('lists the live ones of every gate in one call', async () => {
+    const list = async () => (await w.api().get('/api/rfid/gate-sessions').set(w.as)).body.sessions;
+    expect(await list()).toEqual([]);
+    await put({ customer: 'C1', preset: true, permanent: true });
+    expect(await list()).toMatchObject([{ gateNo: GATE.out, direction: 'out', customer: 'C1', permanent: true }]);
+  });
+
+  it('is not overwritten or cleared by a screen that syncs on its own', async () => {
+    await put({ customer: 'C1', preset: true, permanent: true });
+    expect((await put({ customer: 'C2' })).status).toBe(200);
+    await clear();
+    expect((await read()).session).toMatchObject({ customer: 'C1', permanent: true });
+    await clear('?preset=1');
+    expect((await read()).session).toBeNull();
+  });
+});

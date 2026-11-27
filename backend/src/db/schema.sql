@@ -202,6 +202,13 @@ CREATE TABLE IF NOT EXISTS rfid_gate_auto_sessions (
   updated_by   TEXT
 );
 
+-- preset = a customer set by hand on the gate page: screens that sync on their
+-- own leave it alone, and it is not tied to one truck's plate.
+ALTER TABLE rfid_gate_auto_sessions ADD COLUMN IF NOT EXISTS preset BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE rfid_gate_auto_sessions ADD COLUMN IF NOT EXISTS permanent BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE rfid_gate_auto_sessions ADD COLUMN IF NOT EXISTS ttl_seconds INTEGER;
+ALTER TABLE rfid_gate_auto_sessions ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ;
+
 -- Outbound jobs imported before the truck arrives: the camera's plate picks one.
 CREATE TABLE IF NOT EXISTS ship_plans (
   id           SERIAL PRIMARY KEY,

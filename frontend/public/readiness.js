@@ -50,6 +50,7 @@
     if (!s.customers) return [item('bad', 'ยังไม่มีลูกค้า', 'cust')];
     var out = [item('ok', 'ลูกค้าพร้อมเลือก ' + s.customers + ' ราย', 'cust')];
     if (!s.unattended) return out;
+    (s.permanent || []).forEach(function (g) { out.push(item('warn', 'ประตู ' + g + ' ใช้ลูกค้าแบบถาวร', 'gate')); });
     if (s.plans === 'error') out.push(item('warn', 'ตรวจรายการส่งของไม่ได้', 'gate'));
     else if (s.plans === null) out.push(item('wait', 'กำลังตรวจรายการส่งของ'));
     else if (s.plans > 0) out.push(item('ok', 'รายการรอรถวันนี้ ' + s.plans + ' รายการ', 'gate'));
@@ -82,6 +83,7 @@
   }
   /* English for the page translator: whole-text patterns, so nothing is half translated. */
   var en = [
+    [/^ประตู (\d+) ใช้ลูกค้าแบบถาวร$/, 'Gate $1 uses a permanent customer'],
     [/^พร้อมทำงาน$/, 'Ready to work'],
     [/^กำลังตรวจความพร้อม…$/, 'Checking readiness…'],
     [/^ทำงานได้ · มี (\d+) เรื่องต้องดู$/, 'Working · to review: $1'],

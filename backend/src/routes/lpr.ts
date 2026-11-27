@@ -148,7 +148,9 @@ lprRouter.post('/', asyncHandler(async (req, res) => {
         console.error('[lpr-plan-out] unable to ship the planned job', error);
       }
     } else if (!requiresScreenConfirmation && liveSession?.direction === 'out' && liveSession.customer) {
-      await db.update(rfidGateAutoSessions).set({ plate: payload.plateNumber, updatedAt: new Date(), updatedBy: payload.cameraId }).where(eq(rfidGateAutoSessions.gateNo, gateNo));
+      /* A staged shipment remembers its truck; a customer set at the gate serves
+         every truck, so it must not be tied to the first plate seen. */
+      if (!liveSession.preset) await db.update(rfidGateAutoSessions).set({ plate: payload.plateNumber, updatedAt: new Date(), updatedBy: payload.cameraId }).where(eq(rfidGateAutoSessions.gateNo, gateNo));
       /* A dedicated OUT gate lets the FX9600 ship these boxes before the camera
          reports. Those are done already — only ship what is still here. */
       const done = new Set(seenBoxes

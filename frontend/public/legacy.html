@@ -510,6 +510,21 @@ button.rd-item{cursor:pointer;}button.rd-item:hover,button.rd-item:focus-visible
 .gp-sub{font-weight:700;font-size:13px;margin:16px 0 8px;}
 .gp-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px;}
 .gp-actions select{min-width:220px;}
+.gp-select{width:100%;}
+.gp-chips{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
+.gp-chip{flex:1 1 90px;min-height:48px;border-radius:14px;border:1.5px solid var(--line);background:transparent;color:inherit;font:inherit;font-weight:700;cursor:pointer;}
+.gp-chip.on{border-color:#a3f04b;background:color-mix(in srgb,#a3f04b 18%,transparent);}
+.gp-use{width:100%;justify-content:center;min-height:52px;margin-bottom:8px;}
+.gp-preset{--pc:#22c55e;border:2px solid color-mix(in srgb,var(--pc) 55%,transparent);background:color-mix(in srgb,var(--pc) 8%,transparent);border-radius:18px;padding:16px;}
+.gp-preset.soon,.gp-preset.permanent{--pc:#f59e0b;}.gp-preset.expired{--pc:#8e8e93;}
+.gp-state{color:var(--pc);font-weight:800;font-size:13px;}
+.gp-who{font-size:22px;font-weight:800;margin:4px 0 8px;overflow-wrap:anywhere;}
+.gp-time b{font-size:44px;font-variant-numeric:tabular-nums;line-height:1.1;}
+.gp-time span{color:var(--muted);margin-left:6px;}
+.gp-used{font-size:26px;font-weight:800;margin-bottom:8px;}
+.gp-track{height:8px;border-radius:99px;background:color-mix(in srgb,var(--ink) 10%,transparent);margin:8px 0 10px;overflow:hidden;}
+.gp-track i{display:block;height:100%;background:var(--pc);transition:width 1s linear;}
+.gp-preset .gp-actions{margin:12px 0 0;}
 .gp-row{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--line);}
 html[data-system="rfidgate"] #bulkInvShip,html[data-system="rfidgate"] #bulkInvRelocate,html[data-system="rfidgate"] button[onclick*="invImportFile"],html[data-system="rfidgate"] .sys-pda{display:none!important;}
 .sys-hidden,html[data-system="gate2"] .gateout-mode-panel,html[data-system="rfidgate"] #gateInModeBar,html[data-system="rfidgate"] [data-gateout-mode="rfid"],html[data-system="rfidgate"] .sys-plates,html[data-system="rfidgate"] #tab-gatein .wg-scan-s{display:none!important;}
@@ -2379,8 +2394,8 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
 <script src="/pda-device.js?v=20261126-2"></script>
 <script src="/overdue.js?v=20261126"></script>
 <script src="/systems.js?v=20261127-3"></script>
-<script src="/gate-view.js?v=20261127-2"></script>
-<script src="/readiness.js?v=20261127-2"></script>
+<script src="/gate-view.js?v=20261127-3"></script>
+<script src="/readiness.js?v=20261127-3"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
@@ -3123,12 +3138,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
     <div id="gpImportResult"></div>
     <div id="gpPlans"></div>
     <div class="gp-sub">2 · ลูกค้าที่ตั้งไว้ที่ประตูนี้ (ใช้เมื่อป้ายรถไม่อยู่ในรายการ)</div>
-    <div class="gp-actions">
-      <select id="gpCustomer" aria-label="ลูกค้าของประตูนี้"></select>
-      <button type="button" class="btn accent sm" onclick="gpSetPreset()">ตั้งไว้ 8 ชั่วโมง</button>
-      <button type="button" class="btn ghost sm" onclick="gpClearPreset()">ยกเลิก</button>
-    </div>
-    <div class="muted small" id="gpPreset"></div>
+    <div id="gpPreset"></div>
   </div>
   <div class="gp-card"><h3>ผ่านประตูล่าสุด</h3><div id="gpPassages"></div></div>
 </section>
@@ -8117,8 +8127,9 @@ function renderGatePage(){
   var outbound=auto&&info.type!=='in';
   $('#gpOutbound').hidden=!outbound;$('#gpReview').hidden=!auto;
   if(gpShownFor!==sys+':'+g){
-    gpShownFor=sys+':'+g;$('#gpImportResult').innerHTML='';$('#gpReview').innerHTML='';$('#gpPlans').innerHTML='';$('#gpPreset').textContent='';
-    $('#gpCustomer').innerHTML='<option value="">— เลือกลูกค้า —</option>'+Object.keys(S.customers||{}).map(function(id){return '<option value="'+esc(id).replace(/"/g,'&quot;')+'">'+esc(custName(id))+'</option>';}).join('');
+    if(gpPre.gate!==g){gpPre={gate:g,data:null,editing:false,customer:'',ttl:'28800',sig:''};}
+    gpPre.sig='';$('#gpImportResult').innerHTML='';$('#gpReview').innerHTML='';$('#gpPlans').innerHTML='';$('#gpPreset').innerHTML='';
+    gpRenderPreset();
     gpLoad();
   }
   if(!gpTimer)gpTimer=setInterval(function(){if($('#tab-gate').classList.contains('active')){renderGatePage();gpLoad();}},5000);
@@ -8144,18 +8155,69 @@ function gpLoad(){
   }).catch(function(){});
   gpApi('/api/rfid/gates/'+g+'/auto-session').then(function(d){
     if(!current())return;
-    var x=d.session;
-    $('#gpPreset').textContent=x&&x.direction==='out'&&x.customer?'ตอนนี้ตั้งไว้: '+custName(x.customer)+' (ถึง '+fmtTs(x.expiresAt)+')':'ยังไม่ได้ตั้งลูกค้าไว้';
+    /* Count by the server's clock: a wrong PC clock must not change the time left. */
+    gpPre.data={session:d.session,expired:d.expired,skew:(Date.parse(d.now)||Date.now())-Date.now()};
+    gpRenderPreset();
   }).catch(function(){});
 }
 function gpDirection(dir){var g=gpGateNo();setFixedGate(dir,g);switchTab('gate'+dir);if(dir==='in')applyGateInEntryMode('rfid',false);else applyGateOutEntryMode('rfid',false);}
 function gpDismiss(tag){gpApi('/api/rfid/pending/'+gpGateNo()+'/'+encodeURIComponent(tag),'DELETE').then(gpLoad).catch(gpFail);}
 function gpDeletePlan(id){gpApi('/api/ship-plans/'+id,'DELETE').then(gpLoad).catch(gpFail);}
-function gpSetPreset(){
-  var c=$('#gpCustomer').value;if(!c){toast('เลือกลูกค้าก่อน','','err');return;}
-  gpApi('/api/rfid/gates/'+gpGateNo()+'/auto-session','PUT',{direction:'out',customer:c,ttlSeconds:28800}).then(function(){toast('ตั้งลูกค้าของประตูแล้ว',custName(c),'ok');gpLoad();}).catch(gpFail);
+var gpPre={gate:0,data:null,editing:false,customer:'',ttl:'28800',sig:''},gpTick=null;
+function gpAttr(v){return esc(String(v)).replace(/"/g,'&quot;');}
+function gpRenderPreset(){
+  var host=$('#gpPreset');if(!host||!gpPre.data)return;
+  if(!gpTick)gpTick=setInterval(function(){if($('#tab-gate').classList.contains('active'))gpRenderPreset();},1000);
+  var data=gpPre.data,v=window.GateView.presetView(data,Date.now()+data.skew);
+  var s=data.session||data.expired||{},editing=gpPre.editing||v.state==='none';
+  var sig=[editing,v.state,v.customer,s.startedAt,v.used].join('|');
+  if(sig===gpPre.sig&&host.firstChild){
+    var count=$('#gpCount'),bar=$('#gpBar');
+    if(count&&v.remaining)count.textContent=v.remaining;
+    if(bar&&v.fraction!=null)bar.style.width=(v.fraction*100)+'%';
+    return;
+  }
+  gpPre.sig=sig;
+  var btn=function(cls,label,click){return '<button type="button" class="btn '+cls+'" onclick="'+click+'">'+label+'</button>';};
+  if(editing){
+    var options='<option value="">— เลือกลูกค้า —</option>'+Object.keys(S.customers||{}).map(function(id){return '<option value="'+gpAttr(id)+'"'+(id===gpPre.customer?' selected':'')+'>'+esc(custName(id))+'</option>';}).join('');
+    var chip=function(value,label){var on=gpPre.ttl===value;return '<button type="button" class="gp-chip'+(on?' on':'')+'" aria-pressed="'+on+'" data-ttl="'+value+'" onclick="gpPickTtl(this.dataset.ttl)">'+label+'</button>';};
+    host.innerHTML='<select id="gpCustomer" class="gp-select" aria-label="ลูกค้าของประตูนี้" onchange="gpPre.customer=this.value">'+options+'</select>'
+      +'<div class="gp-sub">ใช้นานแค่ไหน</div><div class="gp-chips">'+chip('7200','2 ชม.')+chip('28800','8 ชม.')+chip('permanent','ถาวร')+'</div>'
+      +'<button type="button" class="btn accent gp-use" onclick="gpUse(gpPre.customer,gpPre.ttl)">ใช้ลูกค้านี้</button>'
+      +(v.state!=='none'?btn('ghost sm','ยกเลิก','gpEdit(false)'):'');
+    return;
+  }
+  var name='<div class="gp-who">'+esc(custName(v.customer))+'</div>';
+  if(v.state==='expired'){
+    host.innerHTML='<div class="gp-preset expired"><div class="gp-state">หมดเวลาแล้ว</div>'+name
+      +'<button type="button" class="btn accent gp-use" onclick="gpAgain()">ใช้ลูกค้าเดิมอีกครั้ง</button><div class="gp-actions">'+btn('ghost sm','เลือกลูกค้าอื่น','gpEdit(true)')+btn('ghost sm','หยุดใช้','gpStop()')+'</div></div>';
+    return;
+  }
+  var permanent=v.state==='permanent';
+  var label=permanent?'● ใช้ตลอดจนกว่าจะหยุด':v.state==='soon'?'● ใกล้หมดเวลา':'● กำลังใช้';
+  var who=s.recorder||'—';
+  host.innerHTML='<div class="gp-preset '+v.state+'"><div class="gp-state">'+label+'</div>'+name
+    +(permanent?'<div class="gp-used">'+v.used+'</div>'
+      :'<div class="gp-time"><b id="gpCount" class="mono">'+v.remaining+'</b> <span>เหลือ</span></div><div class="gp-track"><i id="gpBar" style="width:'+(v.fraction*100)+'%"></i></div>')
+    +'<div class="muted small">ตั้งเมื่อ '+esc(fmtTs(s.startedAt))+' โดย '+esc(who)+(permanent?'':' · หมด '+esc(fmtTs(s.expiresAt)))+'</div>'
+    +'<div class="gp-actions">'+(permanent?'':btn(v.state==='soon'?'accent sm':'ghost sm','ต่อเวลา','gpAgain()'))+btn('ghost sm','เปลี่ยนลูกค้า','gpEdit(true)')+btn('ghost sm','หยุดใช้','gpStop()')+'</div></div>';
 }
-function gpClearPreset(){gpApi('/api/rfid/gates/'+gpGateNo()+'/auto-session','DELETE').then(gpLoad).catch(gpFail);}
+function gpPickTtl(value){gpPre.ttl=value;gpPre.sig='';gpRenderPreset();}
+function gpEdit(on){gpPre.editing=on;gpPre.sig='';gpRenderPreset();}
+function gpUse(customer,ttl){
+  if(!customer){toast('เลือกลูกค้าก่อน','','err');return;}
+  var gate=gpGateNo(),permanent=ttl==='permanent';
+  var send=function(){
+    gpApi('/api/rfid/gates/'+gate+'/auto-session','PUT',{direction:'out',customer:customer,preset:true,permanent:permanent,ttlSeconds:permanent?undefined:Number(ttl)})
+      .then(function(){gpPre.editing=false;gpPre.sig='';toast('ตั้งลูกค้าของประตูแล้ว',custName(customer),'ok');gpLoad();}).catch(gpFail);
+  };
+  if(!permanent){send();return;}
+  confirmA('ใช้ลูกค้านี้ตลอด?','รถที่ป้ายไม่อยู่ในรายการ Excel จะส่งให้ '+custName(customer)+' จนกว่าจะกดหยุดใช้','ใช้ตลอด').then(function(ok){if(ok)send();});
+}
+/* Starts the same customer over, for as long as before. */
+function gpAgain(){var d=gpPre.data||{},s=d.session||d.expired;if(s)gpUse(s.customer,String(s.ttlSeconds||28800));}
+function gpStop(){gpApi('/api/rfid/gates/'+gpGateNo()+'/auto-session?preset=1','DELETE').then(function(){gpPre.editing=false;gpPre.sig='';toast('หยุดใช้ลูกค้าของประตูแล้ว','','ok');gpLoad();}).catch(gpFail);}
 function gpPlanTemplate(){
   downloadXLS('ship-list-'+dstr()+'.xlsx',['ทะเบียนรถ','ลูกค้า','DO','PO','วันที่'],[['70-1234',Object.keys(S.customers||{})[0]||'CUST-01','DO-0001','',dstr()]]);
 }
@@ -8183,7 +8245,7 @@ function gpImport(file){
   reader.readAsArrayBuffer(file);
 }
 window.gpSelect=gpSelect;window.gpDirection=gpDirection;window.gpDismiss=gpDismiss;window.gpDeletePlan=gpDeletePlan;
-window.gpSetPreset=gpSetPreset;window.gpClearPreset=gpClearPreset;window.gpPlanTemplate=gpPlanTemplate;window.gpImport=gpImport;
+window.gpUse=gpUse;window.gpAgain=gpAgain;window.gpStop=gpStop;window.gpEdit=gpEdit;window.gpPickTtl=gpPickTtl;window.gpPlanTemplate=gpPlanTemplate;window.gpImport=gpImport;
 
 /* ===== ความพร้อมของระบบ (top of the report page) ===== */
 var rdServer={key:'',review:null,plans:null,preset:null},rdOpen=null,rdShown='',rdTimer=null,rdBusy=false;
@@ -8203,13 +8265,13 @@ function rdLoadServer(){
   var sys=currentSystem(),readers=rdReaders();
   if(!window.Systems.unattended(sys)||!readers||rdBusy)return;
   rdBusy=true;
-  var gates=readers.map(function(r){return r.gate;}),out=gates.filter(function(g){return gateDirOf(g)!=='in';});
+  var gates=readers.map(function(r){return r.gate;});
   var review=Promise.all(gates.map(function(g){return gpApi('/api/rfid/pending/'+g).then(function(d){return (d.tags||[]).length;});}))
     .then(function(n){return n.reduce(function(a,b){return a+b;},0);}).catch(function(){return 'error';});
   var plans=gpApi('/api/ship-plans').then(function(d){return (d.plans||[]).filter(function(p){return p.status==='waiting'&&p.planDate===d.today;}).length;}).catch(function(){return 'error';});
-  var preset=Promise.all(out.map(function(g){return gpApi('/api/rfid/gates/'+g+'/auto-session').then(function(d){return !!(d.session&&d.session.direction==='out'&&d.session.customer);});}))
-    .then(function(list){return list.some(Boolean);}).catch(function(){return false;});
-  Promise.all([review,plans,preset]).then(function(r){rdBusy=false;rdServer={key:sys,review:r[0],plans:r[1],preset:r[2]};renderReadiness();});
+  /* Asked for all gates: a customer can be set before the reader is bound. */
+  var sessions=gpApi('/api/rfid/gate-sessions').then(function(d){return (d.sessions||[]).filter(function(x){return x.direction==='out'&&x.customer;});}).catch(function(){return [];});
+  Promise.all([review,plans,sessions]).then(function(r){rdBusy=false;rdServer={key:sys,review:r[0],plans:r[1],preset:r[2].length>0,permanent:r[2].filter(function(x){return x.permanent;}).map(function(x){return x.gateNo;})};renderReadiness();});
 }
 function renderReadiness(){
   var host=$('#readinessPanel');if(!host||!window.Readiness)return;
@@ -8224,7 +8286,7 @@ function renderReadiness(){
     pda:pdaDeviceLoaded?pdaDeviceRegistry.map(function(d){return {name:d.name||'PDA',online:d.online===true};}):null,
     boxes:{ready:all.filter(function(b){return b.status==='warehouse'&&b.labeled!==false;}).length,hold:count('hold'),damage:count('damage'),lost:count('lost'),overdue:all.filter(isOverdue).length},
     customers:Object.keys(S.customers||{}).length,
-    review:rdServer.review,plans:rdServer.plans,preset:rdServer.preset
+    review:rdServer.review,plans:rdServer.plans,preset:rdServer.preset,permanent:rdServer.permanent
   });
   var open=rdOpen===null?result.level!=='ok':rdOpen;
   var html='<details class="rd rd-'+result.level+'"'+(open?' open':'')+'><summary onclick="rdOpen=!this.parentNode.open"><span class="rd-dot"></span><span>'+esc(result.title)+'</span></summary><div class="rd-groups">'

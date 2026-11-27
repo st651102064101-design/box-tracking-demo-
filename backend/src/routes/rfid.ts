@@ -425,28 +425,49 @@ rfidRouter.put(
     const ttlSeconds = Math.min(28_800, Math.max(30, Number(req.body?.ttlSeconds) || 1800));
     const [knownGate] = await getDb().select().from(gates).where(eq(gates.gateNo, gate)).limit(1);
     if (!knownGate) throw httpError(404, `ไม่พบ Gate ${gate} ในคลัง`, 'gate_not_found');
+    const preset = req.body?.preset === true;
+    const permanent = preset && req.body?.permanent === true;
+    const current = (await getDb().select().from(rfidGateAutoSessions).where(eq(rfidGateAutoSessions.gateNo, gate)).limit(1))[0];
+    /* A customer set by hand wins over a screen that syncs by itself. */
+    if (!preset && current?.preset && current.expiresAt.getTime() > Date.now()) {
+      res.json({ ok: true, gate, direction: current.direction, expiresAt: current.expiresAt.toISOString(), kept: true });
+      return;
+    }
+    const startedAt = new Date();
     const row = {
+      preset, permanent, ttlSeconds: permanent ? null : ttlSeconds, startedAt,
       gateNo: gate, direction, customer: customer || null, doNo: String(req.body?.doNo ?? '').trim() || null,
       po: String(req.body?.po ?? '').trim() || null, plate: plate || null, driver: String(req.body?.driver ?? '').trim() || null,
       vehicleType: String(req.body?.vehicleType ?? '').trim() || null, recorder: String(req.body?.recorder ?? req.user?.name ?? '').trim() || null,
-      expiresAt: new Date(Date.now() + ttlSeconds * 1000), updatedAt: new Date(), updatedBy: req.user?.name,
+      expiresAt: permanent ? new Date('9999-12-31T00:00:00Z') : new Date(startedAt.getTime() + ttlSeconds * 1000),
+      updatedAt: startedAt, updatedBy: req.user?.name,
     };
     await getDb().insert(rfidGateAutoSessions).values(row).onConflictDoUpdate({ target: rfidGateAutoSessions.gateNo, set: row });
     res.json({ ok: true, gate, direction, expiresAt: row.expiresAt.toISOString() });
   }),
 );
 
+/* Every gate that currently has a shipment context, for the readiness panel. */
+rfidRouter.get('/gate-sessions', requireAuth, asyncHandler(async (_req, res) => {
+  const rows = await getDb().select().from(rfidGateAutoSessions);
+  res.json({ sessions: rows.filter((row) => row.expiresAt.getTime() > Date.now()) });
+}));
+
 rfidRouter.get('/gates/:gate/auto-session', requireAuth, asyncHandler(async (req, res) => {
   const gate = Number(req.params.gate);
   if (!Number.isInteger(gate) || gate <= 0) throw httpError(400, 'Gate ไม่ถูกต้อง', 'invalid_gate');
   const row = (await getDb().select().from(rfidGateAutoSessions).where(eq(rfidGateAutoSessions.gateNo, gate)).limit(1))[0];
-  res.json({ session: row && row.expiresAt.getTime() > Date.now() ? row : null });
+  const live = row && row.expiresAt.getTime() > Date.now();
+  res.json({ session: live ? row : null, expired: row && !live && row.preset ? row : null, now: new Date().toISOString() });
 }));
 
 rfidRouter.delete('/gates/:gate/auto-session', requireAuth, asyncHandler(async (req, res) => {
   const gate = Number(req.params.gate);
   if (!Number.isInteger(gate) || gate <= 0) throw httpError(400, 'Gate ไม่ถูกต้อง', 'invalid_gate');
-  await getDb().delete(rfidGateAutoSessions).where(eq(rfidGateAutoSessions.gateNo, gate));
+  /* Only the gate page (?preset=1) removes a customer set by hand. */
+  const mine = eq(rfidGateAutoSessions.gateNo, gate);
+  await getDb().delete(rfidGateAutoSessions)
+    .where(req.query.preset === '1' ? mine : and(mine, eq(rfidGateAutoSessions.preset, false)));
   res.json({ ok: true });
 }));
 
