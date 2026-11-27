@@ -110,6 +110,12 @@ class SettingsScreen extends StatelessWidget {
                                     style:
                                         TextStyle(fontSize: 12, color: C.muted),
                                   ),
+                                  if (c.presenceNote.isNotEmpty)
+                                    Text(
+                                      'สถานะเครื่อง: ${c.presenceNote}',
+                                      style: TextStyle(
+                                          fontSize: 12, color: C.muted),
+                                    ),
                                 ],
                               ),
                             ),

@@ -671,8 +671,30 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   /// ticks stay quiet meanwhile, so they cannot overwrite the sleeping report.
   bool _screenAsleep = false;
 
+  /// What the last presence report did, shown on the settings screen so a
+  /// handheld that does not appear on the dashboard can be diagnosed on site.
+  String presenceNote = '';
+
+  void _setPresenceNote(String note) {
+    if (presenceNote == note) return;
+    presenceNote = note;
+    notifyListeners();
+  }
+
   Future<void> _reportDevicePresence({bool sleeping = false}) async {
     if (_screenAsleep && !sleeping) return;
+    if (!deviceConfigured) {
+      _setPresenceNote('ยังไม่ได้ตั้งค่าเครื่อง');
+      return;
+    }
+    if (api.baseUrl.trim().isEmpty) {
+      _setPresenceNote('ไม่มีที่อยู่เซิร์ฟเวอร์');
+      return;
+    }
+    if (api.token == null || api.token!.isEmpty) {
+      _setPresenceNote('ยังไม่มี token ของเครื่อง');
+      return;
+    }
     // Do not wait on the live-state flag. That flag follows the SSE stream,
     // and a stream that has not connected yet (or just dropped) is exactly
     // when the dashboard most needs a REST heartbeat to tell an idle but
@@ -694,6 +716,7 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
         sleeping: sleeping,
       );
       if (!sleeping) _markLiveFromPresence();
+      _setPresenceNote('ส่งสถานะสำเร็จ ${DateTime.now().toIso8601String().substring(11, 19)}');
       final ip = _cachedLanIp ?? await readLanIp();
       if (ip != null && ip != _cachedLanIp) {
         _cachedLanIp = ip;
@@ -711,9 +734,10 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
           sleeping: sleeping,
         );
       }
-    } catch (_) {
-      // Presence must never interrupt a scan workflow; the next 25-second
-      // interval will try again when Wi-Fi or authentication recovers.
+    } catch (e) {
+      // Presence must never interrupt a scan workflow; the next interval
+      // tries again when Wi-Fi or authentication recovers.
+      _setPresenceNote('ส่งไม่สำเร็จ: ${e.toString().split('\n').first}');
     }
   }
 

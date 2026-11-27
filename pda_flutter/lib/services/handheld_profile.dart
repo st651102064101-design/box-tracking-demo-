@@ -42,7 +42,9 @@ class HandheldProfile {
     final liveAndroid = release.isEmpty ? '' : 'Android $release';
 
     if (modelUpper.contains('MC3390') ||
-        (zebra && modelUpper.startsWith('MC33') && integratedRfidDetected)) {
+        // Zebra reports the MC3390R as plain "MC33"; RFID is a sled on this model, so it
+        // is not detected as built-in.
+        (zebra && modelUpper.startsWith('MC33'))) {
       return const HandheldProfile(
         id: 'mc3390r',
         name: 'Zebra MC3300 Series (MC3390R)',
