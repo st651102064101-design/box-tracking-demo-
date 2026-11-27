@@ -33,6 +33,9 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
   final _badgeCodeController = TextEditingController();
   final _badgeCodeFocus = FocusNode(debugLabel: 'Employee badge code');
   bool _manualBadgeOpen = false;
+  /// True while the supervisor-card dialog is up: the login scanner is parked
+  /// so the dialog's field can take focus, and a scan is routed to the dialog.
+  bool _supervisorAsking = false;
   bool _badgeSubmitting = false;
   bool _keyboardSeen = false;
   Timer? _onlineLabelTimer;
@@ -286,37 +289,60 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
   /// the focused field, so the supervisor just scans their card. Returns null if
   /// cancelled.
   Future<String?> _askSupervisorCard(Employee e) async {
+    final c = context.read<AppController>();
     final controller = TextEditingController();
-    final result = await showDialog<String>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        title: const Text('ให้หัวหน้าเวรยิงบัตรของตัวเอง'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('เพื่ออนุมัติการตั้ง PIN ใหม่ให้ ${e.name}'),
-            const SizedBox(height: 12),
-            TextField(
-              controller: controller,
-              autofocus: true,
-              textCapitalization: TextCapitalization.characters,
-              decoration: const InputDecoration(labelText: 'บัตรหัวหน้า'),
-              onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+    BuildContext? dialogCtx;
+    // A card scanned now (DataWedge intent) lands here, not on the login
+    // screen behind the dialog, which would otherwise identify the card holder.
+    void onCard(String code) {
+      final dc = dialogCtx;
+      if (dc == null || !dc.mounted) return;
+      Navigator.pop(dc, code);
+    }
+
+    setState(() => _supervisorAsking = true);
+    c.claimBarcodeTarget(onCard);
+    String? result;
+    try {
+      result = await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) {
+          dialogCtx = ctx;
+          return AlertDialog(
+            title: const Text('ให้หัวหน้าเวรยิงบัตรของตัวเอง'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('เพื่ออนุมัติการตั้ง PIN ใหม่ให้ ${e.name}'),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  textCapitalization: TextCapitalization.characters,
+                  decoration: const InputDecoration(labelText: 'บัตรหัวหน้า'),
+                  onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+                ),
+              ],
             ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('ยกเลิก')),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: const Text('ยืนยัน'),
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('ยกเลิก')),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+                child: const Text('ยืนยัน'),
+              ),
+            ],
+          );
+        },
+      );
+    } finally {
+      c.releaseBarcodeTarget(onCard);
+      controller.dispose();
+      if (mounted) setState(() => _supervisorAsking = false);
+    }
     if (result == null || result.isEmpty) return null;
     return result.toUpperCase();
   }
@@ -427,7 +453,7 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
     // the one place they're meant to live) — this screen only needs to say
     // who's badging in and whether the terminal is configured/connected.
     return ScanCapture(
-      enabled: !_manualBadgeOpen,
+      enabled: !_manualBadgeOpen && !_supervisorAsking,
       onScan: _submitBadge,
       child: Column(
         children: [
