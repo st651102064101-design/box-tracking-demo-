@@ -6590,8 +6590,9 @@ function refreshGateOutManualVisibility(){
   var cbtn=$('#gateOutConfirmBtn');if(cbtn)cbtn.style.display=(manual&&!missing.length&&!gateOutConfirmed)?'':'none';
   card.classList.toggle('go-waiting',!ready);
   if(hint){
-    hint.style.display=ready?'none':'';
-    hint.innerHTML=missing.length?'<span>กรอกให้ครบก่อนสแกน — '+missing.map(function(f){return f[1];}).join(' · ')+'</span>':(gateOutConfirmed?'':'<span>กดยืนยันข้อมูลรถก่อนสแกน</span>');
+    /* The step bar and the field messages already say what is missing. */
+    hint.style.display='none';
+    hint.innerHTML='';
   }
 }
 function focusGateOutField(id){var el=$('#'+id);if(el){el.scrollIntoView({block:'center',behavior:'smooth'});el.focus({preventScroll:true});}}
