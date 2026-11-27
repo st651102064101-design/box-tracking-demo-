@@ -2377,7 +2377,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
 <script src="/legacy-sync.js"></script>
 <script src="/pda-device.js?v=20261126-2"></script>
 <script src="/overdue.js?v=20261126"></script>
-<script src="/systems.js?v=20261127"></script>
+<script src="/systems.js?v=20261127-2"></script>
 <script src="/gate-view.js?v=20261127"></script>
 <script src="/readiness.js?v=20261127-2"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
@@ -23449,7 +23449,7 @@ document.addEventListener('change',function(e){
     [/^(\d+) บทบาท$/, "$1 roles"]
   );
   /* The readiness panel's sentences come with their own translations, which win. */
-  var PANEL = (window.Readiness && window.Readiness.en) || [];
+  var PANEL = [].concat((window.Readiness && window.Readiness.en) || [], (window.Systems && window.Systems.en) || []);
   var EXACT_KEYS = Object.keys(EXACT).sort(function(a,b){return b.length-a.length;});
   var FRAG_KEYS  = Object.keys(FRAG).sort(function(a,b){return b.length-a.length;});
 

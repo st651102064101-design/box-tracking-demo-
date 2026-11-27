@@ -36,7 +36,34 @@
     full: { name: 'ครบทุกฟีเจอร์', home: 'overview' },
   };
   function get(id) { return Object.prototype.hasOwnProperty.call(LIST, id) ? LIST[id] : LIST.full; }
+  /* English for the page translator: whole texts of the names and the picker. */
+  var en = [
+    [/^ประตูเดียว อัตโนมัติ$/, 'Single gate, automatic'],
+    [/^ประตูมีเจ้าหน้าที่$/, 'Attended gate'],
+    [/^ประตูทิศเดียว$/, 'One-way gate'],
+    [/^ครบทุกฟีเจอร์$/, 'All features'],
+    [/^เลือกระบบ$/, 'Choose a system'],
+    [/^เปลี่ยนระบบ$/, 'Switch system'],
+    [/^กดการ์ดเพื่อเริ่ม · หรือกดเลข 1–5 บนแป้นพิมพ์$/, 'Click a card to start · or press 1–5'],
+    [/^แฮนออน$/, 'Hanon'],
+    [/^รับเข้า$/, 'Receive'],
+    [/^FX9600 อัตโนมัติ$/, 'FX9600, automatic'],
+    [/^Import Excel · ยิงมือ$/, 'Import Excel · Hand scan'],
+    [/^เริ่มใช้ ›$/, 'Start ›'],
+    [/^คนเฝ้า$/, 'Staff'],
+    [/^ไม่มี$/, 'None'],
+    [/^มีเจ้าหน้าที่$/, 'On duty'],
+    [/^ทิศทาง$/, 'Direction'],
+    [/^เสาอากาศบอกเข้า\/ออก$/, 'Antennas detect in/out'],
+    [/^กดเลือกเข้า\/ออก$/, 'Staff choose in/out'],
+    [/^ตั้งประจำประตู$/, 'Fixed per gate'],
+    [/^ใช้ได้$/, 'Includes'],
+    [/^ภาพรวม คลังกล่อง ติดตาม ตั้งค่า$/, 'Overview, inventory, tracking, setup'],
+    [/^ทุกวิธีรับและส่ง$/, 'Every way to receive and ship'],
+    [/^ประตู$/, 'Gate'],
+  ];
   window.Systems = {
+    en: en,
     valid: function (id) { return Object.prototype.hasOwnProperty.call(LIST, id); },
     name: function (id) { return get(id).name; },
     home: function (id) { return get(id).home; },
