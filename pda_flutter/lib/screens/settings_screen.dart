@@ -5,8 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../controllers/app_controller.dart';
-import '../models/employee.dart';
-import '../services/api_client.dart';
 import '../services/i18n.dart';
 import '../services/rfid_service.dart';
 import '../services/sound_catalog.dart';
@@ -273,20 +271,17 @@ class SettingsScreen extends StatelessWidget {
   /// that whoever's tapping this tile right now is that person; a PIN
   /// exists specifically to stop someone else changing it out from under
   /// them. First-time setup (no PIN on file yet) skips straight to picking
-  /// one, same as before. "ลืมรหัส?" on that old-PIN check reuses the same
-  /// email-OTP reset login_screen.dart's badge flow already has.
+  /// one, same as before.
   Future<void> _setupPin(BuildContext context, AppController c) async {
     final e = c.emp;
     if (e == null) return;
     final loc = context.read<LocaleController>();
 
     if (e.hasPin) {
-      String? otpSentTo;
       final verify = await showPinPad(
         context,
         title: '${loc.t('ใส่รหัส PIN เดิมของ')} ${e.name}',
         subtitle: loc.t('ยืนยันตัวตนก่อนตั้งรหัสใหม่'),
-        showForgot: true,
         validate: (entered) async {
           try {
             final ok = await c.api.verifyEmployeePin(e.id, entered);
@@ -298,23 +293,8 @@ class SettingsScreen extends StatelessWidget {
                 'ออฟไลน์ และยังไม่เคยยืนยันรหัสนี้บนเครื่องนี้ตอนออนไลน์มาก่อน');
           }
         },
-        onForgot: () async {
-          try {
-            final req = await c.api.requestPinReset(e.id);
-            otpSentTo = req['sentTo']?.toString();
-            return null;
-          } catch (err) {
-            return err is ApiException
-                ? err.message
-                : loc.t('ขอรหัส OTP ไม่สำเร็จ');
-          }
-        },
       );
       if (verify == null) return; // cancelled
-      if (verify.forgot) {
-        await _forgotPinFlow(context, c, e, otpSentTo);
-        return;
-      }
       if (verify.pin == null) return;
       if (!context.mounted) return;
     }
@@ -351,96 +331,6 @@ class SettingsScreen extends StatelessWidget {
     c.toastMsg(loc.t('ตั้งรหัส PIN แล้ว'), '', ResultKind.ok);
   }
 
-  /// Same email-OTP reset login_screen.dart's badge flow uses (see its
-  /// _forgotPin) — duplicated rather than shared across the two screens'
-  /// otherwise-unrelated widget trees, since a fully-independent flow here
-  /// keeps this screen's PIN change working even if the badge screen's PIN
-  /// pad ever changes shape.
-  Future<void> _forgotPinFlow(
-      BuildContext context, AppController c, Employee e, String? sentTo) async {
-    final loc = context.read<LocaleController>();
-    c.toastMsg(
-      loc.t('ส่งรหัส OTP แล้ว'),
-      sentTo != null
-          ? '${loc.t('ส่งไปที่อีเมล')} $sentTo ${loc.t('แล้ว — กรอกรหัส 6 หลักด้านล่าง')}'
-          : loc.t('เช็คอีเมลของคุณแล้วกรอกรหัส 6 หลักด้านล่าง'),
-      ResultKind.info,
-    );
-    if (!context.mounted) return;
-    // OTP first — see login_screen.dart's _forgotPin for the full reasoning:
-    // verifyPinReset checks the code without consuming it or touching the
-    // PIN, so a wrong/expired OTP is caught right here instead of after the
-    // operator has already typed a new PIN twice. The actual write still
-    // goes through confirmPinReset at the end, carrying this verified OTP.
-    final otpResult = await showPinPad(
-      context,
-      title: loc.t('กรอกรหัส OTP'),
-      subtitle: sentTo != null
-          ? '${loc.t('ส่งไปที่')} $sentTo ${loc.t('(มีอายุ 5 นาที)')}'
-          : loc.t('รหัส 6 หลักที่ส่งไปทางอีเมล (มีอายุ 5 นาที)'),
-      length: 6,
-      validate: (otp) async {
-        try {
-          await c.api.verifyPinReset(e.id, otp);
-          return null;
-        } on ApiException catch (err) {
-          return err.message.isEmpty
-              ? loc.t('รหัส OTP ไม่ถูกต้องหรือหมดอายุ')
-              : err.message;
-        } catch (err) {
-          return c.errorMessage(err);
-        }
-      },
-      // See login_screen.dart's _forgotPin for the same resend wiring — kept
-      // identical (3-minute client-side cooldown, server's own rate limiter
-      // does the rest) so the two OTP screens behave the same way.
-      resendCooldown: const Duration(minutes: 3),
-      onResend: () async {
-        try {
-          final req = await c.api.requestPinReset(e.id);
-          sentTo = req['sentTo']?.toString();
-          return null;
-        } catch (err) {
-          return err is ApiException ? err.message : c.errorMessage(err);
-        }
-      },
-    );
-    if (otpResult == null || otpResult.pin == null) return;
-    final verifiedOtp = otpResult.pin!;
-
-    if (!context.mounted) return;
-    final newPinResult = await showPinPad(context,
-        title: '${loc.t('ตั้งรหัส PIN ใหม่สำหรับ')} ${e.name}');
-    if (newPinResult == null || newPinResult.pin == null) return;
-    final newPin = newPinResult.pin!;
-
-    if (!context.mounted) return;
-    var applied = false;
-    final confirm = await showPinPad(
-      context,
-      title: loc.t('ยืนยันรหัส PIN ใหม่อีกครั้ง'),
-      validate: (entered) async {
-        if (entered != newPin) return loc.t('รหัสไม่ตรงกัน ลองใหม่');
-        try {
-          await c.api.confirmPinReset(e.id, otp: verifiedOtp, pin: newPin);
-          applied = true;
-          return null;
-        } on ApiException catch (err) {
-          return err.message.isEmpty
-              ? loc.t('รหัส OTP ไม่ถูกต้องหรือหมดอายุ')
-              : err.message;
-        } catch (err) {
-          return c.errorMessage(err);
-        }
-      },
-    );
-    if (confirm == null || !applied) return;
-
-    c.prefs.clearPinSkip(e.id);
-    c.prefs.cachePinHash(e.id, newPin);
-    if (!context.mounted) return;
-    c.toastMsg(loc.t('ตั้งรหัส PIN ใหม่แล้ว'), '', ResultKind.ok);
-  }
 }
 
 /// Reader diagnostics.

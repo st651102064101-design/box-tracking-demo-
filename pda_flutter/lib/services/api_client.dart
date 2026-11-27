@@ -465,25 +465,7 @@ class ApiClient {
     return body['ok'] == true;
   }
 
-  /// POST /api/employees/:id/pin/reset — mints a 6-digit OTP (5 min TTL) and
-  /// emails it to whatever address is on the employee's own record. Returns
-  /// {sentTo, expiresAt}; throws if that employee has no email on file.
-  Future<Map<String, dynamic>> requestPinReset(String employeeId) async {
-    return await _send(() => http.post(
-        _u('/api/employees/$employeeId/pin/reset'),
-        headers: _headers)) as Map<String, dynamic>;
-  }
 
-  /// POST /api/employees/:id/pin/reset/verify { otp } — checks the OTP
-  /// against what's on file without consuming it or setting a PIN. Lets the
-  /// client gate the "set a new PIN" screen behind a correct code instead of
-  /// only learning it was wrong after a new PIN was already typed twice.
-  Future<void> verifyPinReset(String employeeId, String otp) async {
-    await _send(() => http.post(
-        _u('/api/employees/$employeeId/pin/reset/verify'),
-        headers: _headers,
-        body: jsonEncode({'otp': otp})));
-  }
 
   /// POST /api/pda/pin-reset-approved — the employee's card and a supervisor's
   /// card, scanned on this handheld, plus the new PIN. No email involved.
@@ -502,15 +484,6 @@ class ApiClient {
         })));
   }
 
-  /// POST /api/employees/:id/pin/confirm-reset { otp, pin } — the OTP that
-  /// arrived by email, plus the new PIN to set once it checks out.
-  Future<void> confirmPinReset(String employeeId,
-      {required String otp, required String pin}) async {
-    await _send(() => http.post(
-        _u('/api/employees/$employeeId/pin/confirm-reset'),
-        headers: _headers,
-        body: jsonEncode({'otp': otp, 'pin': pin})));
-  }
 
   // ── ตรวจนับ (cycle count) ───────────────────────────────────────────────
   // Session-based on purpose: a count of a real aisle takes minutes and this

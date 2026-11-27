@@ -225,7 +225,7 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
     );
     if (result == null) return; // cancelled
     if (result.forgot) {
-      await _forgotPin(e, null);
+      await _forgotPin(e);
       return;
     }
     if (result.pin == null) return;
@@ -234,30 +234,10 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
     if (err != null) c.toastMsg(err, '', ResultKind.err);
   }
 
-  /// "ลืมรหัส PIN?" — mints a 6-digit OTP and emails it straight to whatever
-  /// address is on this employee's own record (see backend/src/routes/pin.ts).
-  /// No admin in the loop: unlike the shared PDA there's a real inbox only
-  /// that person can read, so there's no second person needed to relay it.
-  ///
-  /// The OTP request itself already ran inside the PIN sheet's `onForgot`
-  /// (see [_verifyThenEnter]) — that's what keeps the sheet showing a loading
-  /// state for the whole round trip instead of popping and leaving this
-  /// screen idle while it waits. [sentTo] is whatever that request found.
-  ///
-  /// Step order is **OTP first**, then new-PIN → confirm. The operator taps
-  /// "ลืมรหัส PIN?" expecting to land straight on the OTP entry they were
-  /// just emailed about — not a "set a new PIN" screen that only reveals a
-  /// wrong/expired code several taps later. `verifyPinReset(id, otp)` checks
-  /// the code against what's on file without consuming it or touching the
-  /// PIN, so a wrong code shows inline right here and the pad stays open for
-  /// a retype; only a verified OTP is allowed through to the PIN screens.
-  /// The actual PIN write still goes through `confirmPinReset(id, otp, pin)`
-  /// at the end — the only call that touches the PIN — carrying the same OTP
-  /// that was just verified.
   /// Forgot PIN, decided on the handheld with no one watching it from elsewhere.
   /// The employee's card is already identified; a supervisor who may reset PINs
   /// scans their own card here, then the employee sets the new PIN twice.
-  Future<void> _forgotPin(Employee e, String? sentTo) async {
+  Future<void> _forgotPin(Employee e) async {
     if (!mounted) return;
     final c = context.read<AppController>();
     final supervisorCard = await _askSupervisorCard(e);
