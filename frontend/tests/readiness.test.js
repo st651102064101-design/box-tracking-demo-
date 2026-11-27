@@ -51,7 +51,7 @@ describe('system readiness', () => {
     for (const pda of [null, [], [{ name: 'TC52', online: false }]]) {
       expect(run({ pda, pdaOptional: true }).level, JSON.stringify(pda)).toBe('ok');
     }
-    expect(texts(run({ pda: [{ name: 'TC52', online: true }], pdaOptional: true }), 'ok')).toContain('PDA ออนไลน์ 1 เครื่อง');
+    expect(texts(run({ pda: [{ name: 'TC52', online: true }], pdaOptional: true }), 'ok')).satisfy((list) => list.some((t) => t.startsWith('PDA ออนไลน์ 1 เครื่อง')));
   });
 
   it('counts the boxes that need attention', () => {

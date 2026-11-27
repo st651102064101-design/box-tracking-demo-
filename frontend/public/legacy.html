@@ -2397,7 +2397,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
 <script src="/overdue.js?v=20261126"></script>
 <script src="/systems.js?v=20261127-5"></script>
 <script src="/gate-view.js?v=20261127-7"></script>
-<script src="/readiness.js?v=20261127-2"></script>
+<script src="/readiness.js?v=20261127-3"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
@@ -8486,6 +8486,7 @@ function rdGo(go,arg){
   if(go==='bind'){if(arg)manageRfidGate(Number(arg));else goSetup('wh');}
   else if(go==='lpr')openLprManagementModal();
   else if(go==='pda')openPdaConnectModal();
+  else if(go==='pdaList')openPdaList();
   else if(go==='cust')goSetup('cust');
   else if(go==='inventory')goInventory(arg?{status:arg,label:({warehouse:'พร้อมส่งออก',lost:'สูญหาย',damage:'ชำรุด',hold:'พักใช้งาน'})[arg]}:{});
   else if(go==='overdue'){var el=$('#ovOverdueWidget');if(el)el.scrollIntoView({behavior:'smooth',block:'start'});}
@@ -8705,6 +8706,17 @@ function pdaDetailHtml(d){
     +'<div class="mfoot"><button class="btn ghost" onclick="openPdaConnectModal()">เชื่อมต่อเครื่องใหม่ (QR)</button><button class="btn gray" data-close>ปิด</button></div>';
 }
 var pdaDetailId=null;
+/* Every handheld with its state. A tap opens its detail; the button at the
+   bottom is the only place that opens the connect QR. */
+function openPdaList(){
+  var stateOf=function(d){return d.state==='sleeping'?'sleeping':d.online===true?'online':'offline';};
+  var label={online:'Online',sleeping:'พักจอ',offline:'Offline'},color={online:'#22c55e',sleeping:'#eab308',offline:'var(--neg)'};
+  var rows=pdaDeviceRegistry.length?pdaDeviceRegistry.map(function(d,i){var st=stateOf(d);return '<button type="button" class="row-click" data-pda="'+i+'" style="display:flex;width:100%;justify-content:space-between;align-items:center;gap:12px;padding:14px 4px;border:0;border-top:1px solid var(--line);background:transparent;color:var(--ink);text-align:left;cursor:pointer;"><span style="min-width:0;"><b style="display:block;font-size:17px;">'+esc(d.name||'PDA')+'</b><span class="muted small">'+esc(d.warehouse?'คลัง '+d.warehouse:'ยังไม่ได้ระบุคลัง')+(d.gate?' · ประตู '+esc(d.gate):'')+'</span></span><b style="flex:0 0 auto;color:'+color[st]+';">● '+label[st]+'</b></button>';}).join(''):'<p class="muted">ยังไม่พบเครื่อง PDA ที่ส่งสถานะ</p>';
+  openModal('<div class="mhead"><h3>เครื่อง PDA</h3><button class="x" data-close aria-label="ปิด"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div><div class="mbody" id="pdaListBody">'+rows+'<button type="button" class="btn ghost" style="width:100%;justify-content:center;margin-top:16px;min-height:48px;" onclick="openPdaConnectModal()">เชื่อมต่อเครื่องใหม่ (QR)</button></div>');
+  var body=document.getElementById('pdaListBody');
+  if(body)body.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[data-pda]');if(b)openPdaDevice(Number(b.dataset.pda));});
+}
+window.openPdaList=openPdaList;
 function openPdaDevice(index){
   var d=pdaDeviceRegistry[index];if(!d){openPdaConnectModal();return;}
   pdaDetailId=d.deviceId;

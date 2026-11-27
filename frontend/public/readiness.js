@@ -22,16 +22,19 @@
     if (s.needsPda && s.pdaOptional) {
       /* A helper, not a requirement: only say what is there. */
       var on = (s.pda || []).filter(function (d) { return d.online; });
-      if (on.length) out.push(item('ok', 'PDA ออนไลน์ ' + on.length + ' เครื่อง', 'pda'));
+      var asleepOpt = (s.pda || []).filter(function (d) { return d.sleeping; });
+      if (on.length) out.push(item('ok', 'PDA ออนไลน์ ' + on.length + ' เครื่อง: ' + on.map(function (d) { return d.name; }).join(', '), 'pdaList'));
+      if (asleepOpt.length) out.push(item('wait', 'PDA พักจอ: ' + asleepOpt.map(function (d) { return d.name; }).join(', '), 'pdaList'));
     } else if (s.needsPda) {
       if (!s.pda) out.push(item('wait', 'กำลังตรวจเครื่อง PDA'));
       else if (!s.pda.length) out.push(item('warn', 'ยังไม่มีเครื่อง PDA เชื่อมต่อ', 'pda'));
       else {
         var off = s.pda.filter(function (d) { return !d.online && !d.sleeping; });
         var asleep = s.pda.filter(function (d) { return d.sleeping; });
-        if (off.length) out.push(item('warn', 'PDA ออฟไลน์: ' + off.map(function (d) { return d.name; }).join(', '), 'pda'));
-        else if (asleep.length) out.push(item('wait', 'PDA พักจอ: ' + asleep.map(function (d) { return d.name; }).join(', '), 'pda'));
-        else out.push(item('ok', 'PDA ออนไลน์ ' + s.pda.length + ' เครื่อง', 'pda'));
+        if (off.length) out.push(item('warn', 'PDA ออฟไลน์: ' + off.map(function (d) { return d.name; }).join(', '), 'pdaList'));
+        if (asleep.length) out.push(item('wait', 'PDA พักจอ: ' + asleep.map(function (d) { return d.name; }).join(', '), 'pdaList'));
+        var on2 = s.pda.filter(function (d) { return d.online; });
+        if (on2.length) out.push(item('ok', 'PDA ออนไลน์ ' + on2.length + ' เครื่อง: ' + on2.map(function (d) { return d.name; }).join(', '), 'pdaList'));
       }
     }
     return out;
@@ -107,6 +110,9 @@
     [/^ยังไม่มีเครื่อง PDA เชื่อมต่อ$/, 'No PDA connected yet'],
     [/^PDA ออฟไลน์: (.+)$/, 'PDA offline: $1'],
     [/^PDA ออนไลน์ (\d+) เครื่อง$/, 'PDAs online: $1'],
+    [/^PDA ออนไลน์ (\d+) เครื่อง: (.+)$/, 'PDAs online: $1 · $2'],
+    [/^PDA พักจอ: (.+)$/, 'PDA asleep: $1'],
+    [/^PDA ออฟไลน์: (.+)$/, 'PDA offline: $1'],
     [/^พร้อมส่ง (\d+) ใบ$/, 'Ready to ship: $1'],
     [/^ไม่มีกล่องพร้อมส่ง$/, 'No box ready to ship'],
     [/^กำลังตรวจรายการต้องตรวจ$/, 'Checking the review queue'],
