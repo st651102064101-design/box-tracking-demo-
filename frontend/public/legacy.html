@@ -3720,7 +3720,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
       <div class="wg-body">
       <div class="wh-tabs" role="tablist" id="whTabs"><button type="button" class="wh-tab active" role="tab" data-whtab-btn="info" onclick="setWhTab('info')">ข้อมูลคลัง</button><button type="button" class="wh-tab" role="tab" data-whtab-btn="gates" onclick="setWhTab('gates')">ประตู</button></div>
       <div class="grid g4 wh-form-layout">
-        <details class="wh-more" style="grid-column:1/-1;"><summary>รายละเอียดเพิ่มเติม</summary>
+        <details class="wh-more" style="grid-column:1/-1;"><summary>รายละเอียดเพิ่มเติม <span class="muted small" style="font-weight:500;margin-left:auto;">รหัสคลัง</span></summary>
         <div class="field" style="grid-column:span 2;"><label>รหัสคลัง (สร้างอัตโนมัติ)</label>
           <div class="auto-tag-row">
             <input id="whId" readonly style="min-width:220px;">
@@ -3731,9 +3731,10 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
         </div>
         </details>
         <div class="whTab" data-whtab="info" style="display:contents;">
+        <div id="whBindSummary" class="muted small" style="grid-column:1/-1;"></div>
         <div class="field"><label>ชื่อคลัง </label><input id="whName" placeholder="คลัง 1 — บางปู"></div>
-        <div class="field"><label>ประตูเริ่ม </label><input id="whGateFrom" type="number" min="1" placeholder="1"></div>
-        <div class="field"><label>ประตูสิ้นสุด </label><input id="whGateTo" type="number" min="1" placeholder="5"></div>
+        <div class="field"><label>ประตูแรก</label><input id="whGateFrom" type="number" min="1" placeholder="1" inputmode="numeric"></div>
+        <div class="field"><label>ประตูสุดท้าย</label><input id="whGateTo" type="number" min="1" placeholder="5" inputmode="numeric"><div id="whGateRangeHint" class="muted small" style="margin-top:5px;"></div></div>
         </div>
         <div class="whTab" data-whtab="gates" hidden style="display:contents;">
         <div class="field"><label>ประเภทประตู (ตั้งทุกประตูพร้อมกัน)</label>
@@ -3765,7 +3766,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
         </div>
         </div>
         <div class="whTab" data-whtab="info" style="display:contents;">
-        <div class="field" style="grid-column:span 2;"><label>พื้นที่ / ที่ตั้ง</label>
+        <div class="field" style="grid-column:span 2;"><label>พื้นที่ / ที่ตั้ง <span class="muted small">(ไม่บังคับ)</span></label>
           <!-- โหมด "พิมพ์เอง" กับ "เลือกบนแผนที่" แยกกันชัดเจน — เดิม #whArea พิมพ์ได้อิสระ
                อยู่ตลอดเวลาแม้ตอนแผนที่เปิดอยู่ (ปุ่ม "เลือกบนแผนที่" แค่โชว์/ซ่อนแผนที่ ไม่ได้
                สลับโหมดจริง) พิมพ์ทับที่แผนที่เพิ่งกรอกให้ได้โดยไม่ตั้งใจ แยกเป็นสอง state:
@@ -6581,9 +6582,24 @@ function gateOutMissing(){return GATE_OUT_REQUIRED.filter(function(f){var v=val(
 var gateOutConfirmed=false;
 /* The operator presses confirm once the form is complete; every field is
    checked then, and the first problem is shown and focused. */
+/* Live hints for the gate range, and how many of its gates are bound yet. */
+function whUpdateRangeHint(){
+  var from=Number(val('whGateFrom')),to=Number(val('whGateTo'));
+  var hint=$('#whGateRangeHint');
+  if(hint){hint.textContent=(from>0&&to>=from)?'จะมี '+(to-from+1)+' ประตู (ประตู '+from+' ถึง '+to+')':(from||to?'สิ้นสุดต้องมากกว่าหรือเท่ากับประตูแรก':'');}
+  var sum=$('#whBindSummary');
+  if(sum){
+    var list=[];for(var g=from;g>0&&to>=from&&g<=to;g++)list.push(g);
+    if(!list.length){sum.textContent='';return;}
+    var bound=list.filter(function(g){return rfidGateIsBound(g);}).length;
+    sum.innerHTML=bound===list.length?'<span style="color:#22c55e;font-weight:700;">✓ ผูกเครื่องครบ '+list.length+' ประตูแล้ว</span>':'ผูกเครื่องแล้ว '+bound+' จาก '+list.length+' ประตู · <button type="button" class="btn ghost sm" style="min-height:36px;" onclick="setWhTab(\'gates\')">ไปที่แท็บประตู ›</button>';
+  }
+}
+(function(){['whGateFrom','whGateTo'].forEach(function(id){var el=document.getElementById(id);if(el)el.addEventListener('input',whUpdateRangeHint);});})();
 function setWhTab(tab){
   document.querySelectorAll('#whFormCard .whTab').forEach(function(el){el.hidden=el.dataset.whtab!==tab;});
   document.querySelectorAll('#whTabs .wh-tab').forEach(function(b){var on=b.dataset.whtabBtn===tab;b.classList.toggle('active',on);b.setAttribute('aria-selected',on?'true':'false');});
+  whUpdateRangeHint();
 }
 function gateOutEdit(){gateOutConfirmed=false;refreshGateOutManualVisibility();var p=$('#outPlate');if(p)p.focus();}
 function confirmGateOutFields(){
