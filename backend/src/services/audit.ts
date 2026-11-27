@@ -35,7 +35,7 @@ export function isEmployeeCrudAuditEntry(entry: { action?: unknown; actor?: unkn
   const actor = String(entry.actor ?? entry.recorder ?? '').trim();
   const action = String(entry.action ?? '').trim().toLowerCase();
   if (!actor || /^(system|auto|worker|service|scheduler|fx9600|lpr|webhook)$/i.test(actor)) return false;
-  return /^(create|update|delete|role_change|role_changed|role_removed|reader_(create|update|unbind)|rfid_detach|pin_(set|reset)|credentials_set|unlink_customer_line|ปลดพัก|พักสินค้า|แจ้งชำรุด)$/i.test(action);
+  return /^(create|update|delete|role_change|role_changed|role_removed|reader_(create|update|unbind)|rfid_detach|pin_(set|reset|reset_approved)|credentials_set|unlink_customer_line|ปลดพัก|พักสินค้า|แจ้งชำรุด)$/i.test(action);
 }
 
 export async function writeAuditLog(db: DB, entry: AuditEntryInput): Promise<void> {
