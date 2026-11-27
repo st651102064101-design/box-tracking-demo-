@@ -40,7 +40,10 @@ devicesRouter.use(requireAuth);
 devicesRouter.post('/heartbeat', (req, res) => {
   const input = schema.parse(req.body);
   const device: Device = {
-    deviceId: input.deviceId ?? req.user!.username,
+    /* Handhelds provisioned by QR share one login, so the login alone cannot
+       tell two of them apart. Without a device id, model and name keep them
+       separate. */
+    deviceId: input.deviceId ?? `${req.user!.username}|${input.model ?? ''}|${input.name}`,
     name: input.name,
     kind: 'pda',
     warehouse: input.warehouse ?? input.warehouseId ?? '',

@@ -17,7 +17,7 @@ describe('PDA presence', () => {
     expect(await list()).toEqual([
       expect.objectContaining({ name: 'TC52', warehouse: 'WH-001', gate: '2', online: true }),
     ]);
-    await beat({ name: 'TC52' });
+    await beat({ name: 'TC52', model: 'TC52', warehouseId: 'WH-001', gateNo: 2, usesZebraSdk: true });
     expect(await list()).toHaveLength(1);
   });
 
@@ -75,5 +75,14 @@ describe('PDA screen state', () => {
     const d = { deviceId: 'x', name: 'x', kind: 'pda', warehouse: '', gate: '', sleeping: true, lastSeenAt: new Date(0).toISOString() } as const;
     expect(deviceState(d as never, 5 * 60_000)).toBe('sleeping');
     expect(deviceState(d as never, 11 * 60_000)).toBe('offline');
+  });
+});
+
+describe('two handhelds on one login', () => {
+  it('keeps a TC52 and an MC3390R apart when they share the login', async () => {
+    await beat({ name: 'Zebra TC52', model: 'tc52', warehouseId: 'WH-001', gateNo: 1 });
+    await beat({ name: 'Zebra MC3390R', model: 'mc3390r', warehouseId: 'WH-001', gateNo: 1 });
+    const names = (await list()).map((d: { name: string }) => d.name);
+    expect(names).toEqual(expect.arrayContaining(['Zebra TC52', 'Zebra MC3390R']));
   });
 });
