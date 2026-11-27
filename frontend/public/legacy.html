@@ -3049,7 +3049,7 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
     <div id="outGateHint"></div>
     <div id="gateOutFormFields">
     <div class="grid g3">
-      <div class="field cust-field"><label>ลูกค้า / ปลายทาง</label><div id="doCustomerTiles" class="cust-tiles" role="radiogroup" aria-label="ลูกค้า / ปลายทาง"></div><select id="doCustomer" style="display:none;"></select><div id="doCustomerHint" style="display:none;"></div></div>
+      <div class="field cust-field"><label>ลูกค้า / ปลายทาง</label><div id="doCustomerTiles" class="cust-combo"></div><select id="doCustomer" style="display:none;"></select><div id="doCustomerHint" style="display:none;"></div></div>
       <div class="field out-rfid-context-extra"><label>ทะเบียนรถ <span class="muted small go-rfid-only">(ถ้ามีจาก LPR)</span></label><input id="outPlate" list="dl-plate" placeholder="82-1234 กทม" autocomplete="off"><div class="field-err" id="err-outPlate" role="alert" hidden></div></div>
       <div class="field out-rfid-context-extra"><label>ชื่อคนขับ</label><input id="outDriver" list="dl-driver" placeholder="นายสมชาย ใจดี" autocomplete="off"><div class="field-err" id="err-outDriver" role="alert" hidden></div></div>
       <div class="field out-rfid-context-extra"><label>เบอร์โทรคนขับ</label><input id="outDriverTel" type="tel" inputmode="tel" list="dl-tel" placeholder="08x-xxx-xxxx" maxlength="15" autocomplete="off"><div class="field-err" id="err-outDriverTel" role="alert" hidden></div></div>
@@ -3152,12 +3152,16 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
   #gateOutManualConfig .field input,#gateOutManualConfig .field select{min-height:56px;font-size:18px;}
   #gateOutManualConfig .field label{font-size:15px;font-weight:700;}
   #doCustomer{display:none!important;}
-  .cust-tiles{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;scrollbar-width:thin;}
+  .cust-combo{position:relative;}
+  .cust-combo input{min-height:56px;font-size:18px;width:100%;}
+  .cust-list{position:absolute;left:0;right:0;top:100%;z-index:20;margin-top:6px;max-height:300px;overflow-y:auto;border-radius:14px;border:1px solid var(--line);background:var(--panel,#161616);box-shadow:0 12px 30px rgba(0,0,0,.35);padding:6px;}
+  .cust-list[hidden]{display:none;}
+  .cust-opt{display:block;width:100%;min-height:52px;padding:10px 12px;border:0;border-radius:10px;background:transparent;color:var(--ink);font-size:17px;font-weight:600;text-align:left;cursor:pointer;}
+  .cust-opt:hover,.cust-opt:focus-visible{background:color-mix(in srgb,var(--ink) 8%,transparent);}
+  .cust-opt.on{color:#22c55e;}
+  .cust-empty{padding:12px;color:var(--muted);font-size:15px;}
   .field-err{margin-top:6px;color:var(--neg);font-size:14px;font-weight:600;}
   .field-err[hidden]{display:none;}
-  .cust-tile{flex:0 0 auto;min-width:180px;min-height:60px;padding:12px 14px;border-radius:16px;border:1.5px solid var(--line);background:color-mix(in srgb,var(--ink) 5%,transparent);color:var(--ink);font-size:17px;font-weight:700;text-align:left;cursor:pointer;}
-  .cust-tile.on{border-color:#22c55e;background:color-mix(in srgb,#22c55e 18%,transparent);box-shadow:0 0 0 2px color-mix(in srgb,#22c55e 35%,transparent);}
-  .cust-tile:focus-visible{outline:3px solid #22c55e;outline-offset:2px;}
   </style>
   <div id="gpWarn"></div>
   <div class="gp-tiles" id="gpStatus"></div>
@@ -6616,16 +6620,36 @@ function checkGateOutField(id){
 })();
 /* Big tap targets for the outbound form: customers as tiles, fields tall enough
    for a gloved thumb. The select stays in the DOM and keeps the value. */
+/* Customer picker: a search box with a list under it. Typing filters the list,
+   a tap or Enter picks the customer and writes the same value the select holds. */
+function custLabel(o){return o?String(o.textContent||'').trim():'';}
 function renderCustTiles(){
   var host=$('#doCustomerTiles'),sel=$('#doCustomer');if(!host||!sel)return;
-  var opts=[].slice.call(sel.options).filter(function(o){return o.value;});
-  var html=opts.length?opts.map(function(o){var on=o.value===sel.value;return '<button type="button" role="radio" aria-checked="'+on+'" class="cust-tile'+(on?' on':'')+'" data-v="'+esc(o.value)+'">'+esc(o.textContent.trim())+'</button>';}).join(''):'<div class="muted small">ยังไม่มีลูกค้า</div>';
-  if(host.dataset.html!==html){host.dataset.html=html;host.innerHTML=html;}
-  else [].forEach.call(host.querySelectorAll('.cust-tile'),function(b){var on=b.dataset.v===sel.value;b.classList.toggle('on',on);b.setAttribute('aria-checked',on);});
+  if(!host.dataset.built){
+    host.dataset.built='1';
+    host.innerHTML='<input id="custSearch" type="search" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="custList" placeholder="พิมพ์ชื่อหรือรหัสลูกค้า"><div id="custList" class="cust-list" role="listbox" hidden></div>';
+    var box=$('#custSearch');
+    box.addEventListener('focus',function(){box.select();custOpen(true);});
+    box.addEventListener('input',function(){custOpen(true);});
+    box.addEventListener('blur',function(){setTimeout(function(){custOpen(false);},120);});
+    box.addEventListener('keydown',function(e){
+      var items=[].slice.call(host.querySelectorAll('.cust-opt'));
+      if(e.key==='Escape'){custOpen(false);return;}
+      if(e.key==='Enter'){e.preventDefault();if(items[0])pickCustTile(items[0].dataset.v);}
+    });
+  }
+  var box=$('#custSearch'),list=$('#custList');
+  var cur=sel.options[sel.selectedIndex]&&sel.value?sel.options[sel.selectedIndex]:null;
+  if(document.activeElement!==box)box.value=cur?custLabel(cur):'';
+  var q=(document.activeElement===box?box.value:'').trim().toLowerCase();
+  var opts=[].slice.call(sel.options).filter(function(o){return o.value&&(!q||custLabel(o).toLowerCase().indexOf(q)>=0||o.value.toLowerCase().indexOf(q)>=0);});
+  var html=opts.length?opts.slice(0,30).map(function(o){var on=cur&&o.value===cur.value;return '<button type="button" role="option" aria-selected="'+on+'" class="cust-opt'+(on?' on':'')+'" data-v="'+esc(o.value)+'">'+esc(custLabel(o))+'</button>';}).join(''):'<div class="cust-empty">ไม่พบลูกค้าที่ตรงกับ “'+esc(box.value)+'”</div>';
+  if(list.dataset.html!==html){list.dataset.html=html;list.innerHTML=html;}
 }
-function pickCustTile(v){var sel=$('#doCustomer');if(!sel)return;sel.value=v;sel.dispatchEvent(new Event('change',{bubbles:true}));renderCustTiles();}
+function custOpen(open){var list=$('#custList'),box=$('#custSearch');if(!list||!box)return;list.hidden=!open;box.setAttribute('aria-expanded',open?'true':'false');if(open)renderCustTiles();}
+function pickCustTile(v){var sel=$('#doCustomer');if(!sel)return;sel.value=v;sel.dispatchEvent(new Event('change',{bubbles:true}));var box=$('#custSearch');if(box)box.value=custLabel(sel.options[sel.selectedIndex]);custOpen(false);if(box)box.blur();}
 (function(){
-  document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('#doCustomerTiles .cust-tile');if(b)pickCustTile(b.dataset.v);});
+  document.addEventListener('mousedown',function(e){var b=e.target.closest&&e.target.closest('#custList .cust-opt');if(b){e.preventDefault();pickCustTile(b.dataset.v);}});
   var sel=document.getElementById('doCustomer');if(sel){new MutationObserver(renderCustTiles).observe(sel,{childList:true,subtree:true});sel.addEventListener('change',renderCustTiles);}
   /* Enter moves to the next field, so the driver never has to reach for the screen. */
   [['outPlate','outDriver'],['outDriver','outDriverTel']].forEach(function(pair){
