@@ -93,3 +93,7 @@ html[data-theme="dark"] main .bg-red-50{background-color:rgba(255,69,58,.15);}
 html[data-theme="dark"] main .text-red-600{color:#ff6961;}
 html[data-theme="dark"] main .bg-amber-50{background-color:rgba(255,214,10,.12);}
 html[data-theme="dark"] main .text-amber-900{color:#ffd60a;}
+
+/* Language toggle in dark mode: keep both labels readable on the dark surface. */
+html[data-theme="dark"] .lang-toggle{background-color:rgba(44,44,46,.9);border-color:rgba(255,255,255,.2);}
+html[data-theme="dark"] .lang-toggle-off{color:#f5f5f7;}
