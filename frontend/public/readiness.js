@@ -27,10 +27,11 @@
       if (!s.pda) out.push(item('wait', 'กำลังตรวจเครื่อง PDA'));
       else if (!s.pda.length) out.push(item('warn', 'ยังไม่มีเครื่อง PDA เชื่อมต่อ', 'pda'));
       else {
-        var off = s.pda.filter(function (d) { return !d.online; });
-        out.push(off.length
-          ? item('warn', 'PDA ออฟไลน์: ' + off.map(function (d) { return d.name; }).join(', '), 'pda')
-          : item('ok', 'PDA ออนไลน์ ' + s.pda.length + ' เครื่อง', 'pda'));
+        var off = s.pda.filter(function (d) { return !d.online && !d.sleeping; });
+        var asleep = s.pda.filter(function (d) { return d.sleeping; });
+        if (off.length) out.push(item('warn', 'PDA ออฟไลน์: ' + off.map(function (d) { return d.name; }).join(', '), 'pda'));
+        else if (asleep.length) out.push(item('wait', 'PDA พักจอ: ' + asleep.map(function (d) { return d.name; }).join(', '), 'pda'));
+        else out.push(item('ok', 'PDA ออนไลน์ ' + s.pda.length + ' เครื่อง', 'pda'));
       }
     }
     return out;
