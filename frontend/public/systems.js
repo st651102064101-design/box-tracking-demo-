@@ -9,7 +9,7 @@
       labels: { overview: 'รายงาน' },
       stabs: ['btype', 'box', 'wh', 'cust'],
       settings: ['data'],
-      without: ['manualReceive', 'stockImport', 'stockShip', 'relocate'],
+      without: ['manualReceive', 'stockImport', 'stockShip', 'relocate', 'pda'],
     };
     Object.keys(extra).forEach(function (key) { system[key] = extra[key]; });
     return system;
@@ -28,7 +28,7 @@
       tabs: ['overview', 'gateout', 'gatein', 'inventory', 'setup'],
       labels: { overview: 'รายงาน' },
       /* Ways around the gates, and shelf handling. */
-      without: ['manualReceive', 'stockImport', 'stockShip', 'relocate'],
+      without: ['manualReceive', 'stockImport', 'stockShip', 'relocate', 'pda', 'plateReport'],
       stabs: ['btype', 'box', 'wh', 'cust'],
       settings: ['data'],
       modes: { in: ['rfid'], out: ['manual', 'excel'] },
@@ -64,6 +64,8 @@
     [/^รายงาน$/, 'Reports'],
   ];
   window.Systems = {
+    /** Features with something on the page to hide (html.no-<feature>). */
+    features: ['stockImport', 'stockShip', 'relocate', 'pda', 'plateReport'],
     en: en,
     valid: function (id) { return Object.prototype.hasOwnProperty.call(LIST, id); },
     name: function (id) { return get(id).name; },

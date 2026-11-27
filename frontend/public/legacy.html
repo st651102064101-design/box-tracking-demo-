@@ -526,8 +526,10 @@ button.rd-item{cursor:pointer;}button.rd-item:hover,button.rd-item:focus-visible
 .gp-track i{display:block;height:100%;background:var(--pc);transition:width 1s linear;}
 .gp-preset .gp-actions{margin:12px 0 0;}
 .gp-row{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--line);}
-html[data-system="rfidgate"] #bulkInvShip,html[data-system="rfidgate"] #bulkInvRelocate,html[data-system="rfidgate"] button[onclick*="invImportFile"],html[data-system="rfidgate"] .sys-pda{display:none!important;}
-.sys-hidden,html[data-system="gate2"] .gateout-mode-panel,html[data-system="rfidgate"] #gateInModeBar,html[data-system="rfidgate"] [data-gateout-mode="rfid"],html[data-system="rfidgate"] .sys-plates,html[data-system="rfidgate"] #tab-gatein .wg-scan-s{display:none!important;}
+html.no-stockShip #bulkInvShip,html.no-relocate #bulkInvRelocate,html.no-stockImport button[onclick*="invImportFile"],html.no-pda .sys-pda,html.no-plateReport .sys-plates{display:none!important;}
+.hw-none{display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap;border:1px dashed var(--line);border-radius:16px;padding:16px;}
+.hw-more>summary{cursor:pointer;min-height:44px;display:flex;align-items:center;color:var(--muted);font-weight:700;}
+.sys-hidden,html[data-system="gate2"] .gateout-mode-panel,html[data-system="rfidgate"] #gateInModeBar,html[data-system="rfidgate"] [data-gateout-mode="rfid"],html[data-system="rfidgate"] #tab-gatein .wg-scan-s{display:none!important;}
 .sys-switch{display:inline-flex;align-items:center;gap:7px;min-height:40px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--ink);font:inherit;font-size:13px;font-weight:800;cursor:pointer;white-space:nowrap;}
 .sys-switch:hover{border-color:var(--ink);}
 @media (max-width:700px){.sys-switch span{display:none;}.sys-switch{padding:0 12px;}}
@@ -2393,9 +2395,9 @@ html[data-theme="dark"] .loc-chip.active{background:var(--ink);color:var(--bg);}
 <script src="/legacy-sync.js"></script>
 <script src="/pda-device.js?v=20261126-2"></script>
 <script src="/overdue.js?v=20261126"></script>
-<script src="/systems.js?v=20261127-3"></script>
-<script src="/gate-view.js?v=20261127-3"></script>
-<script src="/readiness.js?v=20261127-3"></script>
+<script src="/systems.js?v=20261127-4"></script>
+<script src="/gate-view.js?v=20261127-4"></script>
+<script src="/readiness.js?v=20261127-4"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
@@ -8281,7 +8283,7 @@ function renderReadiness(){
   else if(rdServer.review===null)rdLoadServer();
   var count=function(status){return all.filter(function(b){return b.status===status;}).length;};
   var result=window.Readiness.assess({
-    needsLpr:sys!=='rfidgate',needsPda:!window.Systems.valid(sys)||sys==='full',unattended:window.Systems.unattended(sys),
+    needsLpr:sys!=='rfidgate',needsPda:window.Systems.can(sys,'pda'),unattended:window.Systems.unattended(sys),
     readers:rdReaders(),lprGates:rdLprGates(),
     pda:pdaDeviceLoaded?pdaDeviceRegistry.map(function(d){return {name:d.name||'PDA',online:d.online===true};}):null,
     boxes:{ready:all.filter(function(b){return b.status==='warehouse'&&b.labeled!==false;}).length,hold:count('hold'),damage:count('damage'),lost:count('lost'),overdue:all.filter(isOverdue).length},
@@ -8317,6 +8319,7 @@ function currentSystem(){
 function applySystem(){
   var id=currentSystem(),root=document.documentElement;
   root.setAttribute('data-system',window.Systems.valid(id)?id:'full');
+  window.Systems.features.forEach(function(f){root.classList.toggle('no-'+f,!window.Systems.can(id,f));});
   $all('#nav button[data-tab]').forEach(function(b){b.classList.toggle('sys-hidden',!window.Systems.inMenu(id,b.dataset.tab));});
   $all('.stab').forEach(function(b){b.classList.toggle('sys-hidden',!window.Systems.allowsStab(id,b.dataset.stab));});
   var home=$('#nav button[data-tab="overview"]');
@@ -15269,15 +15272,19 @@ function renderOverviewOperations(all){
     if(gates.length){
       var gatesByWarehouse={};gates.forEach(function(g){var whId=String((S.gates||{})[g]||gateWh(g)||'');(gatesByWarehouse[whId]||(gatesByWarehouse[whId]=[])).push(g);});
       var lprTile=function(g){return tile(lprIcon,'LPR Camera · Gate '+esc(g),'รับเหตุการณ์ผ่าน LPR Webhook ของ Gate '+esc(g),'unbound','Webhook','openLprManagementModal('+Number(g)+')','จัดการ LPR ของ Gate '+esc(g));};
-      var warehouseGroups=Object.keys(gatesByWarehouse).map(function(whId){
-        var wh=(S.warehouses||{})[whId]||{},label=wh.name||whId||'ไม่พบคลัง',groupGates=gatesByWarehouse[whId];
+      var groupsFor=function(wanted){return Object.keys(gatesByWarehouse).map(function(whId){
+        var wh=(S.warehouses||{})[whId]||{},label=wh.name||whId||'ไม่พบคลัง',groupGates=gatesByWarehouse[whId].filter(function(g){return rfidGateIsBound(g)===wanted;});
+        if(!groupGates.length)return '';
         var gateGroups=groupGates.map(function(g){
-          var devices=gateTile(g)+(rfidGateIsBound(g)?lprTile(g):'');
+          var devices=gateTile(g)+(wanted?lprTile(g):'');
           return '<div class="hardware-gate-group"><div class="hardware-gate-head"><b>Gate '+esc(g)+'</b><span>อุปกรณ์ประจำ Gate</span></div><div class="hardware-visual">'+devices+'</div></div>';
         }).join('');
-        return '<section class="hardware-wh-group"><div class="hardware-wh-head"><b>คลัง '+esc(label)+'</b><span>'+groupGates.length+' Gate</span></div>'+'<div class="hardware-gate-grid">'+gateGroups+'</div></section>';
-      }).join('');
-      hardware.innerHTML='<div class="hardware-groups">'+warehouseGroups+'<section class="hardware-wh-group sys-pda"><div class="hardware-wh-head"><b>อุปกรณ์ส่วนกลาง</b><span>PDA</span></div><div class="hardware-visual">'+pdaTiles+'</div></section></div>';
+        return '<section class="hardware-wh-group"><div class="hardware-wh-head"><b>'+esc(window.GateView.warehouseLabel(label))+'</b><span>'+groupGates.length+' Gate</span></div>'+'<div class="hardware-gate-grid">'+gateGroups+'</div></section>';
+      }).join('');};
+      var unbound=gates.filter(function(g){return !rfidGateIsBound(g);}).length;
+      var none=unbound===gates.length?'<div class="hw-none"><b>ยังไม่ผูก FX9600 กับประตูใดเลย · มี '+unbound+' ประตู</b><button type="button" class="btn accent sm" onclick="goSetup(\'wh\')">ผูกเครื่อง FX9600 ›</button></div>':'';
+      var more=unbound?'<details class="hw-more"'+(window.hwShowUnbound?' open':'')+' ontoggle="window.hwShowUnbound=this.open"><summary>ดูประตูที่ยังไม่ผูก ('+unbound+')</summary><div class="hardware-groups">'+groupsFor(false)+'</div></details>':'';
+      hardware.innerHTML='<div class="hardware-groups">'+none+groupsFor(true)+'<section class="hardware-wh-group sys-pda"><div class="hardware-wh-head"><b>อุปกรณ์ส่วนกลาง</b><span>PDA</span></div><div class="hardware-visual">'+pdaTiles+'</div></section></div>'+more;
     }else hardware.innerHTML='<div class="hardware-visual"><div class="hardware-device"><span class="hardware-device-icon"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M5 8a9 9 0 0 1 14 0M7.5 11a6 6 0 0 1 9 0M10 14a3 3 0 0 1 4 0"/></svg></span></span><span class="hardware-device-copy"><b>RFID Gate / LPR</b><small>คลังนี้ไม่ได้เปิดใช้งานอุปกรณ์ประตู</small></span></div></div>';
   }
   /* A box only carries a warehouse-level position at present, so call out the

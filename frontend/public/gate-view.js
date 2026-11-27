@@ -40,6 +40,9 @@
     }).filter(function (r) { return r.plate || r.customer; });
   }
 
+  /** Warehouse names often start with the word already. */
+  function warehouseLabel(name) { return String(name).indexOf('คลัง') === 0 ? String(name) : 'คลัง ' + name; }
+
   function two(n) { return (n < 10 ? '0' : '') + n; }
   /** What the "customer set at this gate" card shows at server time `now`. */
   function presetView(data, now) {
@@ -64,6 +67,9 @@
 
   /* English for the page translator: whole texts of the gate page. */
   var en = [
+    [/^ยังไม่ผูก FX9600 กับประตูใดเลย · มี (\d+) ประตู$/, 'No FX9600 bound yet · gates: $1'],
+    [/^ผูกเครื่อง FX9600 ›$/, 'Bind an FX9600 ›'],
+    [/^ดูประตูที่ยังไม่ผูก \((\d+)\)$/, 'Show unbound gates ($1)'],
     [/^ใช้นานแค่ไหน$/, 'For how long'],
     [/^2 ชม\.$/, '2 h'],
     [/^8 ชม\.$/, '8 h'],
@@ -151,5 +157,5 @@
     [/^แถว (\d+): ไม่มีทะเบียนรถ$/, 'Row $1: no license plate'],
     [/^แถว (\d+): วันที่ไม่ถูกต้อง (.*)$/, 'Row $1: invalid date $2'],
   ];
-  window.GateView = { mismatch: mismatch, passages: passages, planRows: planRows, presetView: presetView, en: en };
+  window.GateView = { mismatch: mismatch, passages: passages, planRows: planRows, presetView: presetView, warehouseLabel: warehouseLabel, en: en };
 })();
