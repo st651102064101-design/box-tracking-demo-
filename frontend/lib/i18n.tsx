@@ -172,7 +172,8 @@ export function LanguageToggle() {
           onClick={() => setLocale(option)}
           aria-pressed={locale === option}
           style={{
-            color: locale === option ? '#ffffff' : '#111111',
+            // Unselected colour comes from the class so dark mode can override it.
+            ...(locale === option ? { color: '#ffffff' } : {}),
             backgroundColor: locale === option ? '#1677ff' : 'transparent',
             fontWeight: 700,
           }}
