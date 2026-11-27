@@ -8489,7 +8489,7 @@ function renderReadiness(){
   rdShown=html;host.innerHTML=html;
 }
 function rdGo(go,arg){
-  if(go==='bind'){if(arg)manageRfidGate(Number(arg));else goSetup('wh');}
+  if(go==='bind'){if(arg)manageRfidGate(Number(arg));else openBindList();}
   else if(go==='lpr')openLprManagementModal();
   else if(go==='pda')openPdaConnectModal();
   else if(go==='pdaList')openPdaList();
@@ -8714,6 +8714,21 @@ function pdaDetailHtml(d){
 var pdaDetailId=null;
 /* Every handheld with its state. A tap opens its detail; the button at the
    bottom is the only place that opens the connect QR. */
+/* Binding FX9600 gate by gate: unbound first, one primary action, back to the list after each. */
+function openBindList(){
+  var gates=allGateNums();
+  if(!gates.length){goSetup('wh');return;}
+  var stateOf=function(g){if(!rfidGateIsBound(g))return 'unbound';return fx9600IsOnline(g)?'online':'silent';};
+  var label={unbound:'ยังไม่ผูก',silent:'ไม่ตอบสนอง',online:'ผูกแล้ว'},color={unbound:'var(--neg)',silent:'#f59e0b',online:'#22c55e'};
+  var order=gates.slice().sort(function(a,b){var r={unbound:0,silent:1,online:2};return r[stateOf(a)]-r[stateOf(b)];});
+  var next=order.filter(function(g){return stateOf(g)!=='online';})[0];
+  var rows=order.map(function(g){var st=stateOf(g);return '<button type="button" data-bind="'+g+'" style="display:flex;width:100%;justify-content:space-between;align-items:center;gap:12px;padding:14px 4px;border:0;border-top:1px solid var(--line);background:transparent;color:var(--ink);text-align:left;cursor:pointer;"><span><b style="font-size:16px;">ประตู '+g+'</b><span class="muted small" style="display:block;">'+esc(whName(gateWh(g)))+'</span></span><b style="color:'+color[st]+';">● '+label[st]+'</b></button>';}).join('');
+  var cta=next?'<button type="button" class="btn accent" style="width:100%;justify-content:center;min-height:56px;font-size:17px;margin-top:16px;" data-bind="'+next+'">ผูกเครื่องประตู '+next+' ›</button>':'<p class="muted" style="margin-top:16px;">ทุกประตูผูกเครื่องแล้ว</p>';
+  openModal('<div class="mhead"><h3>ผูกเครื่อง FX9600</h3><button class="x" data-close aria-label="ปิด"><span class="svgi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></span></button></div><div class="mbody" id="bindListBody"><p class="desc" style="margin-top:0;">เลือกประตูที่ต้องผูกเครื่องอ่าน แล้วทำตามขั้นตอนบนหน้านั้น</p>'+rows+cta+'</div>');
+  var body=document.getElementById('bindListBody');
+  if(body)body.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[data-bind]');if(b){var g=Number(b.dataset.bind);var m=document.getElementById('modal');if(m)m.classList.remove('show');manageRfidGate(g);}});
+}
+window.openBindList=openBindList;
 function openPdaList(){
   var stateOf=function(d){return d.state==='sleeping'?'sleeping':d.online===true?'online':'offline';};
   var label={online:'Online',sleeping:'พักจอ',offline:'Offline'},color={online:'#22c55e',sleeping:'#eab308',offline:'var(--neg)'};
