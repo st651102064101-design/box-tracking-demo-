@@ -110,3 +110,12 @@ export function resetPasswordWithFirebase(idToken: string, password: string) {
     body: JSON.stringify({ idToken, password }),
   });
 }
+
+/** POST /api/auth/password-reset/request — the server sends the link only to a
+ *  registered email, and answers the same way either way. */
+export function requestPasswordReset(email: string) {
+  return request<{ ok: true; message: string }>('/auth/password-reset/request', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+}

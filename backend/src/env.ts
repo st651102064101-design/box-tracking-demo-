@@ -18,6 +18,10 @@ export const env = {
   port: Number(process.env.PORT ?? 4000),
   /** Firebase project used for email-link password reset. Public id, not a secret. */
   firebaseProjectId: process.env.FIREBASE_PROJECT_ID ?? 'smarttrace-login',
+  /** Public web API key of that Firebase project (identifies the app; grants nothing by itself). */
+  firebaseApiKey: process.env.FIREBASE_API_KEY ?? 'AIzaSyAbKW5BY5pSAB4eVJRKR1EDIo-uDmpPn98',
+  /** Where the reset link returns to; must be an authorized domain in Firebase. */
+  appPublicUrl: process.env.APP_PUBLIC_URL ?? 'http://localhost:3000',
   corsOrigin: (process.env.CORS_ORIGIN ?? 'http://localhost:3000')
     .split(',')
     .map((s) => s.trim())

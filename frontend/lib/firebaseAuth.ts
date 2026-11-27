@@ -1,9 +1,9 @@
 /* Email-link sign-in for "ลืมรหัสผ่าน?". These values identify the Firebase web app
    and are public by design; they do not grant access on their own. */
 import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
+import { requestPasswordReset } from './api';
 import {
   getAuth,
-  sendSignInLinkToEmail,
   isSignInWithEmailLink,
   signInWithEmailLink,
   signOut,
@@ -22,10 +22,10 @@ function app(): FirebaseApp {
   return getApps()[0] ?? initializeApp(config);
 }
 
-/** Sends the sign-in link. The link brings the user back to /login?reset=1. */
+/** Asks the server to send the link. The server only sends it to a registered
+ *  email; the answer is the same either way. */
 export async function sendResetLink(email: string) {
-  const url = `${window.location.origin}/login?reset=1`;
-  await sendSignInLinkToEmail(getAuth(app()), email, { url, handleCodeInApp: true });
+  await requestPasswordReset(email);
   window.localStorage.setItem(EMAIL_KEY, email);
 }
 

@@ -248,6 +248,41 @@ authRouter.get(
 );
 
 
+
+/* POST /api/auth/password-reset/request — "ลืมรหัสผ่าน?".
+   The server checks the account. Only an existing account's email gets a link
+   (sent by Firebase, through its REST API). The answer is the same whether or
+   not the email is registered, so the form cannot be used to find accounts. */
+const resetRequestSchema = z.object({ email: z.string().trim().email().max(254) });
+const RESET_REQUEST_ANSWER = { ok: true, message: 'ถ้ามีบัญชีที่ใช้อีเมลนี้ ระบบจะส่งลิงก์ไปให้' };
+authRouter.post(
+  '/password-reset/request',
+  asyncHandler(async (req, res) => {
+    const input = resetRequestSchema.parse(req.body);
+    const email = input.email.toLowerCase();
+    const db = getDb();
+    const [row] = await db.select({ id: users.id }).from(users).where(sql`lower(${users.email}) = ${email}`).limit(1);
+    if (row) {
+      try {
+        const r = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${encodeURIComponent(env.firebaseApiKey)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            requestType: 'EMAIL_SIGNIN',
+            email,
+            continueUrl: `${env.appPublicUrl}/login?reset=1`,
+            canHandleCodeInApp: true,
+          }),
+        });
+        if (!r.ok) console.warn('[password-reset] firebase refused the send:', r.status);
+      } catch (err) {
+        console.warn('[password-reset] could not reach firebase:', err instanceof Error ? err.message : 'unknown');
+      }
+    }
+    res.json(RESET_REQUEST_ANSWER);
+  }),
+);
+
 /* POST /api/auth/password-reset/firebase — "ลืมรหัสผ่าน?".
    The browser proves the email with a Firebase email link and sends the ID token
    here with the new password. Only a verified email that belongs to an account
